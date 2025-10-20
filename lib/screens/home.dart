@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:villagebanking/main.dart' show supabase;
 import 'package:villagebanking/screens/widgets/profile_content.dart';
-import 'package:villagebanking/screens/widgets/group_content.dart';
 import 'package:villagebanking/screens/widgets/home_content.dart';
+import 'package:villagebanking/screens/loans.dart';
+import 'package:villagebanking/screens/contributions.dart';
 
 class HomePageContainer extends StatefulWidget {
   const HomePageContainer({super.key});
@@ -118,14 +119,9 @@ class _HomePageContainerState extends State<HomePageContainer>
           membersCount: _groupMembers.length,
         );
       case 1:
-        return GroupContent(groupMembers: _groupMembers);
+        return const ContributionsScreen();
       case 2:
-        return const Center(
-          child: Text(
-            'Goals & Targets',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-        );
+        return const LoansScreen();
       case 3:
         return ProfileContent(supabase);
       default:
@@ -141,10 +137,10 @@ class _HomePageContainerState extends State<HomePageContainer>
     String screenTitle;
     switch (_selectedIndex) {
       case 1:
-        screenTitle = 'Group Contributions';
+        screenTitle = 'Contributions';
         break;
       case 2:
-        screenTitle = 'My Savings';
+        screenTitle = 'Loans';
         break;
       case 3:
         screenTitle = 'Profile';
@@ -182,12 +178,12 @@ class _HomePageContainerState extends State<HomePageContainer>
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.group_work_rounded),
-            label: 'Group',
+            icon: Icon(Icons.attach_money),
+            label: 'Contributions',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.leaderboard_rounded),
-            label: 'Savings',
+            icon: Icon(Icons.account_balance_wallet),
+            label: 'Loans',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

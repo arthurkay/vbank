@@ -6,6 +6,11 @@ import 'package:villagebanking/brick/moodels/group.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:villagebanking/theme.dart';
 
+import 'package:villagebanking/screens/activities.dart';
+import 'package:villagebanking/screens/contributions.dart';
+import 'package:villagebanking/screens/group_members.dart';
+import 'package:villagebanking/screens/loans.dart';
+
 class HomeContent extends StatelessWidget {
   final double currentBalance;
   final double growthLevel;
@@ -214,6 +219,9 @@ class HomeContent extends StatelessWidget {
                   ],
                 );
               } else if (snapshot.hasData) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('No data to show yet.'));
+                }
                 return Column(
                   children: [
                     AnimatedBuilder(
@@ -309,6 +317,7 @@ class HomeContent extends StatelessWidget {
     required IconData icon,
     required String label,
     required Color color,
+    required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
@@ -323,14 +332,7 @@ class HomeContent extends StatelessWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Tapped $label!'),
-              backgroundColor: growthAccent,
-            ),
-          );
-        },
+        onTap: onTap,
         child: Container(
           height: 100,
           margin: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -492,23 +494,98 @@ class HomeContent extends StatelessWidget {
                   icon: Icons.upload_file,
                   label: 'Deposit',
                   color: Theme.of(context).textTheme.bodyMedium!.color!,
+                  onTap: () {},
                 ),
                 _buildActionButton(
                   context,
                   icon: Icons.download_sharp,
                   label: 'Withdraw',
                   color: Theme.of(context).textTheme.bodyMedium!.color!,
+                  onTap: () {},
                 ),
                 _buildActionButton(
                   context,
                   icon: Icons.groups,
                   label: 'Group Loan',
                   color: growthAccent,
+                  onTap: () {},
                 ),
               ],
             ),
           ),
-          _buildCommunityFeed(context),
+          //8 _buildCommunityFeed(context),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                _buildActionButton(
+                  context,
+                  icon: Icons.people,
+                  label: 'Members',
+                  color: Theme.of(context).textTheme.bodyMedium!.color!,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GroupMembersScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildActionButton(
+                  context,
+                  icon: Icons.monetization_on,
+                  label: 'Contributions',
+                  color: Theme.of(context).textTheme.bodyMedium!.color!,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ContributionsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildActionButton(
+                  context,
+                  icon: Icons.account_balance_wallet,
+                  label: 'Loans',
+                  color: growthAccent,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoansScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                _buildActionButton(
+                  context,
+                  icon: Icons.notifications,
+                  label: 'Activities',
+                  color: Theme.of(context).textTheme.bodyMedium!.color!,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ActivitiesScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
         ],
       ),

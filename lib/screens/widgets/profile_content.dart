@@ -98,6 +98,9 @@ class _ProfileContentState extends State<ProfileContent> {
                 if (snapshot.hasError) {
                   return Text(snapshot.error.toString());
                 } else if (snapshot.hasData) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text('No data to show yet.'));
+                  }
                   var userData = snapshot.data!.first;
                   return Column(
                     children: [
