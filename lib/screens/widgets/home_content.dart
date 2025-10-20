@@ -10,6 +10,8 @@ import 'package:villagebanking/screens/activities.dart';
 import 'package:villagebanking/screens/contributions.dart';
 import 'package:villagebanking/screens/group_members.dart';
 import 'package:villagebanking/screens/loans.dart';
+import 'package:villagebanking/screens/loan_application.dart';
+import 'package:villagebanking/screens/interest_calculator.dart';
 
 class HomeContent extends StatelessWidget {
   final double currentBalance;
@@ -17,6 +19,7 @@ class HomeContent extends StatelessWidget {
   final List<Map<String, String>> communityFeed;
   final AnimationController animationController;
   final int membersCount;
+  final String? selectedGroupId;
 
   const HomeContent({
     required this.currentBalance,
@@ -24,6 +27,7 @@ class HomeContent extends StatelessWidget {
     required this.communityFeed,
     required this.animationController,
     required this.membersCount,
+    this.selectedGroupId,
   });
 
   // Helper method for the visually appealing "Growth Hub"
@@ -86,7 +90,9 @@ class HomeContent extends StatelessWidget {
           FutureBuilder(
             future: Repository().get<Group>(
               policy: OfflineFirstGetPolicy.alwaysHydrate,
-              query: Query(limit: 1),
+              query: selectedGroupId != null
+                  ? Query(where: [Where.exact('id', selectedGroupId!)])
+                  : Query(limit: 1),
             ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -377,6 +383,10 @@ class HomeContent extends StatelessWidget {
     final isDarkMode = theme.brightness == Brightness.dark;
     final secondaryTextColor = isDarkMode ? Colors.grey[400] : Colors.grey[600];
 
+    final filteredCommunityFeed = selectedGroupId != null
+        ? communityFeed.where((item) => item['group_id'] == selectedGroupId).toList()
+        : communityFeed;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -394,9 +404,9 @@ class HomeContent extends StatelessWidget {
         ListView.builder(
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
-          itemCount: communityFeed.length,
+          itemCount: filteredCommunityFeed.length,
           itemBuilder: (context, index) {
-            final item = communityFeed[index];
+            final item = filteredCommunityFeed[index];
             IconData icon;
             Color color;
             String actionText;
@@ -491,29 +501,35 @@ class HomeContent extends StatelessWidget {
               children: [
                 _buildActionButton(
                   context,
-                  icon: Icons.upload_file,
-                  label: 'Deposit',
+                  icon: Icons.request_quote,
+                  label: 'Loan Application',
                   color: Theme.of(context).textTheme.bodyMedium!.color!,
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoanApplicationScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _buildActionButton(
                   context,
-                  icon: Icons.download_sharp,
-                  label: 'Withdraw',
+                  icon: Icons.calculate,
+                  label: 'Interest Calculator',
                   color: Theme.of(context).textTheme.bodyMedium!.color!,
-                  onTap: () {},
-                ),
-                _buildActionButton(
-                  context,
-                  icon: Icons.groups,
-                  label: 'Group Loan',
-                  color: growthAccent,
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InterestCalculatorScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
-          //8 _buildCommunityFeed(context),
           const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -528,47 +544,11 @@ class HomeContent extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const GroupMembersScreen(),
+                        builder: (context) => GroupMembersScreen(groupId: selectedGroupId),
                       ),
                     );
                   },
                 ),
-                _buildActionButton(
-                  context,
-                  icon: Icons.monetization_on,
-                  label: 'Contributions',
-                  color: Theme.of(context).textTheme.bodyMedium!.color!,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ContributionsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _buildActionButton(
-                  context,
-                  icon: Icons.account_balance_wallet,
-                  label: 'Loans',
-                  color: growthAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoansScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
                 _buildActionButton(
                   context,
                   icon: Icons.notifications,
@@ -578,7 +558,7 @@ class HomeContent extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ActivitiesScreen(),
+                        builder: (context) => ActivitiesScreen(groupId: selectedGroupId),
                       ),
                     );
                   },

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:villagebanking/main.dart';
+import 'package:villagebanking/screens/change_password.dart';
 import 'package:villagebanking/theme.dart';
 
 class ProfileContent extends StatefulWidget {
@@ -79,7 +81,9 @@ class _ProfileContentState extends State<ProfileContent> {
       'email': supabase.client.auth.currentUser?.email,
       'phone': '+260 971 123 456',
       'group_name': 'Zambia Copper Savings Group',
-      'joining_date': supabase.client.auth.currentUser?.createdAt,
+      'joining_date': DateFormat.yMd().format(
+        DateTime.parse(supabase.client.auth.currentUser?.createdAt ?? ''),
+      ),
     };
 
     return SingleChildScrollView(
@@ -185,6 +189,36 @@ class _ProfileContentState extends State<ProfileContent> {
           const SizedBox(height: 30),
 
           const SizedBox(height: 30),
+
+          // Change Password Button
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChangePasswordScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.lock, color: darkText),
+            label: const Text(
+              'Change Password',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: darkText,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey,
+              minimumSize: const Size(double.infinity, 55),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Logout Button
           ElevatedButton.icon(

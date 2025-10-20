@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/loan.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:intl/intl.dart';
+import 'package:brick_core/query.dart';
 
 class LoansScreen extends StatelessWidget {
-  const LoansScreen({super.key});
+  final String? groupId;
+
+  const LoansScreen({super.key, this.groupId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<List<Loan>>(
-        stream: Repository().subscribe<Loan>(),
+        stream: Repository().subscribe<Loan>(
+          query: groupId != null ? Query.where('groupId', groupId!) : null,
+        ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));

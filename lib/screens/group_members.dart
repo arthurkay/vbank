@@ -1,19 +1,23 @@
+import 'package:brick_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/group_member.model.dart';
 import 'package:villagebanking/brick/repository.dart';
+import 'package:villagebanking/screens/widgets/group_member_tile.dart';
 import 'package:villagebanking/theme.dart';
 
 class GroupMembersScreen extends StatelessWidget {
-  const GroupMembersScreen({super.key});
+  final String? groupId;
+
+  const GroupMembersScreen({super.key, this.groupId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Group Members'),
-      ),
+      appBar: AppBar(title: const Text('Group Members')),
       body: StreamBuilder<List<GroupMember>>(
-        stream: Repository().subscribe<GroupMember>(),
+        stream: Repository().subscribe<GroupMember>(
+          query: groupId != null ? Query.where('groupId', groupId!) : null,
+        ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
@@ -28,18 +32,7 @@ class GroupMembersScreen extends StatelessWidget {
             itemCount: members.length,
             itemBuilder: (context, index) {
               final member = members[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: growthAccent,
-                    child: Text(member.role.substring(0, 1)),
-                  ),
-                  title: Text(member.memberId), // Replace with actual member name
-                  subtitle: Text(member.role),
-                  trailing: Text(member.status),
-                ),
-              );
+              return GroupMemberTile(groupMember: member);
             },
           );
         },

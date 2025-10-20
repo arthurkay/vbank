@@ -4,6 +4,11 @@ import 'package:villagebanking/screens/widgets/profile_content.dart';
 import 'package:villagebanking/screens/widgets/home_content.dart';
 import 'package:villagebanking/screens/loans.dart';
 import 'package:villagebanking/screens/contributions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:brick_core/query.dart';
+import 'package:villagebanking/brick/moodels/group.model.dart';
+import 'package:villagebanking/brick/moodels/group_member.model.dart';
+import 'package:villagebanking/brick/repository.dart';
 
 class HomePageContainer extends StatefulWidget {
   const HomePageContainer({super.key});
@@ -87,6 +92,8 @@ class _HomePageContainerState extends State<HomePageContainer>
   ];
   late AnimationController _controller;
 
+  String? _selectedGroupId;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +101,69 @@ class _HomePageContainerState extends State<HomePageContainer>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..forward();
+    _loadSelectedGroup();
+  }
+
+  Future<void> _loadSelectedGroup() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedGroupId = prefs.getString('selectedGroupId');
+    });
+  }
+
+  Future<void> _showGroupSelector(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentUserId = supabase.client.auth.currentUser?.id;
+
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User not logged in')));
+      return;
+    }
+
+    final groupMemberships = await Repository().get<GroupMember>(
+      query: Query.where('memberId', currentUserId),
+    );
+
+    final groups = <Group>[];
+    for (final membership in groupMemberships) {
+      final group = await Repository().get<Group>(
+        query: Query.where('id', membership.groupId),
+      );
+      if (group.isNotEmpty) {
+        groups.add(group.first);
+      }
+    }
+
+    if (groups.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No groups found for this user')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return ListView.builder(
+          itemCount: groups.length,
+          itemBuilder: (context, index) {
+            final group = groups[index];
+            return ListTile(
+              title: Text(group.name),
+              onTap: () async {
+                await prefs.setString('selectedGroupId', group.id);
+                setState(() {
+                  _selectedGroupId = group.id;
+                });
+                Navigator.pop(context);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -117,6 +187,7 @@ class _HomePageContainerState extends State<HomePageContainer>
           communityFeed: _communityFeed,
           animationController: _controller,
           membersCount: _groupMembers.length,
+          selectedGroupId: _selectedGroupId,
         );
       case 1:
         return const ContributionsScreen();
@@ -159,12 +230,12 @@ class _HomePageContainerState extends State<HomePageContainer>
             letterSpacing: -0.5,
           ),
         ),
-        /* actions: [
+        actions: [
           IconButton(
-            icon: Icon(Icons.notifications_none, color: theme.iconTheme.color),
-            onPressed: () {},
+            icon: Icon(Icons.group, color: theme.iconTheme.color),
+            onPressed: () => _showGroupSelector(context),
           ),
-        ], */
+        ],
       ),
       body: SafeArea(child: _getScreenContent(_selectedIndex)),
       bottomNavigationBar: BottomNavigationBar(

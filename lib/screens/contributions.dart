@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/contribution.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:intl/intl.dart';
+import 'package:brick_core/query.dart';
 
 class ContributionsScreen extends StatelessWidget {
-  const ContributionsScreen({super.key});
+  final String? groupId;
+
+  const ContributionsScreen({super.key, this.groupId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<List<Contribution>>(
-        stream: Repository().subscribe<Contribution>(),
+        stream: Repository().subscribe<Contribution>(
+          query: groupId != null ? Query.where('groupId', groupId!) : null,
+        ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
