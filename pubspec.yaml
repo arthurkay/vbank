@@ -43,6 +43,8 @@ dependencies:
   brick_supabase: ^2.1.0
   shimmer: ^3.0.0
   brick_core: ^2.0.0
+  shared_preferences: ^2.5.3
+  brick_offline_first: ^4.0.1
 
 dev_dependencies:
   flutter_test:

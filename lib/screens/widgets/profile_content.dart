@@ -1,15 +1,19 @@
-import 'package:brick_core/query.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:villagebanking/main.dart';
 import 'package:villagebanking/theme.dart';
 
-class ProfileContent extends StatelessWidget {
+class ProfileContent extends StatefulWidget {
   final Supabase supabase;
   const ProfileContent(this.supabase, {super.key});
+  @override
+  State<ProfileContent> createState() => _ProfileContentState();
+}
 
+class _ProfileContentState extends State<ProfileContent> {
   Widget _buildProfileTile(
     BuildContext context, {
     required String label,
@@ -86,7 +90,10 @@ class ProfileContent extends StatelessWidget {
           // User Header and Avatar
           Center(
             child: FutureBuilder(
-              future: Repository().get<Profile>(query: Query(limit: 1)),
+              future: Repository().get<Profile>(
+                query: Query(limit: 1),
+                policy: OfflineFirstGetPolicy.alwaysHydrate,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Text(snapshot.error.toString());
@@ -100,13 +107,24 @@ class ProfileContent extends StatelessWidget {
                         child: Icon(Icons.person, color: darkText, size: 40),
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        userData.fullName ?? "N/A",
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: primaryTextColor,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            userData.fullName ?? "N/A",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: primaryTextColor,
+                            ),
+                          ),
+                          // Edit Name Button
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            color: growthAccent,
+                            onPressed: () {},
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -163,27 +181,6 @@ class ProfileContent extends StatelessWidget {
 
           const SizedBox(height: 30),
 
-          /*          // Settings Section
-          Text(
-            'Settings & Support',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: primaryTextColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildSettingsItem(
-            context,
-            title: 'Security & Privacy',
-            icon: Icons.security_rounded,
-          ),
-          _buildSettingsItem(
-            context,
-            title: 'Help & FAQ',
-            icon: Icons.help_outline,
-          ),
- */
           const SizedBox(height: 30),
 
           // Logout Button

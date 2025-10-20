@@ -1,3 +1,4 @@
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:brick_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
@@ -66,7 +67,7 @@ class HomeContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'My Current Balance',
+                'My Group Savings',
                 style: TextStyle(
                   color: secondaryTextColor,
                   fontSize: 14,
@@ -78,7 +79,10 @@ class HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 8.0),
           FutureBuilder(
-            future: Repository().get<Group>(query: Query(limit: 1)),
+            future: Repository().get<Group>(
+              policy: OfflineFirstGetPolicy.alwaysHydrate,
+              query: Query(limit: 1),
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return SizedBox(
@@ -136,7 +140,7 @@ class HomeContent extends StatelessWidget {
                       animation: animationController,
                       builder: (context, child) {
                         return Text(
-                          'Unable to load balance',
+                          'Unable to load group data',
                           style: TextStyle(
                             fontSize: 40,
                             fontWeight: FontWeight.w900,

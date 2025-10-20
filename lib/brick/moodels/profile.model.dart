@@ -10,16 +10,18 @@ class Profile extends OfflineFirstWithSupabaseModel {
   @Supabase(unique: true)
   @Sqlite(index: true, unique: true)
   final String id;
-  String? fullName;
-  String? phoneNumber;
+  @Supabase(name: 'full_name')
+  final String? fullName;
+  @Supabase(name: 'phone_number')
+  final String? phoneNumber;
   final bool isAdmin;
   String? avatarUrl;
 
   Profile({
     String? id,
-    String? fullName,
-    String? phoneNumber,
+    required this.fullName,
+    required this.phoneNumber,
     required this.isAdmin,
-    String? avatarUrl,
-  }) : this.id = id ?? const Uuid().v4();
+    this.avatarUrl,
+  }) : id = id ?? const Uuid().v4();
 }
