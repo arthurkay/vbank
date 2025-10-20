@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:villagebanking/brick/moodels/group.model.dart';
 import 'package:villagebanking/brick/repository.dart';
+import 'package:villagebanking/screens/interest_calculator.dart';
 import 'package:villagebanking/theme.dart';
 
 import 'package:villagebanking/screens/activities.dart';
@@ -11,17 +12,25 @@ import 'package:villagebanking/screens/contributions.dart';
 import 'package:villagebanking/screens/group_members.dart';
 import 'package:villagebanking/screens/loans.dart';
 import 'package:villagebanking/screens/loan_application.dart';
-import 'package:villagebanking/screens/interest_calculator.dart';
+import 'package:villagebanking/screens/add_user_to_group_screen.dart';
+import 'package:villagebanking/screens/create_loan_entries_screen.dart';
 
-class HomeContent extends StatelessWidget {
+import 'package:villagebanking/main.dart' show supabase;
+import 'package:villagebanking/brick/repository.dart';
+import 'package:villagebanking/brick/moodels/group_member.model.dart';
+import 'package:brick_core/query.dart';
+
+class HomeContent extends StatefulWidget {
   final double currentBalance;
   final double growthLevel;
   final List<Map<String, String>> communityFeed;
   final AnimationController animationController;
+
   final int membersCount;
   final String? selectedGroupId;
 
   const HomeContent({
+    super.key,
     required this.currentBalance,
     required this.growthLevel,
     required this.communityFeed,
@@ -29,6 +38,59 @@ class HomeContent extends StatelessWidget {
     required this.membersCount,
     this.selectedGroupId,
   });
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdminStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedGroupId != oldWidget.selectedGroupId) {
+      _checkAdminStatus();
+    }
+  }
+
+  Future<void> _checkAdminStatus() async {
+    debugPrint("This doesnt work ${widget.selectedGroupId}");
+    if (widget.selectedGroupId == null) {
+      setState(() {
+        _isAdmin = false;
+      });
+      return;
+    }
+
+    final currentUserId = supabase.client.auth.currentUser?.id;
+    if (currentUserId == null) {
+      setState(() {
+        _isAdmin = false;
+      });
+      return;
+    }
+
+    final groupMemberships = await Repository().get<GroupMember>(
+      query: Query.where('memberId', currentUserId),
+    );
+
+    if (groupMemberships.isNotEmpty) {
+      setState(() {
+        _isAdmin = groupMemberships.first.role == 'Admin';
+      });
+    } else {
+      setState(() {
+        _isAdmin = false;
+      });
+    }
+  }
 
   // Helper method for the visually appealing "Growth Hub"
   Widget _buildGrowthHub(BuildContext context) {
@@ -46,7 +108,11 @@ class HomeContent extends StatelessWidget {
     );
 
     final Color growthColor =
-        Color.lerp(growthAccent.withOpacity(0.3), growthAccent, growthLevel) ??
+        Color.lerp(
+          growthAccent.withOpacity(0.3),
+          growthAccent,
+          widget.growthLevel,
+        ) ??
         growthAccent;
 
     return Container(
@@ -90,8 +156,8 @@ class HomeContent extends StatelessWidget {
           FutureBuilder(
             future: Repository().get<Group>(
               policy: OfflineFirstGetPolicy.alwaysHydrate,
-              query: selectedGroupId != null
-                  ? Query(where: [Where.exact('id', selectedGroupId!)])
+              query: widget.selectedGroupId != null
+                  ? Query(where: [Where.exact('id', widget.selectedGroupId)])
                   : Query(limit: 1),
             ),
             builder: (context, snapshot) {
@@ -107,9 +173,9 @@ class HomeContent extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Icon(
-                            growthLevel < 0.3
+                            widget.growthLevel < 0.3
                                 ? Icons.eco_outlined
-                                : growthLevel < 0.7
+                                : widget.growthLevel < 0.7
                                 ? Icons.scatter_plot_rounded
                                 : Icons.trending_up,
                             color: Colors.white,
@@ -148,7 +214,7 @@ class HomeContent extends StatelessWidget {
                 return Column(
                   children: [
                     AnimatedBuilder(
-                      animation: animationController,
+                      animation: widget.animationController,
                       builder: (context, child) {
                         return Text(
                           'Unable to load group data',
@@ -185,9 +251,9 @@ class HomeContent extends StatelessWidget {
                           alignment: Alignment.center,
                           children: [
                             Icon(
-                              growthLevel < 0.3
+                              widget.growthLevel < 0.3
                                   ? Icons.eco_outlined
-                                  : growthLevel < 0.7
+                                  : widget.growthLevel < 0.7
                                   ? Icons.scatter_plot_rounded
                                   : Icons.trending_up,
                               color: Colors.white,
@@ -209,7 +275,7 @@ class HomeContent extends StatelessWidget {
                               top: 8,
                               right: 8,
                               child: Text(
-                                '${(growthLevel * 100).toInt()}%',
+                                '${(widget.growthLevel * 100).toInt()}%',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -231,7 +297,7 @@ class HomeContent extends StatelessWidget {
                 return Column(
                   children: [
                     AnimatedBuilder(
-                      animation: animationController,
+                      animation: widget.animationController,
                       builder: (context, child) {
                         return Text(
                           snapshot.data?.first.name ?? '',
@@ -268,9 +334,9 @@ class HomeContent extends StatelessWidget {
                           alignment: Alignment.center,
                           children: [
                             Icon(
-                              growthLevel < 0.3
+                              widget.growthLevel < 0.3
                                   ? Icons.eco_outlined
-                                  : growthLevel < 0.7
+                                  : widget.growthLevel < 0.7
                                   ? Icons.scatter_plot_rounded
                                   : Icons.trending_up,
                               color: Colors.white,
@@ -292,7 +358,7 @@ class HomeContent extends StatelessWidget {
                               top: 8,
                               right: 8,
                               child: Text(
-                                '${(growthLevel * 100).toInt()}%',
+                                '${(widget.growthLevel * 100).toInt()}%',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -377,116 +443,6 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  // Helper method for the Community Feed (Engagement/Retention)
-  Widget _buildCommunityFeed(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-    final secondaryTextColor = isDarkMode ? Colors.grey[400] : Colors.grey[600];
-
-    final filteredCommunityFeed = selectedGroupId != null
-        ? communityFeed.where((item) => item['group_id'] == selectedGroupId).toList()
-        : communityFeed;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16.0, top: 20.0, bottom: 10.0),
-          child: Text(
-            'Community Feed (${membersCount} members)',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: theme.textTheme.titleLarge!.color,
-            ),
-          ),
-        ),
-        ListView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          itemCount: filteredCommunityFeed.length,
-          itemBuilder: (context, index) {
-            final item = filteredCommunityFeed[index];
-            IconData icon;
-            Color color;
-            String actionText;
-
-            switch (item['type']) {
-              case 'deposit':
-                icon = Icons.savings;
-                color = growthAccent;
-                actionText = 'deposited \$${item['amount']}';
-                break;
-              case 'goal':
-                icon = Icons.flag_rounded;
-                color = Colors.orange;
-                actionText = item['amount']!;
-                break;
-              case 'praise':
-                icon = Icons.emoji_events;
-                color = Colors.purple;
-                actionText = item['amount']!;
-                break;
-              case 'loan':
-                icon = Icons.handshake;
-                color = Colors.blueGrey;
-                actionText = item['amount']!;
-                break;
-              default:
-                icon = Icons.info;
-                color = Colors.grey;
-                actionText = 'did something.';
-            }
-
-            return Container(
-              margin: const EdgeInsets.only(
-                bottom: 8.0,
-                left: 16.0,
-                right: 16.0,
-              ),
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDarkMode
-                      ? const Color(0xFF333333)
-                      : const Color(0xFFE0E0E0),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDarkMode
-                        ? Colors.black.withOpacity(0.3)
-                        : Colors.black.withOpacity(0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: theme.cardColor,
-                  child: Icon(icon, color: color),
-                ),
-                title: Text(
-                  item['user']!,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.titleLarge!.color,
-                  ),
-                ),
-                subtitle: Text(
-                  actionText,
-                  style: TextStyle(color: secondaryTextColor),
-                ),
-                trailing: Icon(Icons.chevron_right, color: secondaryTextColor),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -544,7 +500,8 @@ class HomeContent extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => GroupMembersScreen(groupId: selectedGroupId),
+                        builder: (context) =>
+                            GroupMembersScreen(groupId: widget.selectedGroupId),
                       ),
                     );
                   },
@@ -558,7 +515,8 @@ class HomeContent extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ActivitiesScreen(groupId: selectedGroupId),
+                        builder: (context) =>
+                            ActivitiesScreen(groupId: widget.selectedGroupId),
                       ),
                     );
                   },
@@ -566,6 +524,47 @@ class HomeContent extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          if (_isAdmin)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  _buildActionButton(
+                    context,
+                    icon: Icons.person_add,
+                    label: 'Add User to Group',
+                    color: Theme.of(context).textTheme.bodyMedium!.color!,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AddUserToGroupScreen(
+                            groupId: widget.selectedGroupId!,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildActionButton(
+                    context,
+                    icon: Icons.money,
+                    label: 'Create Loan Entries',
+                    color: Theme.of(context).textTheme.bodyMedium!.color!,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CreateLoanEntriesScreen(
+                            groupId: widget.selectedGroupId!,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 20),
         ],
       ),

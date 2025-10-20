@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:villagebanking/brick/moodels/group_member.model.dart';
 import 'package:villagebanking/main.dart' show supabase;
 import 'package:villagebanking/screens/widgets/profile_content.dart';
 import 'package:villagebanking/screens/widgets/home_content.dart';
@@ -7,7 +8,7 @@ import 'package:villagebanking/screens/contributions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:brick_core/query.dart';
 import 'package:villagebanking/brick/moodels/group.model.dart';
-import 'package:villagebanking/brick/moodels/group_member.model.dart';
+
 import 'package:villagebanking/brick/repository.dart';
 
 class HomePageContainer extends StatefulWidget {
