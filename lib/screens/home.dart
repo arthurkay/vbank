@@ -1,3 +1,4 @@
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/group_member.model.dart';
 import 'package:villagebanking/main.dart' show supabase;
@@ -26,71 +27,7 @@ class _HomePageContainerState extends State<HomePageContainer>
   double _currentBalance = 1450.75;
   double _growthLevel = 0.78;
   // Mock Data for the Group Management Screen
-  final List<Map<String, dynamic>> _groupMembers = [
-    {
-      'name': 'Kwesi Amoah',
-      'contribution': 300,
-      'loan': 500.0,
-      'eligible': true,
-      'next_repayment': '2025-11-01',
-      'interest_rate': 0.05,
-    },
-    {
-      'name': 'Aisha Juma',
-      'contribution': 450,
-      'loan': 0.0,
-      'eligible': true,
-      'next_repayment': 'N/A',
-      'interest_rate': 0.05,
-    },
-    {
-      'name': 'Thomas Osei',
-      'contribution': 150,
-      'loan': 1200.0,
-      'eligible': false,
-      'next_repayment': '2025-10-25',
-      'interest_rate': 0.05,
-    },
-    {
-      'name': 'Zara Hassan',
-      'contribution': 200,
-      'loan': 250.0,
-      'eligible': true,
-      'next_repayment': '2025-11-15',
-      'interest_rate': 0.05,
-    },
-    {
-      'name': 'Bayo Eze',
-      'contribution': 600,
-      'loan': 0.0,
-      'eligible': true,
-      'next_repayment': 'N/A',
-      'interest_rate': 0.05,
-    },
-    {
-      'name': 'Amara Okoro',
-      'contribution': 50,
-      'loan': 800.0,
-      'eligible': false,
-      'next_repayment': '2025-10-20',
-      'interest_rate': 0.05,
-    },
-  ];
 
-  final List<Map<String, String>> _communityFeed = [
-    {'type': 'deposit', 'user': 'Aisha', 'amount': '50.00'},
-    {
-      'type': 'goal',
-      'user': 'Your Group',
-      'amount': 'Loan Pool Target Reached!',
-    },
-    {'type': 'praise', 'user': 'You', 'amount': 'Weekly commitment saved! ✨'},
-    {
-      'type': 'loan',
-      'user': 'Kwesi',
-      'amount': 'Loan disbursed for farm supplies',
-    },
-  ];
   late AnimationController _controller;
 
   String? _selectedGroupId;
@@ -125,6 +62,7 @@ class _HomePageContainerState extends State<HomePageContainer>
 
     final groupMemberships = await Repository().get<GroupMember>(
       query: Query.where('memberId', currentUserId),
+      policy: OfflineFirstGetPolicy.alwaysHydrate,
     );
 
     final groups = <Group>[];
@@ -147,21 +85,39 @@ class _HomePageContainerState extends State<HomePageContainer>
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
-        return ListView.builder(
-          itemCount: groups.length,
-          itemBuilder: (context, index) {
-            final group = groups[index];
-            return ListTile(
-              title: Text(group.name),
-              onTap: () async {
-                await prefs.setString('selectedGroupId', group.id);
-                setState(() {
-                  _selectedGroupId = group.id;
-                });
-                Navigator.pop(context);
-              },
-            );
-          },
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Select Group',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: groups.length,
+                  itemBuilder: (context, index) {
+                    final group = groups[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text(group.name),
+                        onTap: () async {
+                          await prefs.setString('selectedGroupId', group.id);
+                          setState(() {
+                            _selectedGroupId = group.id;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -185,15 +141,15 @@ class _HomePageContainerState extends State<HomePageContainer>
         return HomeContent(
           currentBalance: _currentBalance,
           growthLevel: _growthLevel,
-          communityFeed: _communityFeed,
+          communityFeed: [],
           animationController: _controller,
-          membersCount: _groupMembers.length,
+          membersCount: 0,
           selectedGroupId: _selectedGroupId,
         );
       case 1:
         return const ContributionsScreen();
       case 2:
-        return const LoansScreen();
+        return LoansScreen(groupId: _selectedGroupId ?? "0");
       case 3:
         return ProfileContent(supabase);
       default:
@@ -233,7 +189,7 @@ class _HomePageContainerState extends State<HomePageContainer>
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.group, color: theme.iconTheme.color),
+            icon: Icon(Icons.swap_vert, color: theme.iconTheme.color),
             onPressed: () => _showGroupSelector(context),
           ),
         ],

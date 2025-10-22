@@ -1,3 +1,4 @@
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/activity.model.dart';
 import 'package:villagebanking/brick/repository.dart';
@@ -12,10 +13,13 @@ class ActivitiesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Community Feed')),
+      appBar: AppBar(title: const Text('Activity Feed')),
       body: StreamBuilder<List<Activity>>(
         stream: Repository().subscribe<Activity>(
-          query: groupId != null ? Query.where('groupId', groupId!) : null,
+          query: groupId != null
+              ? Query.where('groupId', groupId!)
+              : Query.where('groupId', "0"),
+          policy: OfflineFirstGetPolicy.alwaysHydrate,
         ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {

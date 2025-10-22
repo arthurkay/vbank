@@ -15,9 +15,9 @@ class Loan extends OfflineFirstWithSupabaseModel {
   @Supabase(name: 'member_id')
   final String memberId;
   @Supabase(name: 'principal_amount')
-  final double principalAmount;
+  final num principalAmount;
   @Supabase(name: 'interest_rate')
-  final double interestRate;
+  final num interestRate;
   @Supabase(name: 'disbursement_date')
   final DateTime disbursementDate;
   @Supabase(name: 'term_months')
@@ -26,7 +26,7 @@ class Loan extends OfflineFirstWithSupabaseModel {
   final DateTime? nextRepaymentDate;
   final String status;
   @Supabase(name: 'current_balance')
-  final double currentBalance;
+  final num currentBalance;
 
   Loan({
     String? id,

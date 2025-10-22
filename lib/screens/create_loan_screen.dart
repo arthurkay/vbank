@@ -1,10 +1,20 @@
+import 'dart:ffi';
+
+import 'package:brick_offline_first/brick_offline_first.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:villagebanking/brick/moodels/loan.model.dart';
+import 'package:villagebanking/brick/repository.dart';
 
 class CreateLoanScreen extends StatefulWidget {
   final String groupId;
   final String memberId;
 
-  const CreateLoanScreen({super.key, required this.groupId, required this.memberId});
+  const CreateLoanScreen({
+    super.key,
+    required this.groupId,
+    required this.memberId,
+  });
 
   @override
   State<CreateLoanScreen> createState() => _CreateLoanScreenState();
@@ -29,7 +39,8 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
   void _calculateMonthlyPayment() {
     if (_formKey.currentState!.validate()) {
       final double amount = double.parse(_amountController.text);
-      final double annualInterestRate = double.parse(_interestRateController.text) / 100;
+      final double annualInterestRate =
+          double.parse(_interestRateController.text) / 100;
       final int tenureMonths = int.parse(_tenureController.text);
 
       if (tenureMonths == 0) {
@@ -49,7 +60,8 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
         // For simplicity, let's assume simple interest for now, or a basic division.
         // A more accurate formula for amortized loan payment (P = L[i(1 + i)^n] / [(1 + i)^n – 1]) is complex.
         // For a simple approximation, we'll just divide principal + total interest by tenure.
-        final double totalInterest = amount * annualInterestRate * (tenureMonths / 12);
+        final double totalInterest =
+            amount * annualInterestRate * (tenureMonths / 12);
         setState(() {
           _monthlyPayment = (amount + totalInterest) / tenureMonths;
         });
@@ -57,12 +69,46 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
     }
   }
 
-  void _submitLoan() {
+  Future<void> _submitLoan() async {
     if (_formKey.currentState!.validate()) {
-      // Here you would typically send the loan data to your backend or repository
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Submitting loan for ${widget.memberId} in group ${widget.groupId}')),
-      );
+      try {
+        final double _currentBalance =
+            (double.parse(_amountController.text) *
+                (double.parse(_interestRateController.text) / 100)) +
+            double.parse(_amountController.text);
+        final loanSumission = Loan(
+          groupId: widget.groupId,
+          memberId: widget.memberId,
+          principalAmount: double.parse(_amountController.text),
+          interestRate: double.parse(_interestRateController.text),
+          disbursementDate: DateTime.now(),
+          termMonths: int.parse(_tenureController.text),
+          currentBalance: _currentBalance,
+          nextRepaymentDate: DateTime.now().add(Duration(days: 30)),
+        );
+
+        final loan = await Repository().upsert<Loan>(
+          loanSumission,
+          policy: OfflineFirstUpsertPolicy.requireRemote,
+        );
+        if (loan.isNewRecord) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Loan submission failed')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Loan submitted successfully')),
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error submitting loan: $e');
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting loan: Try again later')),
+        );
+        return;
+      }
       // For now, just pop the screen
       Navigator.pop(context);
     }
@@ -71,9 +117,7 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create New Loan'),
-      ),
+      appBar: AppBar(title: const Text('Create New Loan')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -91,7 +135,8 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter an amount';
                   }
-                  if (double.tryParse(value) == null || double.parse(value) <= 0) {
+                  if (double.tryParse(value) == null ||
+                      double.parse(value) <= 0) {
                     return 'Please enter a valid positive amount';
                   }
                   return null;
@@ -110,7 +155,8 @@ class _CreateLoanScreenState extends State<CreateLoanScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter an interest rate';
                   }
-                  if (double.tryParse(value) == null || double.parse(value) < 0) {
+                  if (double.tryParse(value) == null ||
+                      double.parse(value) < 0) {
                     return 'Please enter a valid non-negative interest rate';
                   }
                   return null;

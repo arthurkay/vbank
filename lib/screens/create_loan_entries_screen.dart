@@ -5,6 +5,7 @@ import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:brick_core/query.dart';
 import 'package:villagebanking/screens/create_loan_screen.dart';
 import 'package:villagebanking/screens/create_loan_repayment_screen.dart';
+import 'package:villagebanking/theme.dart';
 
 class GroupMemberWithProfile {
   final GroupMember groupMember;
@@ -129,13 +130,29 @@ class _CreateLoanEntriesScreenState extends State<CreateLoanEntriesScreen> {
               itemCount: _groupMembersWithProfiles.length,
               itemBuilder: (context, index) {
                 final memberWithProfile = _groupMembersWithProfiles[index];
-                return ListTile(
-                  title: Text(memberWithProfile.profile.fullName),
-                  subtitle: Text('Role: ${memberWithProfile.groupMember.role}'),
-                  onTap: () => _showActionBottomSheet(
-                    context,
-                    memberWithProfile.groupMember.memberId,
-                    memberWithProfile.profile.fullName,
+                return Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: growthAccent,
+                      child: Text(
+                        memberWithProfile.profile.fullName.isNotEmpty
+                            ? memberWithProfile.profile.fullName[0]
+                            : '?',
+                      ),
+                    ),
+                    title: Text(memberWithProfile.profile.fullName),
+                    subtitle: Text(
+                      'Role: ${memberWithProfile.groupMember.role}',
+                    ),
+                    onTap: () => _showActionBottomSheet(
+                      context,
+                      memberWithProfile.groupMember.memberId,
+                      memberWithProfile.profile.fullName,
+                    ),
                   ),
                 );
               },

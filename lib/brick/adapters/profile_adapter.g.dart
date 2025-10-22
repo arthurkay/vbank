@@ -8,14 +8,10 @@ Future<Profile> _$ProfileFromSupabase(
 }) async {
   return Profile(
     id: data['id'] as String?,
-    fullName: data['full_name'] == null ? null : data['full_name'] as String?,
-    phoneNumber: data['phone_number'] == null
-        ? null
-        : data['phone_number'] as String?,
+    fullName: data['full_name'] as String?,
+    phoneNumber: data['phone_number'] as String?,
     isAdmin: data['is_admin'] as bool,
-    avatarUrl: data['avatar_url'] == null
-        ? null
-        : data['avatar_url'] as String?,
+    avatarUrl: data['avatar_url'] as String?,
   );
 }
 
@@ -40,14 +36,10 @@ Future<Profile> _$ProfileFromSqlite(
 }) async {
   return Profile(
     id: data['id'] as String,
-    fullName: data['full_name'] == null ? null : data['full_name'] as String?,
-    phoneNumber: data['phone_number'] == null
-        ? null
-        : data['phone_number'] as String?,
+    fullName: data['full_name'] as String,
+    phoneNumber: data['phone_number'] as String,
     isAdmin: data['is_admin'] == 1,
-    avatarUrl: data['avatar_url'] == null
-        ? null
-        : data['avatar_url'] as String?,
+    avatarUrl: data['avatar_url'] as String,
   )..primaryKey = data['_brick_id'] as int;
 }
 

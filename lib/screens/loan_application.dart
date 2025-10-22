@@ -1,3 +1,4 @@
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:villagebanking/brick/moodels/activity.model.dart';
@@ -59,7 +60,10 @@ class _LoanApplicationScreenState extends State<LoanApplicationScreen> {
         description:
             'Loan Amount: $amount, Payment Tenure: $tenure months, Interest Rate: 20%',
       );
-      Repository().upsert<Activity>(activity);
+      Repository().upsert<Activity>(
+        activity,
+        policy: OfflineFirstUpsertPolicy.requireRemote,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Loan application submitted!')),
       );
