@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:villagebanking/brick/moodels/activity.model.dart';
+import 'package:villagebanking/brick/moodels/contribution.model.dart';
+import 'package:villagebanking/brick/moodels/group_member.model.dart';
+import 'package:villagebanking/brick/moodels/group.model.dart';
+import 'package:villagebanking/brick/moodels/loan_repayment.model.dart';
+import 'package:villagebanking/brick/moodels/loan.model.dart';
+import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:villagebanking/screens/home.dart';
 import 'package:villagebanking/screens/login.dart';
@@ -16,7 +23,18 @@ void main() async {
   );
   await Repository.configure(databaseFactory);
   await Repository().initialize();
+  await _syncRemoteDeletions();
   runApp(const VillageBankingApp());
+}
+
+Future<void> _syncRemoteDeletions() async {
+  await Repository().destructiveLocalSyncFromRemote<Group>();
+  await Repository().destructiveLocalSyncFromRemote<Profile>();
+  await Repository().destructiveLocalSyncFromRemote<GroupMember>();
+  await Repository().destructiveLocalSyncFromRemote<Contribution>();
+  await Repository().destructiveLocalSyncFromRemote<Loan>();
+  await Repository().destructiveLocalSyncFromRemote<LoanRepayment>();
+  await Repository().destructiveLocalSyncFromRemote<Activity>();
 }
 
 class VillageBankingApp extends StatelessWidget {
