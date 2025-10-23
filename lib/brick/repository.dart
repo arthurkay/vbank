@@ -1,4 +1,3 @@
-import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:brick_offline_first_with_supabase/brick_offline_first_with_supabase.dart';
 import 'package:brick_sqlite/brick_sqlite.dart';
 import 'package:brick_sqlite/memory_cache_provider.dart';
@@ -12,7 +11,7 @@ import 'package:villagebanking/brick/db/schema.g.dart';
 
 import 'brick.g.dart';
 
-class Repository extends OfflineFirstWithSupabaseRepository with DestructiveLocalSyncFromRemoteMixin {
+class Repository extends OfflineFirstWithSupabaseRepository {
   static late Repository? _instance;
 
   Repository._({
