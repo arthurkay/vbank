@@ -1,4 +1,5 @@
 import 'package:brick_core/core.dart';
+import 'package:brick_offline_first/brick_offline_first.dart';
 import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/group_member.model.dart';
 import 'package:villagebanking/brick/repository.dart';
@@ -16,6 +17,7 @@ class GroupMembersScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Group Members')),
       body: StreamBuilder<List<GroupMember>>(
         stream: Repository().subscribe<GroupMember>(
+          policy: OfflineFirstGetPolicy.alwaysHydrate,
           query: groupId != null ? Query.where('groupId', groupId!) : null,
         ),
         builder: (context, snapshot) {

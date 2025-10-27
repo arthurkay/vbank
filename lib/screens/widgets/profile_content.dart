@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:brick_offline_first/brick_offline_first.dart';
@@ -96,7 +97,10 @@ class _ProfileContentState extends State<ProfileContent> {
           Center(
             child: FutureBuilder(
               future: Repository().get<Profile>(
-                query: Query(limit: 1),
+                query: Query.where(
+                  "id",
+                  supabase.client.auth.currentUser?.id ?? "",
+                ),
                 policy: OfflineFirstGetPolicy.alwaysHydrate,
               ),
               builder: (context, snapshot) {
@@ -216,6 +220,8 @@ class _ProfileContentState extends State<ProfileContent> {
                 ),
               );
               await supabase.client.auth.signOut();
+              var prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const AuthGate()),
                 (Route<dynamic> route) => false,

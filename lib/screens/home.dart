@@ -147,7 +147,7 @@ class _HomePageContainerState extends State<HomePageContainer>
           selectedGroupId: _selectedGroupId,
         );
       case 1:
-        return const ContributionsScreen();
+        return ContributionsScreen(groupId: _selectedGroupId ?? "0");
       case 2:
         return LoansScreen(groupId: _selectedGroupId ?? "0");
       case 3:

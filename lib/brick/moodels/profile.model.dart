@@ -12,13 +12,15 @@ class Profile extends OfflineFirstWithSupabaseModel {
   final String id;
   final String fullName;
   final String phoneNumber;
+  final String? email;
   final bool isAdmin;
   final String avatarUrl;
 
   Profile({
     String? id,
     String? fullName,
-    String? phoneNumber, // Make phoneNumber nullable
+    String? phoneNumber,
+    this.email,
     required this.isAdmin,
     String? avatarUrl,
   })  : this.id = id ?? const Uuid().v4(),

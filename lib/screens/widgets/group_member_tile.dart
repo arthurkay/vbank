@@ -3,6 +3,7 @@ import 'package:villagebanking/brick/moodels/group_member.model.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:brick_core/query.dart';
+import 'package:villagebanking/screens/create_loan_repayment_screen.dart';
 import 'package:villagebanking/theme.dart';
 
 class GroupMemberTile extends StatelessWidget {
@@ -42,7 +43,26 @@ class GroupMemberTile extends StatelessWidget {
           },
         ),
         subtitle: Text(groupMember.role),
-        trailing: Text(groupMember.status),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(groupMember.status),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => CreateLoanRepaymentScreen(
+                      groupId: groupMember.groupId,
+                      memberId: groupMember.memberId,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Repay Loan'),
+            ),
+          ],
+        ),
       ),
     );
   }

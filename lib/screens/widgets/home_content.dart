@@ -14,6 +14,7 @@ import 'package:villagebanking/screens/loans.dart';
 import 'package:villagebanking/screens/loan_application.dart';
 import 'package:villagebanking/screens/add_user_to_group_screen.dart';
 import 'package:villagebanking/screens/create_loan_entries_screen.dart';
+import 'package:villagebanking/screens/create_user_screen.dart';
 
 import 'package:villagebanking/main.dart' show supabase;
 import 'package:villagebanking/brick/repository.dart';
@@ -78,7 +79,10 @@ class _HomeContentState extends State<HomeContent> {
     }
 
     final groupMemberships = await Repository().get<GroupMember>(
-      query: Query.where('memberId', currentUserId),
+      query: Query(where: [
+        Where.exact('memberId', currentUserId),
+        Where.exact('groupId', widget.selectedGroupId!),
+      ]),
     );
 
     if (groupMemberships.isNotEmpty) {
@@ -548,6 +552,20 @@ class _HomeContentState extends State<HomeContent> {
                   ),
                   _buildActionButton(
                     context,
+                    icon: Icons.person_add_alt_1,
+                    label: 'Create User',
+                    color: Theme.of(context).textTheme.bodyMedium!.color!,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CreateUserScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildActionButton(
+                    context,
                     icon: Icons.money,
                     label: 'Create Loan Entries',
                     color: Theme.of(context).textTheme.bodyMedium!.color!,
@@ -558,7 +576,7 @@ class _HomeContentState extends State<HomeContent> {
                           builder: (context) => CreateLoanEntriesScreen(
                             groupId: widget.selectedGroupId!,
                           ),
-                        ),
+),
                       );
                     },
                   ),

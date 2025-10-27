@@ -1,9 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/loan.model.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:brick_core/query.dart';
+import 'package:villagebanking/screens/loan_repayments.dart';
 
 class LoanTile extends StatefulWidget {
   final Loan loan;
@@ -46,16 +46,22 @@ class _LoanTileState extends State<LoanTile> {
               return Text('Member: ${widget.loan.memberId}');
             }
             final profile = snapshot.data!;
-            return Text(profile.fullName);
+            return Text(profile.fullName ?? 'N/A');
           },
         ),
         subtitle: Text(
           'Balance: ${widget.loan.currentBalance}',
         ),
-        trailing: Text(widget.loan.status),
-        onTap: () {
-          // Navigate to LoanRepaymentsScreen
-        },
+        trailing: ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => LoanRepaymentsScreen(loanId: widget.loan.id),
+              ),
+            );
+          },
+          child: const Text('View Repayments'),
+        ),
       ),
     );
   }
