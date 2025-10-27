@@ -73,13 +73,14 @@ class _ProfileContentState extends State<ProfileContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    String phone = "-";
     final primaryTextColor = theme.textTheme.titleLarge!.color;
     final Map<String, dynamic> _mockUserProfile = {
       'id': supabase.client.auth.currentUser?.id,
       'name': supabase.client.auth.currentUser?.userMetadata?['full_name'],
       'group_role': 'Treasurer/Admin',
       'email': supabase.client.auth.currentUser?.email,
-      'phone': '+260 971 123 456',
+      'phone': supabase.client.auth.currentUser?.userMetadata?['phone'] ?? "",
       'group_name': 'Zambia Copper Savings Group',
       'joining_date': DateFormat.yMd().format(
         DateTime.parse(supabase.client.auth.currentUser?.createdAt ?? ''),
@@ -106,6 +107,7 @@ class _ProfileContentState extends State<ProfileContent> {
                     return const Center(child: Text('No data to show yet.'));
                   }
                   var userData = snapshot.data!.first;
+                  phone = userData.phoneNumber;
                   return Column(
                     children: [
                       const CircleAvatar(
@@ -114,24 +116,13 @@ class _ProfileContentState extends State<ProfileContent> {
                         child: Icon(Icons.person, color: darkText, size: 40),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            userData.fullName ?? "N/A",
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: primaryTextColor,
-                            ),
-                          ),
-                          // Edit Name Button
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 20),
-                            color: growthAccent,
-                            onPressed: () {},
-                          ),
-                        ],
+                      Text(
+                        userData.fullName,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: primaryTextColor,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -160,13 +151,6 @@ class _ProfileContentState extends State<ProfileContent> {
               color: primaryTextColor,
             ),
           ),
-          const SizedBox(height: 12),
-          _buildProfileTile(
-            context,
-            label: 'Group Name',
-            value: _mockUserProfile['group_name'],
-            icon: Icons.groups_2_rounded,
-          ),
           _buildProfileTile(
             context,
             label: 'Email Address',
@@ -176,7 +160,7 @@ class _ProfileContentState extends State<ProfileContent> {
           _buildProfileTile(
             context,
             label: 'Phone Number',
-            value: _mockUserProfile['phone'],
+            value: phone,
             icon: Icons.phone_outlined,
           ),
           _buildProfileTile(
