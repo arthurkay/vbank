@@ -79,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Icon(Icons.account_balance, size: 80, color: growthAccent),
               const SizedBox(height: 16),
               Text(
-                'Welcome to The Growth Hub',
+                'Welcome to vBank',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,

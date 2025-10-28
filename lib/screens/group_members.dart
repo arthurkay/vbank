@@ -7,9 +7,9 @@ import 'package:villagebanking/screens/widgets/group_member_tile.dart';
 import 'package:villagebanking/theme.dart';
 
 class GroupMembersScreen extends StatelessWidget {
-  final String? groupId;
+  final String groupId;
 
-  const GroupMembersScreen({super.key, this.groupId});
+  const GroupMembersScreen({super.key, required this.groupId});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class GroupMembersScreen extends StatelessWidget {
       body: StreamBuilder<List<GroupMember>>(
         stream: Repository().subscribe<GroupMember>(
           policy: OfflineFirstGetPolicy.alwaysHydrate,
-          query: groupId != null ? Query.where('groupId', groupId!) : null,
+          query: Query.where('groupId', groupId),
         ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {

@@ -86,7 +86,6 @@ class _ContributionsScreenState extends State<ContributionsScreen> {
             itemBuilder: (context, index) {
               final contribution = contributions[index];
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
                   leading: const Icon(Icons.attach_money),
                   title: Text('Amount: ${contribution.amount}'),

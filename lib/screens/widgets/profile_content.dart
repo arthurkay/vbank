@@ -219,8 +219,9 @@ class _ProfileContentState extends State<ProfileContent> {
                   duration: const Duration(seconds: 4),
                 ),
               );
-              await supabase.client.auth.signOut();
               var prefs = await SharedPreferences.getInstance();
+              await prefs.remove("selectedGroupId");
+              await supabase.client.auth.signOut();
               await prefs.clear();
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (context) => const AuthGate()),

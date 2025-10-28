@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:villagebanking/brick/moodels/profile.model.dart';
 import 'package:villagebanking/brick/repository.dart';
 import 'package:villagebanking/main.dart';
+import 'package:villagebanking/screens/widgets/success_dialog.dart';
 
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
@@ -106,15 +107,13 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       );
 
                       if (response.user != null) {
-                        final profile = Profile(
-                          id: response.user!.id,
-                          fullName: _fullNameController.text,
-                          phoneNumber: _phoneNumberController.text,
-                          email: _emailController.text,
-                          isAdmin: false,
-                        );
-                        await Repository().upsert<Profile>(profile);
-                        Navigator.pop(context);
+                        showDialog(
+                          context: context,
+                          builder: (context) => const SuccessDialog(
+                            title: 'User Created',
+                            message: 'The user has been created successfully.',
+                          ),
+                        ).then((_) => Navigator.pop(context));
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(

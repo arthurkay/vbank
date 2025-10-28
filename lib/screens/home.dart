@@ -174,7 +174,7 @@ class _HomePageContainerState extends State<HomePageContainer>
         screenTitle = 'Profile';
         break;
       default:
-        screenTitle = 'The Growth Hub';
+        screenTitle = 'vBank';
     }
 
     return Scaffold(
