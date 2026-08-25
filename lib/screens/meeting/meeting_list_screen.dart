@@ -23,10 +23,20 @@ class MeetingListScreen extends ConsumerWidget {
         error: (e, _) => ErrorView(e),
         data: (list) {
           if (list.isEmpty) return const EmptyState(icon: LucideIcons.calendar, title: 'No meetings scheduled');
-          return ListView(
-            padding: const EdgeInsets.all(20),
+          return FilterableList<Meeting>(
+            items: list,
+            searchPlaceholder: 'Search meetings',
+            searchText: (m) => '${fmtDateTime(m.scheduledAt)} ${m.status.name} ${m.notes ?? ''}',
+            filters: [
+              FilterOption.all<Meeting>(),
+              FilterOption('Scheduled', (m) => m.status == MeetingStatus.scheduled),
+              FilterOption('Completed', (m) => m.status == MeetingStatus.completed),
+              FilterOption('Cancelled', (m) => m.status == MeetingStatus.cancelled),
+            ],
+            builder: (context, visible) => ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             children: [
-              for (final m in list)
+              for (final m in visible)
                 ListRow(
                   leading: Icon(m.status == MeetingStatus.completed ? LucideIcons.circleCheck : LucideIcons.calendar),
                   title: Text(fmtDateTime(m.scheduledAt)),
@@ -35,6 +45,7 @@ class MeetingListScreen extends ConsumerWidget {
                   onTap: () => pushScreen(context, MeetingDetailScreen(meetingId: m.id)),
                 ),
             ],
+            ),
           );
         },
       ),

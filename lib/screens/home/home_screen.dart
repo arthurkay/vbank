@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/ipfs/sync_manager.dart' show SyncState;
 import '../../models/group.dart';
 import '../../models/meeting.dart';
+import '../../models/transaction.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
@@ -121,20 +122,25 @@ class _GroupsTab extends ConsumerWidget {
             ),
           );
         }
-        return RefreshTrigger(
-          onRefresh: () => ref.read(groupListProvider.notifier).refresh(),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
-            children: [
-              for (final group in groups)
-                _GroupRow(group: group, me: me),
-              const Gap(4),
-              Button.outline(
-                onPressed: () => Navigator.pushNamed(context, '/join-group'),
-                leading: const Icon(LucideIcons.scanLine),
-                child: const Text('Join another group'),
-              ),
-            ],
+        return FilterableList<Group>(
+          items: groups,
+          searchPlaceholder: 'Search groups',
+          searchText: (g) => '${g.name} ${g.status.name} ${g.config.currency}',
+          builder: (context, visible) => RefreshTrigger(
+            onRefresh: () => ref.read(groupListProvider.notifier).refresh(),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
+              children: [
+                for (final group in visible)
+                  _GroupRow(group: group, me: me),
+                const Gap(4),
+                Button.outline(
+                  onPressed: () => Navigator.pushNamed(context, '/join-group'),
+                  leading: const Icon(LucideIcons.scanLine),
+                  child: const Text('Join another group'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -182,22 +188,29 @@ class _TransactionsTab extends ConsumerWidget {
       error: (e, _) => ErrorView(e),
       data: (list) {
         if (list.isEmpty) return const EmptyState(icon: LucideIcons.receipt, title: 'No transactions yet');
-        return RefreshTrigger(
-          onRefresh: () => ref.refresh(allTransactionsProvider.future),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: list.length.clamp(0, 50),
-            itemBuilder: (context, i) {
-              final tx = list[i];
-              final group = groups.where((g) => g.id == tx.groupId).firstOrNull;
-              return TransactionTile(
-                transaction: tx,
-                onTap: () {
-                  if (group != null) ref.read(selectedGroupProvider.notifier).state = group;
-                  pushScreen(context, TransactionDetailScreen(transaction: tx));
-                },
-              );
-            },
+        Group? groupOf(Transaction tx) => groups.where((g) => g.id == tx.groupId).firstOrNull;
+        return FilterableList<Transaction>(
+          items: list,
+          filters: txFilters(),
+          searchPlaceholder: 'Search activity',
+          searchText: (tx) => txHaystack(tx, group: groupOf(tx)),
+          builder: (context, visible) => RefreshTrigger(
+            onRefresh: () => ref.refresh(allTransactionsProvider.future),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              itemCount: visible.length,
+              itemBuilder: (context, i) {
+                final tx = visible[i];
+                final group = groupOf(tx);
+                return TransactionTile(
+                  transaction: tx,
+                  onTap: () {
+                    if (group != null) ref.read(selectedGroupProvider.notifier).state = group;
+                    pushScreen(context, TransactionDetailScreen(transaction: tx));
+                  },
+                );
+              },
+            ),
           ),
         );
       },
@@ -223,12 +236,17 @@ class _MeetingsTab extends ConsumerWidget {
             subtitle: 'Admins schedule meetings from a group\'s Meetings tab',
           );
         }
-        return RefreshTrigger(
+        String nameOfGroup(Meeting m) => groups.where((g) => g.id == m.groupId).firstOrNull?.name ?? 'Meeting';
+        return FilterableList<Meeting>(
+          items: list,
+          searchPlaceholder: 'Search meetings',
+          searchText: (m) => '${nameOfGroup(m)} ${fmtDateTime(m.scheduledAt)} ${m.status.name}',
+          builder: (context, visible) => RefreshTrigger(
           onRefresh: () => ref.refresh(upcomingMeetingsProvider.future),
           child: ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             children: [
-              for (final m in list)
+              for (final m in visible)
                 ListRow(
                   leading: Icon(
                     m.status == MeetingStatus.completed ? LucideIcons.circleCheck : LucideIcons.calendar,
@@ -244,6 +262,7 @@ class _MeetingsTab extends ConsumerWidget {
                   },
                 ),
             ],
+          ),
           ),
         );
       },
@@ -324,3 +343,34 @@ class _SettingsTab extends ConsumerWidget {
     );
   }
 }
+
+/// Searchable text for a transaction: type, note, amount, date, and the names
+/// of the people and group involved.
+String txHaystack(Transaction tx, {Group? group}) {
+  String nameOf(String peerId) => peerId == 'group'
+      ? 'group fund'
+      : group?.members.where((m) => m.peerId == peerId).firstOrNull?.name ?? '';
+  return [
+    tx.type.name,
+    tx.status.name,
+    tx.note ?? '',
+    tx.currency,
+    tx.amount.toStringAsFixed(2),
+    fmtDate(tx.timestamp),
+    nameOf(tx.fromPeerId),
+    nameOf(tx.toPeerId),
+    group?.name ?? '',
+  ].join(' ');
+}
+
+/// Type filters shared by the Activity tab, the group Transactions tab and the
+/// standalone transaction list.
+List<FilterOption<Transaction>> txFilters() => [
+      FilterOption.all<Transaction>(),
+      FilterOption('Contributions', (t) => t.type == TransactionType.contribution),
+      FilterOption('Loans', (t) => t.type == TransactionType.loan),
+      FilterOption('Repayments', (t) => t.type == TransactionType.repayment),
+      FilterOption('Penalties', (t) => t.type == TransactionType.penalty),
+      FilterOption('Withdrawals', (t) => t.type == TransactionType.withdrawal),
+      FilterOption('Reversed', (t) => t.status == TransactionStatus.reversed || t.type == TransactionType.reversal),
+    ];

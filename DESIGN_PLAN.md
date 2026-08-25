@@ -1984,6 +1984,12 @@ Status of record as of 2026-08-25. See `planning/PLAN_GAP_ANALYSIS.md` for the a
 - Battery: node stopped 15 min after the app is backgrounded; periodic sync only in foreground.
 - Discovery: DHT `findProviders` on each group's snapshot CID + dial; mDNS is provided by dart_ipfs's own service (`_ipfs-discovery._udp`), not a custom `_vbank._tcp`.
 
+**v1.4 (2026-08-26) - search and filters on long lists**
+- `FilterableList<T>` + `SearchField` + `FilterOption<T>` in `lib/ui/ui.dart`: case-insensitive substring search over a per-item haystack, scrollable filter chips, an "N of M" counter while narrowed, a "No matches" state naming the query, and the search field hidden until a list reaches `minItemsForSearch` (default 6).
+- Wired into: home Activity (type filters incl. Reversed), home Groups (search), home Meetings (search), group Transactions / Members / Loans / Meetings tabs, the standalone transaction / loan / meeting list screens, and the group-settings roster (inline search, since that page is itself a ListView).
+- Search haystacks resolve peer ids to member names via the group roster (`txHaystack` in `home_screen.dart`), so searching a member's name finds every entry involving them.
+- Covered by `test/filterable_list_test.dart` (5 widget tests: narrowing, case-insensitivity/amount match, empty state, chip+query combination, hidden search on short lists).
+
 **v1.3 (2026-08-25) - Spark design system, website, store assets**
 - The shadcn UI now follows the **Spark design system** (`../o-systems/spark`): zinc light/dark theme (no brand colour; red/green/orange as semantic accents only), **Lucide icons throughout** (no Material `Icons`), muted radius-12 `Panel`/`ListRow` surfaces, borderless text fields, `.small.semiBold.muted` section labels, page padding 20, `SurfaceCard` toasts, Spark-style filter chips (`Segmented`/`FilterChip`) in place of `Tabs`, and an animated welcome screen.
 - Bottom navigation gives each destination an equal-width cell (`Expanded` + `NavigationBarAlignment.spaceEvenly`) so icons sit on even centres; the transactions tab is labelled "Activity" because a quarter of a 384 dp screen only fits ~8 characters.

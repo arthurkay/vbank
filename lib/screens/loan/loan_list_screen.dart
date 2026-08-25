@@ -32,10 +32,24 @@ class LoanListScreen extends ConsumerWidget {
         error: (e, _) => ErrorView(e),
         data: (list) {
           if (list.isEmpty) return const EmptyState(icon: LucideIcons.landmark, title: 'No loans yet');
-          return ListView(
-            padding: const EdgeInsets.all(20),
+          String borrowerOf(LoanRequest l) =>
+              group.members.where((m) => m.peerId == l.borrowerPeerId).firstOrNull?.name ?? 'member';
+          return FilterableList<LoanRequest>(
+            items: list,
+            searchPlaceholder: 'Search loans',
+            searchText: (l) =>
+                '${borrowerOf(l)} ${l.status.name} ${l.requestedAmount.toStringAsFixed(2)} ${l.termWeeks} weeks ${l.reason ?? ''}',
+            filters: [
+              FilterOption.all<LoanRequest>(),
+              FilterOption('Pending', (l) => l.status == LoanStatus.pending),
+              FilterOption('Active', (l) => l.isActive),
+              FilterOption('Completed', (l) => l.status == LoanStatus.completed),
+              FilterOption('Rejected', (l) => l.status == LoanStatus.rejected || l.status == LoanStatus.defaulted),
+            ],
+            builder: (context, visible) => ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             children: [
-              for (final loan in list)
+              for (final loan in visible)
                 ListRow(
                   title: Text('${fmtMoney(c, loan.requestedAmount)} · ${group.members.where((m) => m.peerId == loan.borrowerPeerId).firstOrNull?.name ?? 'member'}'),
                   subtitle: Text(loan.status.name).small.muted,
@@ -43,6 +57,7 @@ class LoanListScreen extends ConsumerWidget {
                   onTap: () => pushScreen(context, LoanDetailScreen(loanId: loan.id)),
                 ),
             ],
+            ),
           );
         },
       ),

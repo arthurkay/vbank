@@ -608,6 +608,150 @@ class FilterChip extends StatelessWidget {
   }
 }
 
+/// Spark-style search input: borderless, leading magnifier, clear button.
+class SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final String placeholder;
+  const SearchField({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+    this.placeholder = 'Search',
+  });
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        placeholder: Text(placeholder),
+        onChanged: onChanged,
+        features: const [
+          InputFeature.leading(Icon(LucideIcons.search, size: 16)),
+          InputFeature.clear(),
+        ],
+      );
+}
+
+/// One chip in a [FilterableList]: a label and the test an item must pass.
+class FilterOption<T> {
+  final String label;
+  final bool Function(T) test;
+  const FilterOption(this.label, this.test);
+
+  /// Chip that matches everything.
+  static FilterOption<T> all<T>([String label = 'All']) => FilterOption<T>(label, (_) => true);
+}
+
+/// A searchable, filterable list section.
+///
+/// Owns the query and the selected filter, hands the surviving items to
+/// [builder], and shows a "no matches" state when a search or filter excludes
+/// everything. Search is a case-insensitive substring match against
+/// [searchText]; the chips come from [filters] (omit them for search only).
+///
+/// The search field only appears once there are [minItemsForSearch] items, so
+/// short lists stay uncluttered.
+class FilterableList<T> extends StatefulWidget {
+  final List<T> items;
+  final String Function(T) searchText;
+  final List<FilterOption<T>> filters;
+  final Widget Function(BuildContext context, List<T> items) builder;
+  final String searchPlaceholder;
+  final int minItemsForSearch;
+  final Widget? empty;
+  final EdgeInsetsGeometry headerPadding;
+
+  const FilterableList({
+    super.key,
+    required this.items,
+    required this.searchText,
+    required this.builder,
+    this.filters = const [],
+    this.searchPlaceholder = 'Search',
+    this.minItemsForSearch = 6,
+    this.empty,
+    this.headerPadding = const EdgeInsets.fromLTRB(20, 12, 20, 0),
+  });
+
+  @override
+  State<FilterableList<T>> createState() => _FilterableListState<T>();
+}
+
+class _FilterableListState<T> extends State<FilterableList<T>> {
+  final _controller = TextEditingController();
+  String _query = '';
+  int _filter = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty && widget.empty != null) return widget.empty!;
+
+    final filters = widget.filters;
+    final index = _filter.clamp(0, filters.isEmpty ? 0 : filters.length - 1);
+    final q = _query.trim().toLowerCase();
+    final filtered = widget.items.where((item) {
+      if (filters.isNotEmpty && !filters[index].test(item)) return false;
+      if (q.isEmpty) return true;
+      return widget.searchText(item).toLowerCase().contains(q);
+    }).toList();
+
+    final showSearch = widget.items.length >= widget.minItemsForSearch || q.isNotEmpty;
+    final narrowed = filtered.length != widget.items.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showSearch || filters.isNotEmpty)
+          Padding(
+            padding: widget.headerPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showSearch)
+                  SearchField(
+                    controller: _controller,
+                    placeholder: widget.searchPlaceholder,
+                    onChanged: (v) => setState(() => _query = v),
+                  ),
+                if (filters.isNotEmpty) ...[
+                  if (showSearch) const Gap(10),
+                  Segmented<int>(
+                    scrollable: true,
+                    values: [for (var i = 0; i < filters.length; i++) i],
+                    selected: index,
+                    label: (i) => filters[i].label,
+                    onChanged: (i) => setState(() => _filter = i),
+                  ),
+                ],
+                if (narrowed) ...[
+                  const Gap(10),
+                  Text('${filtered.length} of ${widget.items.length}').xSmall.muted,
+                ],
+              ],
+            ),
+          ),
+        Expanded(
+          child: filtered.isEmpty
+              ? EmptyState(
+                  icon: LucideIcons.search,
+                  title: 'No matches',
+                  subtitle: q.isEmpty
+                      ? 'Nothing here under this filter.'
+                      : 'Nothing matches “$_query” under this filter.',
+                )
+              : widget.builder(context, filtered),
+        ),
+      ],
+    );
+  }
+}
+
 /// Simple dropdown.
 class SimpleSelect<T> extends StatelessWidget {
   final T? value;

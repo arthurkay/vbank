@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/group.dart';
 import '../../models/loan.dart';
+import '../../models/transaction.dart';
 import '../../models/meeting.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/balance_provider.dart';
@@ -11,6 +12,7 @@ import '../../providers/transaction_provider.dart';
 import '../../ui/ui.dart';
 import '../../widgets/role_badge.dart';
 import '../../widgets/transaction_tile.dart';
+import '../home/home_screen.dart' show txFilters, txHaystack;
 import '../loan/loan_detail_screen.dart';
 import '../meeting/meeting_detail_screen.dart';
 import '../transaction/transaction_detail_screen.dart';
@@ -158,18 +160,24 @@ class _TransactionsTab extends ConsumerWidget {
     return txsAsync.when(
       data: (txs) {
         if (txs.isEmpty) return const EmptyState(icon: LucideIcons.receipt, title: 'No transactions yet');
-        return RefreshTrigger(
-          onRefresh: () => ref.read(transactionListProvider(group.id).notifier).refresh(),
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            itemCount: txs.length,
-            itemBuilder: (context, index) {
-              final tx = txs[index];
-              return TransactionTile(
-                transaction: tx,
-                onTap: () => pushScreen(context, TransactionDetailScreen(transaction: tx)),
-              );
-            },
+        return FilterableList<Transaction>(
+          items: txs,
+          filters: txFilters(),
+          searchPlaceholder: 'Search transactions',
+          searchText: (tx) => txHaystack(tx, group: group),
+          builder: (context, visible) => RefreshTrigger(
+            onRefresh: () => ref.read(transactionListProvider(group.id).notifier).refresh(),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final tx = visible[index];
+                return TransactionTile(
+                  transaction: tx,
+                  onTap: () => pushScreen(context, TransactionDetailScreen(transaction: tx)),
+                );
+              },
+            ),
           ),
         );
       },
@@ -189,11 +197,23 @@ class _MembersTab extends ConsumerWidget {
       ..sort((a, b) => a.role.index != b.role.index ? a.role.index.compareTo(b.role.index) : a.name.compareTo(b.name));
     if (members.isEmpty) return const EmptyState(icon: LucideIcons.users, title: 'No members yet');
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-      itemCount: members.length,
+    return FilterableList<Member>(
+      items: members,
+      searchPlaceholder: 'Search members',
+      searchText: (m) => '${m.name} ${m.role.name} ${m.status.name}',
+      filters: [
+        FilterOption.all<Member>(),
+        FilterOption('Admins', (m) => m.role != MemberRole.member),
+        FilterOption('Members', (m) => m.role == MemberRole.member),
+        FilterOption('Pending', (m) => m.status == MemberStatus.pending),
+        FilterOption('Suspended', (m) => m.status == MemberStatus.suspended),
+        FilterOption('With loans', (m) => m.hasOutstandingLoan),
+      ],
+      builder: (context, visible) => ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        final member = members[index];
+        final member = visible[index];
         final balance = ref.watch(balanceProvider((peerId: member.peerId, groupId: group.id))).value;
         return ListRow(
           leading: InitialsAvatar(member.name),
@@ -207,6 +227,7 @@ class _MembersTab extends ConsumerWidget {
           trailing: RoleBadge(role: member.role.name),
         );
       },
+      ),
     );
   }
 }
@@ -234,12 +255,26 @@ class _LoansTab extends ConsumerWidget {
         if (loans.isEmpty) {
           return EmptyState(icon: LucideIcons.landmark, title: 'No loans', action: requestButton);
         }
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
+        String borrowerOf(LoanRequest l) =>
+            group.members.where((m) => m.peerId == l.borrowerPeerId).firstOrNull?.name ?? 'member';
+        return FilterableList<LoanRequest>(
+          items: loans,
+          searchPlaceholder: 'Search loans',
+          searchText: (l) =>
+              '${borrowerOf(l)} ${l.status.name} ${l.requestedAmount.toStringAsFixed(2)} ${l.termWeeks} weeks ${l.reason ?? ''}',
+          filters: [
+            FilterOption.all<LoanRequest>(),
+            FilterOption('Pending', (l) => l.status == LoanStatus.pending),
+            FilterOption('Active', (l) => l.isActive),
+            FilterOption('Completed', (l) => l.status == LoanStatus.completed),
+            FilterOption('Rejected', (l) => l.status == LoanStatus.rejected || l.status == LoanStatus.defaulted),
+          ],
+          builder: (context, visible) => ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
           children: [
             ?requestButton,
             const Gap(12),
-            for (final loan in loans)
+            for (final loan in visible)
               ListRow(
                 title: Text(
                   '${fmtMoney(c, loan.requestedAmount)} · ${group.members.where((m) => m.peerId == loan.borrowerPeerId).firstOrNull?.name ?? 'member'}',
@@ -261,6 +296,7 @@ class _LoansTab extends ConsumerWidget {
                 onTap: () => pushScreen(context, LoanDetailScreen(loanId: loan.id)),
               ),
           ],
+          ),
         );
       },
       loading: () => const LoadingView(),
@@ -344,12 +380,22 @@ class _MeetingsTab extends ConsumerWidget {
         if (meetings.isEmpty) {
           return EmptyState(icon: LucideIcons.calendar, title: 'No meetings yet', action: scheduleButton);
         }
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
+        return FilterableList<Meeting>(
+          items: meetings,
+          searchPlaceholder: 'Search meetings',
+          searchText: (m) => '${fmtDateTime(m.scheduledAt)} ${m.status.name} ${m.notes ?? ''}',
+          filters: [
+            FilterOption.all<Meeting>(),
+            FilterOption('Scheduled', (m) => m.status == MeetingStatus.scheduled),
+            FilterOption('Completed', (m) => m.status == MeetingStatus.completed),
+            FilterOption('Cancelled', (m) => m.status == MeetingStatus.cancelled),
+          ],
+          builder: (context, visible) => ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
           children: [
             ?scheduleButton,
             const Gap(12),
-            for (final m in meetings)
+            for (final m in visible)
               ListRow(
                 leading: Icon(
                   switch (m.status) {
@@ -368,6 +414,7 @@ class _MeetingsTab extends ConsumerWidget {
                 onTap: () => pushScreen(context, MeetingDetailScreen(meetingId: m.id)),
               ),
           ],
+          ),
         );
       },
       loading: () => const LoadingView(),

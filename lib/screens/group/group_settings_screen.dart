@@ -17,6 +17,14 @@ class GroupSettingsScreen extends ConsumerStatefulWidget {
 
 class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
   bool _busy = false;
+  final _memberSearch = TextEditingController();
+  String _memberQuery = '';
+
+  @override
+  void dispose() {
+    _memberSearch.dispose();
+    super.dispose();
+  }
 
   void _msg(String m, {bool error = false}) {
     if (mounted) showMessage(context, m, error: error);
@@ -104,8 +112,17 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           ],
 
           // --- members ---------------------------------------------------------
-          const SectionTitle('Members'),
-          for (final m in roster)
+          SectionTitle('Members', trailing: Text('${roster.length}').xSmall.muted),
+          if (roster.length >= 6) ...[
+            SearchField(
+              controller: _memberSearch,
+              placeholder: 'Search members',
+              onChanged: (v) => setState(() => _memberQuery = v),
+            ),
+            const Gap(10),
+          ],
+          for (final m in roster.where((m) => _memberQuery.trim().isEmpty ||
+              '${m.name} ${m.role.name} ${m.status.name}'.toLowerCase().contains(_memberQuery.trim().toLowerCase())))
             Builder(builder: (context) {
               final isMe = m.peerId == me;
               final actions = <ActionMenuItem>[];
