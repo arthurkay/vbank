@@ -1,0 +1,61 @@
+name: vbank
+description: "vBank — Distributed village banking via IPFS"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # UI
+
+  # IPFS / P2P
+  dart_ipfs: ^1.11.7
+
+  # Local storage (encrypted)
+
+  # State management
+  flutter_riverpod: ^2.5.0
+
+  # Crypto
+  cryptography: ^2.7.0
+
+  # Notifications
+  flutter_local_notifications: ^18.0.0
+  timezone: ^0.9.4
+
+  # QR & Sharing
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.0.0
+  share_plus: ^10.0.0
+  url_launcher: ^6.2.0
+
+  # Deep linking
+
+  # Encoding
+
+  # Utils
+  uuid: ^4.0.0
+  intl: ^0.20.2
+  path_provider: ^2.1.0
+  path: ^1.9.0
+  app_links: ^7.0.0
+  sqflite_sqlcipher: ^3.4.1
+  flutter_secure_storage: ^10.3.1
+  file_picker: ^11.0.3
+  shadcn_flutter: ^0.0.51
+  cbor: ^6.3.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.0+3
+
+flutter:
+  uses-material-design: true

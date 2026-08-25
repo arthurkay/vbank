@@ -1,0 +1,128 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:cryptography/cryptography.dart';
+
+import '../codec/wire_codec.dart';
+import 'encryption.dart';
+
+/// Kinds of payload that travel over IPFS. Stored in the cleartext header so
+/// a receiver knows how to interpret the plaintext after decrypting.
+enum SyncPayloadType {
+  transaction,
+  groupSnapshot,
+  memberJoin,
+  loan,
+  meeting,
+  reversal,
+}
+
+/// Thrown when an envelope cannot be opened with the supplied group key.
+class EnvelopeAuthException implements Exception {
+  final String message;
+  const EnvelopeAuthException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// The on-IPFS format for every vBank payload (DESIGN_PLAN §9/§11), encoded
+/// as CBOR (§5):
+///
+///     signed record (CBOR)  ──XChaCha20-Poly1305(group key)──►  ciphertext
+///
+/// The header (`v`, `type`, `groupId`) is cleartext — `groupId` is a random
+/// UUID and tells a receiver which key to try — but it is bound into the
+/// AEAD as associated data, so it cannot be altered without failing the MAC.
+class SyncEnvelope {
+  static const currentVersion = 2;
+
+  final int version;
+  final SyncPayloadType type;
+  final String groupId;
+  final EncryptedData data;
+
+  const SyncEnvelope({
+    this.version = currentVersion,
+    required this.type,
+    required this.groupId,
+    required this.data,
+  });
+
+  static List<int> _aad(int version, SyncPayloadType type, String groupId) =>
+      utf8.encode('vbank:$version:${type.name}:$groupId');
+
+  /// Encrypts [plaintextJson] for [groupId] and returns the envelope bytes to
+  /// hand to `IpfsService.addData`.
+  static Future<Uint8List> seal({
+    required SyncPayloadType type,
+    required String groupId,
+    required Map<String, dynamic> plaintextJson,
+    required SecretKey groupKey,
+  }) async {
+    final plaintext = WireCodec.encode(plaintextJson);
+    final encrypted = await EncryptionService.encrypt(
+      plaintext,
+      groupKey,
+      aad: _aad(currentVersion, type, groupId),
+    );
+    return SyncEnvelope(type: type, groupId: groupId, data: encrypted).encode();
+  }
+
+  Uint8List encode() => WireCodec.encode({
+        'v': version,
+        'type': type.name,
+        'groupId': groupId,
+        'nonce': Uint8List.fromList(data.nonce),
+        'mac': Uint8List.fromList(data.mac),
+        'ciphertext': Uint8List.fromList(data.ciphertext),
+      });
+
+  /// Parses the cleartext header. Returns null if [bytes] is not an envelope
+  /// (e.g. garbage from the network). Accepts v1 (JSON/base64) envelopes.
+  static SyncEnvelope? tryDecode(List<int> bytes) {
+    final json = WireCodec.tryDecodeMap(bytes);
+    if (json == null) return null;
+    try {
+      final typeName = json['type'] as String?;
+      final type = SyncPayloadType.values.where((t) => t.name == typeName).firstOrNull;
+      if (type == null) return null;
+      return SyncEnvelope(
+        version: json['v'] as int? ?? currentVersion,
+        type: type,
+        groupId: json['groupId'] as String,
+        data: EncryptedData(
+          nonce: _bytes(json['nonce']),
+          mac: _bytes(json['mac']),
+          ciphertext: _bytes(json['ciphertext']),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// v1 envelopes carried base64 strings; v2 carry CBOR byte strings.
+  static List<int> _bytes(Object? v) {
+    if (v is String) return base64Decode(v);
+    return (v as List).cast<int>();
+  }
+
+  /// Decrypts and parses the payload. Throws [EnvelopeAuthException] on a
+  /// wrong key or tampering.
+  Future<Map<String, dynamic>> open(SecretKey groupKey) async {
+    try {
+      final plaintext = await EncryptionService.decrypt(
+        data,
+        groupKey,
+        aad: _aad(version, type, groupId),
+      );
+      final decoded = WireCodec.tryDecodeMap(plaintext);
+      if (decoded == null) throw const EnvelopeAuthException('Payload is not a vBank record');
+      return decoded;
+    } on SecretBoxAuthenticationError {
+      throw const EnvelopeAuthException(
+        'Could not decrypt: wrong group key or tampered data',
+      );
+    }
+  }
+}

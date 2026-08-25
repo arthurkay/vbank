@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vBank privacy policy</title>
+<meta name="description" content="vBank privacy policy: what the app stores, what it never collects, how peer-to-peer sync works, permissions, children, security, retention and deletion, and how to contact us.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2318181b'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='%23fafafa'>vB</text></svg>">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">vB</span> vBank</a>
+    <nav class="top">
+      <a href="index.html">Home</a>
+      <a href="guide.html">Guide</a>
+      <a class="active" href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap doc" style="padding-top:56px">
+
+<h1>Privacy policy</h1>
+<p class="updated">Effective 25 August 2026 · Last updated 25 August 2026</p>
+
+<p>
+  This policy explains how the vBank mobile application (“vBank”, “the app”) handles information. It is
+  written to be read by the people who actually use it — members of savings groups — and to satisfy the
+  disclosure requirements of the Google Play Store and the Apple App Store.
+</p>
+
+<div class="note">
+  <strong>The short version.</strong>
+  vBank has no servers and no accounts. We do not collect, receive, transmit to ourselves, sell or share
+  any of your personal data. Your records live on your own phone, encrypted, and are exchanged directly
+  with the phones of the group members you invite — also encrypted. There is no analytics, no advertising,
+  no tracking and no third-party SDK that phones home.
+</div>
+
+<h2>1. Who is responsible</h2>
+<p>
+  vBank is published by the vBank project (“we”, “us”). Because the app has no backend, we do not act as a
+  processor or controller of your group's records — we never receive them. For questions about this policy,
+  write to <a href="mailto:privacy@vbank.zm">privacy@vbank.zm</a>.
+</p>
+
+<h2>2. Information the app stores on your device</h2>
+<table>
+  <tr><th>Data</th><th>Why it exists</th><th>Where it is kept</th></tr>
+  <tr>
+    <td>A display name you type when you first open the app</td>
+    <td>So other members of your groups can tell who recorded what</td>
+    <td>Encrypted database on your device</td>
+  </tr>
+  <tr>
+    <td>A cryptographic identity (signing key pair and peer ID) generated on your device</td>
+    <td>To sign your records so other members can verify them, and to be addressable on the peer-to-peer network</td>
+    <td>Encrypted database; the device's secure keystore holds the key that protects it</td>
+  </tr>
+  <tr>
+    <td>Group records: group name and rules, member list with display names and public keys, contributions, penalties, withdrawals, loans and repayment schedules, meetings and attendance, reversals</td>
+    <td>They are the group's books — the purpose of the app</td>
+    <td>Encrypted database on your device</td>
+  </tr>
+  <tr>
+    <td>Group encryption keys derived from the group passphrase you were given</td>
+    <td>To decrypt records shared by your group</td>
+    <td>Encrypted database on your device</td>
+  </tr>
+  <tr>
+    <td>Backup files you choose to create</td>
+    <td>To move to a new phone</td>
+    <td>Wherever you export them; encrypted with your PIN</td>
+  </tr>
+  <tr>
+    <td>App preferences (notification toggles, selected group)</td>
+    <td>To remember your settings</td>
+    <td>Encrypted database on your device</td>
+  </tr>
+</table>
+<p>
+  vBank does not ask for and does not store: your phone number, email address, contacts, precise or coarse
+  location, advertising identifier, photos or media library, health data, or any government identifier.
+</p>
+
+<h2>3. Information we collect: none</h2>
+<p>
+  We operate no servers for vBank. The app makes no requests to us, contains no analytics or crash-reporting
+  SDK, and shows no advertising. We cannot see your groups, your balances, your identity or even how many
+  people use the app.
+</p>
+
+<h2>4. What is shared with other people, and how</h2>
+<p>
+  When you record something in a group, that record is encrypted and published to the peer-to-peer IPFS
+  network so the other members of that group can receive it. This means:
+</p>
+<ul>
+  <li><strong>Who can read it:</strong> only people holding your group's passphrase — in practice, the members
+  your admins invited. Encryption is XChaCha20-Poly1305 with a key derived from that passphrase
+  (PBKDF2-HMAC-SHA256, 100,000 iterations, salted per group).</li>
+  <li><strong>What other members see:</strong> your display name, your public key, the records you signed, and
+  the amounts and dates in them. This is the same information a paper ledger would show the group.</li>
+  <li><strong>What third parties see:</strong> other computers participating in the IPFS network may relay,
+  store or cache the encrypted blocks and can observe network-level metadata (that a peer with a given peer
+  ID is publishing or requesting content identifiers, and its IP address). They cannot read the contents.</li>
+  <li><strong>What we see:</strong> nothing.</li>
+</ul>
+<div class="note">
+  <strong>Public network, private contents.</strong>
+  IPFS is a public, distributed network. Encrypted blocks that other nodes have cached cannot be recalled
+  or deleted by us or by you. They remain unreadable without your group's passphrase, but you should treat
+  publication as permanent — which is also why the passphrase must never be shared outside the group.
+</div>
+
+<h2>5. Permissions the app requests</h2>
+<table>
+  <tr><th>Permission</th><th>Why</th></tr>
+  <tr><td>Internet, network and Wi-Fi state, multicast</td><td>To reach other members' phones over the peer-to-peer network, including on a local Wi-Fi at a meeting</td></tr>
+  <tr><td>Camera</td><td>Only to scan an invite QR code. No photo or video is stored or transmitted</td></tr>
+  <tr><td>Notifications</td><td>Meeting, contribution and repayment reminders generated on your device</td></tr>
+  <tr><td>Exact alarms / scheduled alarms</td><td>To fire those reminders at the right time</td></tr>
+  <tr><td>Run at startup</td><td>To restore your reminder schedule after the phone reboots</td></tr>
+  <tr><td>Prevent sleeping (wake lock)</td><td>To finish a sync round that is already in progress</td></tr>
+  <tr><td>File access via the system picker</td><td>Only when you import or export a backup file that you chose</td></tr>
+</table>
+<p>You can decline notifications and camera access and still use the rest of the app.</p>
+
+<h2>6. Security</h2>
+<ul>
+  <li>The on-device database is encrypted with SQLCipher (AES-256). Its key is derived from a device secret
+  stored in the platform's secure storage (Android Keystore / iOS Keychain), not in the app's files.</li>
+  <li>Every record is signed with Ed25519 and verified on receipt; records that fail verification, or that
+  come from someone without the role to write them, are rejected.</li>
+  <li>Records in transit and at rest on the network are encrypted with XChaCha20-Poly1305 using your group's
+  derived key. Backup files use the same construction with a key derived from your PIN.</li>
+  <li>Invites are one-use, expiring and signed by the admin who created them.</li>
+</ul>
+<p>
+  No system is perfect, and two risks are inherent to the design: anyone who learns your group passphrase can
+  read that group's records, and anyone who obtains a backup file <em>and</em> its PIN can act as you. Guard both.
+</p>
+
+<h2>7. Children</h2>
+<p>
+  vBank is intended for adults managing group finances and is not directed at children. We do not knowingly
+  collect information from anyone — including children — because we collect nothing at all. Where a minor
+  participates in a family or school savings group, a parent, guardian or group administrator should manage
+  the app on their behaf and is responsible for the records entered.
+</p>
+
+<h2>8. Retention and deletion</h2>
+<ul>
+  <li><strong>Your device:</strong> records stay until you delete them. <strong>Settings → Log out</strong> removes
+  your identity, keys and local database from the phone; uninstalling the app does the same. Neither can be undone
+  without a backup file.</li>
+  <li><strong>Other members' devices:</strong> records you sent are their copies of the group's books and remain
+  with them, exactly as entries in a paper ledger would. Ask your group's admins to remove you from the roster to
+  stop receiving further updates.</li>
+  <li><strong>The network:</strong> encrypted blocks already cached by other IPFS nodes cannot be withdrawn (see
+  section 4).</li>
+  <li><strong>Us:</strong> we hold nothing, so there is nothing for us to delete and no data-deletion request to make.
+  Details are on the <a href="index.html#delete-data">deleting your data</a> section of the home page.</li>
+</ul>
+
+<h2>9. International transfers</h2>
+<p>
+  Because sync is peer-to-peer, your encrypted records travel directly to the devices of your group members
+  and through IPFS nodes that may be located in other countries. The contents remain encrypted end to end
+  with a key only your group holds. We do not transfer data ourselves because we do not receive any.
+</p>
+
+<h2>10. Your rights</h2>
+<p>
+  Data-protection laws (including Zambia's Data Protection Act, and the GDPR where it applies) give you rights
+  of access, correction, deletion, portability and objection. In vBank these are exercised directly in the app,
+  because you hold the data:
+</p>
+<ul>
+  <li><strong>Access and portability:</strong> everything about you is visible in the app; “Create backup” gives
+  you a complete, portable copy.</li>
+  <li><strong>Correction:</strong> ask an admin to record a reversal and the corrected entry.</li>
+  <li><strong>Deletion:</strong> log out or uninstall (see section 8).</li>
+  <li><strong>Complaints:</strong> if you believe the app mishandles data, write to
+  <a href="mailto:privacy@vbank.zm">privacy@vbank.zm</a>; you may also complain to your national data-protection
+  authority.</li>
+</ul>
+
+<h2>11. Third-party services</h2>
+<p>
+  vBank includes no advertising, attribution or analytics SDKs. It uses open-source libraries that run entirely
+  on your device (for cryptography, local storage, QR scanning, notifications and IPFS networking). The only
+  external systems involved are the peer-to-peer network itself and, if you choose to use them, the apps you
+  pick from the system share sheet when exporting a backup or an invite link — those apps' own privacy policies
+  then apply.
+</p>
+
+<h2>12. Changes to this policy</h2>
+<p>
+  If this policy changes we will update the date at the top and, where the change is significant, note it in
+  the app's release notes. Continuing to use the app after a change means you accept the updated policy.
+</p>
+
+<h2>13. Contact</h2>
+<p>
+  vBank project — <a href="mailto:privacy@vbank.zm">privacy@vbank.zm</a><br>
+  Support: <a href="mailto:support@vbank.zm">support@vbank.zm</a>
+</p>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span>© 2026 vBank</span>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="guide.html">Guide</a>
+      <a href="terms.html">Terms of use</a>
+      <a href="mailto:support@vbank.zm">Support</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
