@@ -17,20 +17,25 @@ store/          store-ready assets (see below)
 
 ## Publishing
 
-The site is deployed by `.github/workflows/pages.yml` on every push to `main`
-that touches `website/**`: enable **Settings → Pages → Build and deployment →
-Source: GitHub Actions** once, and it serves at
-`https://<user>.github.io/<repo>/`.
+This directory *is* the site root. Two ways to publish it — pick one:
 
-Alternatives if you prefer no Actions:
+* **Branch deploy (no Actions)** — Settings → Pages → Build and deployment →
+  Source: *Deploy from a branch*, Branch: `main`, Folder: `/docs`.
+* **GitHub Actions** — Settings → Pages → Source: *GitHub Actions*. The included
+  `.github/workflows/pages.yml` publishes `docs/` on every push to `main` that
+  touches it.
 
-* **Branch deploy** — move these files to the repository root or to `/docs`, then
-  set Settings → Pages → Source: *Deploy from a branch*.
-* **Custom domain** — add a `CNAME` file containing the domain (e.g.
+Either way it serves at `https://<user>.github.io/<repo>/`.
+
+* **Custom domain** — add a `CNAME` file here containing the domain (e.g.
   `vbank.zm`), point a DNS `CNAME` at `<user>.github.io`, and update the URLs in
   `sitemap.xml` and `robots.txt`.
 
-`.nojekyll` is present so files and folders starting with `_` are served as-is.
+`.nojekyll` is present so files and folders starting with `_` are served as-is
+and no Jekyll build touches the pages.
+
+Project planning documents live in `planning/`, outside this folder, so they are
+not published with the site.
 
 ## Before going live
 

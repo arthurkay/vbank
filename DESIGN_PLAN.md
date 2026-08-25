@@ -1967,7 +1967,7 @@ dependencies {
 
 ## 36. v1.1 Implementation Notes
 
-Status of record as of 2026-08-25. See `docs/PLAN_GAP_ANALYSIS.md` for the audit that drove these changes.
+Status of record as of 2026-08-25. See `planning/PLAN_GAP_ANALYSIS.md` for the audit that drove these changes.
 
 **Implemented in v1.1**
 - SQLCipher local DB with device-secret-derived key; automatic migration of pre-v1.1 plaintext databases.
@@ -1988,7 +1988,7 @@ Status of record as of 2026-08-25. See `docs/PLAN_GAP_ANALYSIS.md` for the audit
 - The shadcn UI now follows the **Spark design system** (`../o-systems/spark`): zinc light/dark theme (no brand colour; red/green/orange as semantic accents only), **Lucide icons throughout** (no Material `Icons`), muted radius-12 `Panel`/`ListRow` surfaces, borderless text fields, `.small.semiBold.muted` section labels, page padding 20, `SurfaceCard` toasts, Spark-style filter chips (`Segmented`/`FilterChip`) in place of `Tabs`, and an animated welcome screen.
 - Bottom navigation gives each destination an equal-width cell (`Expanded` + `NavigationBarAlignment.spaceEvenly`) so icons sit on even centres; the transactions tab is labelled "Activity" because a quarter of a 384 dp screen only fits ~8 characters.
 - Derived data now refreshes after local writes: `dataVersionProvider` (lib/providers/data_version.dart) is bumped by transaction, loan, meeting and dissolution flows, and `balanceProvider`/`groupBalancesProvider` watch it alongside `syncTickProvider`.
-- `website/` is a standalone GitHub Pages site (landing page, full user guide, privacy policy, terms of use including Apple's required EULA clauses) deployed by `.github/workflows/pages.yml`; `website/store/` holds Play (1080x1920), App Store 6.7" (1290x2796) and 6.5" (1284x2778) screenshot sets plus a 1024x500 feature graphic, all derived from real device captures.
+- `docs/` is a standalone GitHub Pages site (landing page, full user guide, privacy policy, terms of use including Apple's required EULA clauses) deployed by `.github/workflows/pages.yml`; `docs/store/` holds Play (1080x1920), App Store 6.7" (1290x2796) and 6.5" (1284x2778) screenshot sets plus a 1024x500 feature graphic, all derived from real device captures.
 
 **v1.2 (2026-08-25) — UI and wire-format decisions**
 - UI ported to **shadcn_flutter** (0.0.53) using the **Spark design system** (`../o-systems/spark`): zinc light/dark theme (radius 0.5, no brand colour; red/green/orange as semantic accents), Lucide icons, borderless text fields on muted radius-12 panels, `.small.semiBold.muted` section labels, page padding 20, `SurfaceCard` toasts. `lib/ui/ui.dart` is the kit (`VBankTheme`, `AppPage`, `Panel`, `ListRow`, `StatCard`, `StatusBadge`, `Segmented`/`FilterChip`, `SimpleSelect`, `ActionMenu`, …). No screen imports `flutter/material.dart`; only `MaterialPageRoute` (re-exported by shadcn) is used. `VBankTheme.pageTransitionShim` (installed via `ShadcnApp.builder`, so it reads the live theme) sets the status-bar icon style *and* a Material `Theme` whose `colorScheme.surface` + `ZoomPageTransitionsBuilder(backgroundColor:)` match the shadcn background — without it Flutter's Material page transitions composite each entering route over `ThemeData.fallback()`'s light surface, washing every push light-grey in dark mode. The Android launch background is `@color/launch_background` (white / `#09090B` in night mode) so cold start has no white flash either.
