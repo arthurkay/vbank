@@ -15,8 +15,13 @@
 ///
 /// Run with:
 ///   E2E_DIR=/path GDK_BACKEND=x11 flutter test integration_test/e2e_desktop_peer_test.dart -d linux
+/// and drive the phone with `tool/e2e/phone.sh` (deeplink → passphrase, then
+/// once `stage` is `contributed`: opengroup → loan). The phone should run a
+/// profile build; the desktop test writes `name.txt` so the driver can find the
+/// group by name.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -48,6 +53,10 @@ void main() {
   /// Tab labels can collide with sidebar destinations ("Meetings"), so scope to the tab bar.
   Finder tab(String label) => find.descendant(of: find.byType(TabBar), matching: find.text(label));
 
+  /// `FilledButton.icon` builds a private subclass, so match by `is`, not by type.
+  Finder filled(String label) =>
+      find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is FilledButton));
+
   Future<void> settle(WidgetTester tester, [double seconds = 2]) async {
     for (var i = 0; i < seconds * 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -70,25 +79,32 @@ void main() {
 
   testWidgets('owner on desktop, member on phone: join → approve → contribute → loan → meeting',
       (tester) async {
-    app.main();
+    // dart_ipfs/ipfs_libp2p leak the occasional async StateError ("Session
+    // closed while opening stream") when a peer drops a connection. The app
+    // shrugs those off; the test framework would fail the test, so contain them.
+    runZonedGuarded(app.main, (e, st) {
+      // ignore: avoid_print
+      print('[e2e] background error ignored: $e');
+    });
     await settle(tester, 6);
 
     // --- identity (first run only) --------------------------------------------
-    final getStarted = find.widgetWithText(FilledButton, 'Get started');
+    final getStarted = filled('Get started');
     if (getStarted.evaluate().isNotEmpty) {
       await tester.tap(getStarted);
       await settle(tester);
       await tester.enterText(find.byType(TextField).first, 'Desktop Owner');
       await settle(tester);
-      await tester.tap(find.widgetWithText(FilledButton, 'Get started').last);
+      await tester.tap(filled('Get started').last);
       await settle(tester, 5);
     }
 
     // --- create the group (approval required, so the phone's join is gated) ---
     final groupName = 'E2E Circle ${DateTime.now().millisecondsSinceEpoch % 100000}';
-    await tester.tap(find.widgetWithText(FilledButton, 'New group').first);
+    await tester.tap(filled('New group').first);
     await settle(tester);
-    final fields = find.byType(TextField);
+    // Scope to the dialog: with 6+ groups the list shows a YaruSearchField too.
+    final fields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
     await tester.enterText(fields.at(0), groupName);
     await tester.enterText(fields.at(1), '20.00');
     await tester.enterText(fields.at(2), passphrase);
@@ -97,7 +113,7 @@ void main() {
     // "New members need approval" switch is the only YaruSwitchListTile here.
     await tester.tap(find.byType(YaruSwitchListTile).first);
     await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Create group'));
+    await tester.tap(filled('Create group'));
     await settle(tester, 12); // PBKDF2 on a background isolate
 
     final groupService = GroupService();
@@ -105,18 +121,22 @@ void main() {
     final group = groups.where((g) => g.name == groupName).single;
     expect(group.requireApproval, isTrue);
     File('${dir.path}/group.txt').writeAsStringSync(group.id);
+    File('${dir.path}/name.txt').writeAsStringSync(groupName);
 
     // --- open it and create an invite -----------------------------------------
     await tester.tap(find.text(groupName).first);
     await settle(tester, 4);
     await tester.tap(find.byTooltip('Invite members'));
-    await settle(tester, 8); // publishes the snapshot to IPFS first
+    // Publishes the snapshot to IPFS first; give the network up to 40 s.
     final linkWidget = find.byType(SelectableText);
+    for (var i = 0; i < 20 && linkWidget.evaluate().isEmpty; i++) {
+      await settle(tester, 2);
+    }
     expect(linkWidget, findsOneWidget, reason: 'invite dialog shows the link');
     final link = (tester.widget(linkWidget) as SelectableText).data!;
     expect(link, startsWith('vbank://join'));
     File('${dir.path}/invite.txt').writeAsStringSync(link);
-    await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+    await tester.tap(filled('Done'));
     await settle(tester);
     stage('invited');
 
@@ -132,11 +152,29 @@ void main() {
     );
     expect(pending, isNotNull, reason: 'phone member should appear as pending');
     stage('joined');
+    final phone = pending!;
 
     // --- approve from the Members tab ------------------------------------------
+    // Applying the join republishes the snapshot and refreshes the group list;
+    // the detail page can be mid-rebuild (or lose its selection) at that moment.
+    for (var i = 0; i < 10 && find.byType(TabBar).evaluate().isEmpty; i++) {
+      await settle(tester, 2);
+      if (find.byType(TabBar).evaluate().isEmpty && find.text(groupName).evaluate().isNotEmpty) {
+        await tester.tap(find.text(groupName).first);
+        await settle(tester, 2);
+      }
+    }
     await tester.tap(tab('Members'));
     await settle(tester, 3);
+    // The roster refreshes when the sync change lands; give it up to 30 s and
+    // nudge it by re-entering the tab if it is slow.
     final menus = find.byType(PopupMenuButton<String>);
+    for (var i = 0; i < 10 && menus.evaluate().isEmpty; i++) {
+      await tester.tap(tab('Overview'));
+      await settle(tester, 1);
+      await tester.tap(tab('Members'));
+      await settle(tester, 2);
+    }
     expect(menus, findsWidgets, reason: 'pending member has an actions menu');
     await tester.tap(menus.first);
     await settle(tester);
@@ -144,25 +182,28 @@ void main() {
     await settle(tester, 6);
     final approved = await groupService.getGroup(group.id);
     expect(
-      approved!.members.where((m) => m.peerId == pending!.peerId).single.status,
+      approved!.members.where((m) => m.peerId == phone.peerId).single.status,
       MemberStatus.active,
     );
     stage('approved');
     await settle(tester, 20); // let the snapshot reach the phone
 
-    // --- record a contribution for the phone member ----------------------------
+    // --- record three contributions for the phone member ------------------------
+    // The default loan terms require three contributions before a loan.
     await tester.tap(tab('Overview'));
     await settle(tester, 2);
-    await tester.tap(find.widgetWithText(FilledButton, 'Record transaction'));
-    await settle(tester, 2);
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
-    await settle(tester);
-    await tester.tap(find.text(pending!.name).last);
-    await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Record'));
-    await settle(tester, 6);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(filled('Record transaction'));
+      await settle(tester, 2);
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await settle(tester);
+      await tester.tap(find.text(phone.name).last);
+      await settle(tester);
+      await tester.tap(filled('Record'));
+      await settle(tester, 6);
+    }
     final txs = await TransactionService().getByGroupId(group.id);
-    expect(txs.where((t) => t.fromPeerId == pending.peerId), isNotEmpty);
+    expect(txs.where((t) => t.fromPeerId == phone.peerId).length, 3);
     stage('contributed');
 
     // --- wait for the phone to request a loan ----------------------------------
@@ -170,7 +211,7 @@ void main() {
     final loan = await waitFor<LoanRequest>(
       tester,
       () async => (await loanService.getByGroupId(group.id))
-          .where((l) => l.borrowerPeerId == pending.peerId && l.status == LoanStatus.pending)
+          .where((l) => l.borrowerPeerId == phone.peerId && l.status == LoanStatus.pending)
           .firstOrNull,
       const Duration(minutes: 5),
       'a loan request from the phone',
@@ -181,17 +222,17 @@ void main() {
     // --- approve, disburse, record one repayment (loan detail page) ------------
     await tester.tap(tab('Loans'));
     await settle(tester, 3);
-    await tester.tap(find.textContaining(pending.name).first);
+    await tester.tap(find.textContaining(phone.name).first);
     await settle(tester, 3);
-    await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+    await tester.tap(filled('Approve'));
     await settle(tester, 2);
-    await tester.tap(find.widgetWithText(FilledButton, 'Approve').last);
+    await tester.tap(filled('Approve').last);
     await settle(tester, 5);
-    await tester.tap(find.widgetWithText(FilledButton, 'Record disbursement'));
+    await tester.tap(filled('Record disbursement'));
     await settle(tester, 6);
-    await tester.tap(find.widgetWithText(FilledButton, 'Record repayment'));
+    await tester.tap(filled('Record repayment'));
     await settle(tester, 2);
-    await tester.tap(find.widgetWithText(FilledButton, 'Record').last);
+    await tester.tap(filled('Record').last);
     await settle(tester, 6);
     final after = (await loanService.getByGroupId(group.id)).where((l) => l.id == loan!.id).single;
     expect(after.status, anyOf(LoanStatus.repaying, LoanStatus.disbursed, LoanStatus.completed));

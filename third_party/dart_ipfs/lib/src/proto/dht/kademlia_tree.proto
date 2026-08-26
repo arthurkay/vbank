@@ -1,0 +1,15 @@
+// lib/src/proto/dht/kademlia_tree.proto
+syntax = "proto3";
+
+package ipfs.dht.kademlia_tree;
+
+import "dht/kademlia_node.proto";
+
+message KademliaTree {
+  ipfs.dht.kademlia_node.KademliaNode local_node = 1; 
+  repeated KademliaBucket buckets = 2;
+}
+
+message KademliaBucket {
+  repeated ipfs.dht.kademlia_node.KademliaNode nodes = 1;
+}

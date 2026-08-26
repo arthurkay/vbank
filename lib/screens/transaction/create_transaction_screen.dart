@@ -113,7 +113,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   const Gap(20),
                   LabeledField(
                     label: 'Amount (${group?.config.currency ?? 'ZMW'})',
-                    child: TextField(
+                    child: TextField(cursorOpacityAnimates: false, 
                       controller: _amount,
                       autofocus: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -122,7 +122,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   const Gap(20),
                   LabeledField(
                     label: 'Note (optional)',
-                    child: TextField(controller: _note, maxLines: 2),
+                    child: TextField(cursorOpacityAnimates: false, controller: _note, maxLines: 2),
                   ),
                   const Gap(32),
                   Button.primary(

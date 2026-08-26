@@ -1,0 +1,142 @@
+// src/core/data_structures/block.dart
+import 'dart:typed_data';
+
+import 'package:dart_ipfs/src/core/cid.dart';
+import 'package:dart_ipfs/src/core/interfaces/block.dart';
+import 'package:dart_ipfs/src/proto/generated/bitswap/bitswap.pb.dart' as proto;
+import 'package:dart_ipfs/src/proto/generated/core/block.pb.dart';
+
+/// Represents an IPFS block.
+class Block implements IBlock {
+  // Keep format for existing methods
+
+  /// Creates a new [Block] with the specific [cid], [data], and [format].
+  Block({
+    required this.cid,
+    required this.data,
+    this.format = 'raw', // Default format if not provided
+  });
+
+  /// The content identifier (CID) of this block.
+  @override
+  final CID cid;
+
+  /// The raw byte data of this block.
+  @override
+  final Uint8List data;
+
+  /// The codec format used by this block (e.g., 'raw', 'dag-pb').
+  final String format;
+
+  /// Creates a [Block] from raw data, automatically computing the CID.
+  static Future<Block> fromData(Uint8List data, {String format = 'raw'}) async {
+    final cid = await CID.fromContent(data, codec: format);
+    return Block(cid: cid, data: data, format: format);
+  }
+
+  /// Creates a block from bytes using BaseBlock's fromBytes method
+  // This method needs to be re-evaluated or removed if BaseBlock is gone.
+  // For now, I'll comment it out or adapt it if possible.
+  // Given the new class structure, BaseBlock is removed, so this method needs a new implementation.
+  // Let's assume it's meant to be removed or re-implemented later.
+  /*
+  // Deprecated/Removed method
+  static Block fromBytes(Uint8List bytes) {
+    throw UnimplementedError();
+  }
+  */
+
+  @override
+  int get size => data.length;
+
+  /// Validates the block's data against its CID.
+  ///
+  /// Computes the CID from the block's data and compares it to the stored CID.
+  /// Returns `true` only if the content hash matches the CID.
+  ///
+  /// **Security Note:** This method MUST be called on all blocks received from
+  /// untrusted peers to prevent malicious block injection attacks (SEC-002).
+  @override
+  Future<bool> validate() async {
+    try {
+      // Compare multihash bytes directly rather than encoded CID strings,
+      // because CIDv0 and CIDv1 encode differently for the same content.
+      final computedCid = await CID.fromContent(data, codec: format);
+      final computedMh = computedCid.multihash.toBytes();
+      final expectedMh = cid.multihash.toBytes();
+      if (computedMh.length != expectedMh.length) return false;
+      for (var i = 0; i < computedMh.length; i++) {
+        if (computedMh[i] != expectedMh[i]) return false;
+      }
+      return true;
+    } catch (e) {
+      // If we can't compute the CID, validation fails
+      return false;
+    }
+  }
+
+  /// Synchronous validation check (less secure, for performance-critical paths).
+  /// Performs basic structural checks only. Use [validate] for full verification.
+  bool validateSync() {
+    // Basic checks: non-empty data and valid CID structure
+    if (data.isEmpty) return false;
+    if (cid.encode().isEmpty) return false;
+    return true; // Structural check only - use validate() for hash verification
+  }
+
+  /// Converts the block to its protobuf representation.
+  ///
+  /// @return A [BlockProto] instance.
+  @override
+  BlockProto toProto() {
+    return BlockProto()
+      ..cid = cid.toProto()
+      ..data = data
+      ..format = format;
+  }
+
+  /// Creates a block from its protobuf representation.
+  ///
+  /// @param proto The [BlockProto] to convert.
+  /// @return A new [Block] instance.
+  static Block fromProto(BlockProto proto) {
+    return Block(
+      cid: CID.fromProto(proto.cid),
+      data: Uint8List.fromList(proto.data),
+      format: proto.format,
+    );
+  }
+
+  /// Creates a block from its Bitswap protobuf representation.
+  ///
+  /// @param protoBlock The [proto.Message_Block] to convert.
+  /// @return A new [Block] instance.
+  static Future<Block> fromBitswapProto(proto.Message_Block protoBlock) async {
+    return Block.fromData(Uint8List.fromList(protoBlock.data));
+  }
+
+  @override
+  proto.Message_Block toBitswapProto() {
+    return proto.Message_Block()
+      ..data = data
+      ..prefix = cid.toBytes();
+  }
+
+  @override
+  Uint8List toBytes() {
+    // Basic implementation - just data for now, or could include CID prefix if needed
+    // Assuming raw data block for now
+    return data;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Block &&
+          runtimeType == other.runtimeType &&
+          cid.encode() == other.cid.encode() &&
+          data.toString() == other.data.toString(); // Weak data check, but sufficient for small blocks
+
+  @override
+  int get hashCode => cid.encode().hashCode ^ data.length.hashCode;
+}

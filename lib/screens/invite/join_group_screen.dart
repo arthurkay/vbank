@@ -106,6 +106,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
             groupCid: result.groupCid,
             inviteId: result.inviteId,
             inviteNonceB64: result.inviteNonceB64,
+            inviterAddrs: result.inviterAddrs,
             passphrase: passphrase,
             self: self,
             keyPair: keyPair,
@@ -121,8 +122,10 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       ref.read(selectedGroupProvider.notifier).state = group;
       Navigator.pushReplacementNamed(context, '/group-detail');
     } on JoinGroupException catch (e) {
+      debugPrint('[join] ${e.message}');
       if (mounted) showMessage(context, e.message, error: true);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[join] $e\n$st');
       if (mounted) showMessage(context, 'Error joining group: $e', error: true);
     } finally {
       if (mounted) {

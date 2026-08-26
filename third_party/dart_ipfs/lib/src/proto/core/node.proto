@@ -1,0 +1,20 @@
+// lib/src/proto/core/node.proto
+
+syntax = "proto3";
+
+package ipfs.core.data_structures;
+
+import "core/dag.proto";
+import "core/link.proto";
+import "core/cid.proto";
+import "core/node_type.proto";
+
+message NodeProto {
+  IPFSCIDProto cid = 1;
+  repeated PBLink links = 2;
+  bytes data = 3;
+  NodeTypeProto type = 4;
+  uint64 size = 5;
+  int64 timestamp = 6;
+  map<string, string> metadata = 7;
+}

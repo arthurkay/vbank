@@ -46,6 +46,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         groupCid: invite.cid,
         inviteId: invite.id,
         inviteNonceB64: base64Encode(invite.nonce!),
+        inviterAddrs: ref.read(syncManagerProvider).dialableAddresses,
       );
       if (!mounted) return;
       setState(() {

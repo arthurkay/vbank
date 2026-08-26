@@ -60,6 +60,7 @@ class _VBankYaruAppState extends ConsumerState<VBankYaruApp> {
       builder: (context, accent, _) {
         return YaruTheme(
         builder: (context, yaru, child) => MaterialApp(
+          scaffoldMessengerKey: yaruMessengerKey,
           title: 'vBank',
           debugShowCheckedModeBanner: false,
           theme: accent == null ? yaru.theme : createYaruLightTheme(primaryColor: accent),

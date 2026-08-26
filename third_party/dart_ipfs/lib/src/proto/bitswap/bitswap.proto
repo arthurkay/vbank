@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package ipfs.bitswap;
+
+message Message {
+  message Wantlist {
+    enum WantType {
+      Block = 0;
+      Have = 1;
+    }
+    
+    message Entry {
+      bytes block = 1;       // The block CID
+      int32 priority = 2;    // Priority (normalized), default to 1
+      bool cancel = 3;       // Whether this revokes an entry
+      WantType wantType = 4; // Note: defaults to Block
+      bool sendDontHave = 5; // Note: defaults to false
+    }
+
+    repeated Entry entries = 1;
+    bool full = 2;
+  }
+
+  message Block {
+    bytes prefix = 1; // CID prefix (for CIDv1, 0 for CIDv0)
+    bytes data = 2;
+  }
+
+  message BlockPresence {
+    enum Type {
+      Have = 0;
+      DontHave = 1;
+    }
+    bytes cid = 1;
+    Type type = 2;
+  }
+
+  Wantlist wantlist = 1;
+  repeated bytes blocks = 2;            // Used to send blocks in Bitswap 1.0.0
+  repeated Block payload = 3;           // Used to send blocks in Bitswap 1.1.0+
+  repeated BlockPresence blockPresences = 4;
+  int32 pendingBytes = 5;
+}

@@ -218,7 +218,7 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                LabeledField(label: 'Reason', child: TextField(controller: c, autofocus: true)),
+                LabeledField(label: 'Reason', child: TextField(cursorOpacityAnimates: false, controller: c, autofocus: true)),
                 if (m.hasOutstandingLoan) ...[
                   const Gap(16),
                   Checkbox(
@@ -275,11 +275,11 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            LabeledField(label: 'Group name', child: TextField(controller: name, textCapitalization: TextCapitalization.words)),
+            LabeledField(label: 'Group name', child: TextField(cursorOpacityAnimates: false, controller: name, textCapitalization: TextCapitalization.words)),
             const Gap(16),
             LabeledField(
               label: 'Contribution (${cfg.currency})',
-              child: TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              child: TextField(cursorOpacityAnimates: false, controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
             ),
             const Gap(16),
             LabeledField(
@@ -297,14 +297,14 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
                 Expanded(
                   child: LabeledField(
                     label: 'Loan interest (%)',
-                    child: TextField(controller: interest, keyboardType: TextInputType.number),
+                    child: TextField(cursorOpacityAnimates: false, controller: interest, keyboardType: TextInputType.number),
                   ),
                 ),
                 const Gap(12),
                 Expanded(
                   child: LabeledField(
                     label: 'Late penalty (%)',
-                    child: TextField(controller: penalty, keyboardType: TextInputType.number),
+                    child: TextField(cursorOpacityAnimates: false, controller: penalty, keyboardType: TextInputType.number),
                   ),
                 ),
               ],
@@ -315,14 +315,14 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
                 Expanded(
                   child: LabeledField(
                     label: 'Max loan (× contributions)',
-                    child: TextField(controller: multiplier, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                    child: TextField(cursorOpacityAnimates: false, controller: multiplier, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                   ),
                 ),
                 const Gap(12),
                 Expanded(
                   child: LabeledField(
                     label: 'Min contributions',
-                    child: TextField(controller: minContrib, keyboardType: TextInputType.number),
+                    child: TextField(cursorOpacityAnimates: false, controller: minContrib, keyboardType: TextInputType.number),
                   ),
                 ),
               ],

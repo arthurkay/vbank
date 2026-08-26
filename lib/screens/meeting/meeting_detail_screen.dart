@@ -42,10 +42,10 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
         children: [
           LabeledField(
             label: 'Total collected (${group.config.currency})',
-            child: TextField(controller: c, autofocus: true, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+            child: TextField(cursorOpacityAnimates: false, controller: c, autofocus: true, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
           ),
           const Gap(16),
-          LabeledField(label: 'Notes', child: TextField(controller: n, maxLines: 2)),
+          LabeledField(label: 'Notes', child: TextField(cursorOpacityAnimates: false, controller: n, maxLines: 2)),
           const Gap(24),
           Button.primary(onPressed: () => close(true), child: const Text('Complete')),
           const Gap(8),

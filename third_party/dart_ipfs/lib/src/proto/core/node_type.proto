@@ -1,0 +1,18 @@
+// lib/src/proto/core/node_type.proto
+
+syntax = "proto3";
+
+package ipfs.core.data_structures;
+
+// Enum representing the different types of nodes in the IPFS network.
+enum NodeTypeProto {
+  NODE_TYPE_UNSPECIFIED = 0;
+  NODE_TYPE_FILE = 1;
+  NODE_TYPE_DIRECTORY = 2;
+  NODE_TYPE_SYMLINK = 3;
+  NODE_TYPE_REGULAR = 4;
+  NODE_TYPE_BOOTSTRAP = 5;
+  NODE_TYPE_RELAY = 6;
+  NODE_TYPE_GATEWAY = 7;
+  NODE_TYPE_ARCHIVAL = 8;
+}

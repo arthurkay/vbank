@@ -56,7 +56,8 @@ void main() {
     await tester.tap(newGroup.first);
     await settle(tester);
 
-    final fields = find.byType(TextField);
+    // Scope to the dialog: with 6+ groups the list shows a YaruSearchField too.
+    final fields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
     expect(fields, findsAtLeast(4), reason: 'name, amount, passphrase, confirm');
     await tester.enterText(fields.at(0), groupName);
     await tester.enterText(fields.at(1), '25.00');

@@ -60,11 +60,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ],
+      // Both entry points stay on screen however long the group list gets.
       floating: _index == 0
-          ? Button.primary(
-              onPressed: () => Navigator.pushNamed(context, '/create-group'),
-              leading: const Icon(LucideIcons.plus),
-              child: const Text('New group'),
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Button.secondary(
+                  onPressed: () => Navigator.pushNamed(context, '/join-group'),
+                  leading: const Icon(LucideIcons.scanLine),
+                  child: const Text('Join'),
+                ),
+                const Gap(8),
+                Button.primary(
+                  onPressed: () => Navigator.pushNamed(context, '/create-group'),
+                  leading: const Icon(LucideIcons.plus),
+                  child: const Text('New group'),
+                ),
+              ],
             )
           : null,
       child: IndexedStack(
@@ -134,12 +146,6 @@ class _GroupsTab extends ConsumerWidget {
               children: [
                 for (final group in visible)
                   _GroupRow(group: group, me: me),
-                const Gap(4),
-                Button.outline(
-                  onPressed: () => Navigator.pushNamed(context, '/join-group'),
-                  leading: const Icon(LucideIcons.scanLine),
-                  child: const Text('Join another group'),
-                ),
               ],
             ),
           ),
@@ -205,6 +211,8 @@ class _TransactionsTab extends ConsumerWidget {
                 final group = groupOf(tx);
                 return TransactionTile(
                   transaction: tx,
+                  group: group,
+                  showGroup: true,
                   onTap: () {
                     if (group != null) ref.read(selectedGroupProvider.notifier).state = group;
                     pushScreen(context, TransactionDetailScreen(transaction: tx));

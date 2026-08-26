@@ -129,8 +129,11 @@ class AppPage extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(),
               ),
           ],
-          title: Text(title),
-          subtitle: subtitle,
+          // One line of title, one of subtitle: the header never grows past two.
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: subtitle == null
+              ? null
+              : DefaultTextStyle.merge(maxLines: 1, overflow: TextOverflow.ellipsis, child: subtitle!),
           trailing: trailing,
           alignment: canPop ? Alignment.center : Alignment.centerLeft,
         ),
@@ -275,7 +278,7 @@ Future<String?> promptSheet(
         if (message != null) ...[Text(message).muted, const Gap(16)],
         LabeledField(
           label: label,
-          child: TextField(
+          child: TextField(cursorOpacityAnimates: false, 
             controller: controller,
             autofocus: true,
             obscureText: obscure,
@@ -624,7 +627,7 @@ class SearchField extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => TextField(
+  Widget build(BuildContext context) => TextField(cursorOpacityAnimates: false, 
         controller: controller,
         placeholder: Text(placeholder),
         onChanged: onChanged,

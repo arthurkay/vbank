@@ -1,0 +1,12 @@
+// lib/src/proto/dht/routing_table.proto
+syntax = "proto3";
+
+package ipfs.dht.routing_table;
+
+import "dht/kademlia_node.proto";
+
+message RoutingTableProto {
+  // Represents the routing table entries.
+  // The key is the PeerId string, and the value is the associated KademliaNode.
+  map<string, ipfs.dht.kademlia_node.KademliaNode> entries = 1; 
+}

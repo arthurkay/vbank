@@ -60,7 +60,7 @@ class LoanService {
         'rate': l.interestRate,
         'termWeeks': l.termWeeks,
         'reason': l.reason,
-        'requestedAt': l.requestedAt.toUtc().toIso8601String(),
+        'requestedAt': TransactionService.signedInstant(l.requestedAt),
       }));
 
   static List<int> approvalSigningPayload(LoanRequest l) => utf8.encode(jsonEncode({
@@ -69,7 +69,7 @@ class LoanService {
         'status': l.status == LoanStatus.rejected ? 'rejected' : 'approved',
         'approvedAmount': l.approvedAmount,
         'approver': l.approvedByPeerId,
-        'approvedAt': l.approvedAt?.toUtc().toIso8601String(),
+        'approvedAt': l.approvedAt == null ? null : TransactionService.signedInstant(l.approvedAt!),
       }));
 
   Future<bool> verifyRequestSignature(LoanRequest l, List<int> borrowerPublicKey) =>

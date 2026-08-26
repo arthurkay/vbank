@@ -51,7 +51,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
             const Gap(24),
             LabeledField(
               label: 'Display name',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _nameController,
                 autofocus: true,
                 placeholder: const Text('e.g. Grace Mwanza'),

@@ -214,16 +214,26 @@ class YaruStatTile extends StatelessWidget {
   }
 }
 
+/// The app's root messenger. Dialog contexts have no Scaffold of their own,
+/// so `ScaffoldMessenger.of(dialogContext)` can end up with nothing to present
+/// to; going through the app-level key always reaches the page underneath.
+final yaruMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 /// Ubuntu-style toast: a snack bar with no floating behaviour.
 void yaruToast(BuildContext context, String message, {bool error = false}) {
   final theme = Theme.of(context);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: error ? theme.colorScheme.error : null,
-      duration: Duration(seconds: error ? 5 : 3),
-    ),
+  final bar = SnackBar(
+    content: Text(message),
+    backgroundColor: error ? theme.colorScheme.error : null,
+    duration: Duration(seconds: error ? 5 : 3),
   );
+  final messenger = yaruMessengerKey.currentState ?? ScaffoldMessenger.maybeOf(context);
+  try {
+    messenger?.showSnackBar(bar);
+  } catch (_) {
+    // No Scaffold anywhere (e.g. a bare dialog during start-up): drop the toast
+    // rather than crash the gesture handler.
+  }
 }
 
 /// Ubuntu dialog frame: [YaruDialogTitleBar] plus an actions row.

@@ -35,17 +35,24 @@ class DeviceSecret {
     final cached = _cached;
     if (cached != null) return cached;
 
-    String? stored;
+    // The fallback file only exists if the keyring was unusable when the secret
+    // was created — and then the database was keyed with *that* value, so it
+    // must win over whatever the keyring says now. (Observed on Android: the
+    // Keystore was slow right after an install, the first run fell back to the
+    // file, the next run got a prompt keyring answer of "nothing here",
+    // minted a second secret and could no longer open its own database.)
+    String? stored = await _readFallback();
     var keyringUsable = true;
-    try {
-      // On Linux the read goes over D-Bus to a Secret Service. With no keyring
-      // running the call can block instead of failing, which would hang start-up
-      // — so bound it and fall back to the file.
-      stored = await _storage.read(key: _key).timeout(_keyringTimeout);
-    } catch (_) {
-      keyringUsable = false; // no Secret Service, keyring locked, or timed out
+    if (stored == null) {
+      try {
+        // On Linux the read goes over D-Bus to a Secret Service. With no
+        // keyring running the call can block instead of failing, which would
+        // hang start-up — so bound it and fall back to the file.
+        stored = await _storage.read(key: _key).timeout(_keyringTimeout);
+      } catch (_) {
+        keyringUsable = false; // no Secret Service, keyring locked, or timed out
+      }
     }
-    stored ??= keyringUsable ? null : await _readFallback();
 
     if (stored != null) {
       final bytes = Uint8List.fromList(base64Decode(stored));
@@ -59,6 +66,9 @@ class DeviceSecret {
     if (keyringUsable) {
       try {
         await _storage.write(key: _key, value: encoded).timeout(_keyringTimeout);
+        // A write that "succeeded" but does not read back is as good as none.
+        final check = await _storage.read(key: _key).timeout(_keyringTimeout);
+        if (check != encoded) keyringUsable = false;
       } catch (_) {
         keyringUsable = false;
       }

@@ -3,6 +3,26 @@ import 'package:vbank/core/deeplink/deeplink_handler.dart';
 
 void main() {
   group('DeepLinkHandler.parse', () {
+    test('inviter addresses round-trip through the link', () {
+      final link = DeepLinkHandler.buildJoinLink(
+        groupId: 'G1',
+        inviterPeerId: 'P1',
+        groupCid: 'bafy1',
+        inviteId: 'I1',
+        inviteNonceB64: 'bm9uY2U=',
+        inviterAddrs: ['/ip4/192.168.1.141/tcp/4001/p2p/P1', '/ip4/10.0.0.5/tcp/4001/p2p/P1'],
+      );
+      final r = DeepLinkHandler.parseString(link);
+      expect(r.isJoin, isTrue);
+      expect(r.inviterAddrs, ['/ip4/192.168.1.141/tcp/4001/p2p/P1', '/ip4/10.0.0.5/tcp/4001/p2p/P1']);
+      expect(r.inviteNonceB64, 'bm9uY2U=', reason: 'base64 padding survives URL encoding');
+    });
+
+    test('links without addresses parse with an empty list', () {
+      final r = DeepLinkHandler.parseString('vbank://join?group=G1&inviter=P1');
+      expect(r.inviterAddrs, isEmpty);
+    });
+
     test('valid join link', () {
       final r = DeepLinkHandler.parseString('vbank://join?group=G1&inviter=P1');
       expect(r.type, DeepLinkType.joinGroup);

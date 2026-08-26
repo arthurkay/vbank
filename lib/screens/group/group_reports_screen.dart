@@ -32,9 +32,13 @@ class _GroupReportsScreenState extends ConsumerState<GroupReportsScreen> {
     if (group == null) {
       return const AppPage(title: 'Reports', child: EmptyState(icon: LucideIcons.chartColumn, title: 'No group selected'));
     }
+    // Day-granular bounds: the provider is keyed on them, so a fresh
+    // microsecond timestamp on every build would restart the report each frame
+    // and the page would never leave its loading state.
     final now = DateTime.now();
-    final start = _months == 0 ? DateTime(2000) : DateTime(now.year, now.month - _months, now.day);
-    final end = now.add(const Duration(days: 1));
+    final today = DateTime(now.year, now.month, now.day);
+    final start = _months == 0 ? DateTime(2000) : DateTime(today.year, today.month - _months, today.day);
+    final end = today.add(const Duration(days: 1));
     final report = ref.watch(_reportProvider((groupId: group.id, start: start, end: end)));
     final c = group.config.currency;
     final scheme = Theme.of(context).colorScheme;

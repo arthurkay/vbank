@@ -34,13 +34,18 @@ class DeepLinkHandler {
     if (!_linkController.isClosed) _linkController.add(result);
   }
 
-  /// Builds a join link: `vbank://join?group=…&inviter=…&cid=…`
+  /// Builds a join link: `vbank://join?group=…&inviter=…&cid=…&addrs=…`
+  ///
+  /// [inviterAddrs] are the inviter's dialable multiaddrs. Peer discovery on a
+  /// LAN is not reliable, so the joiner dials these directly before fetching
+  /// the group snapshot.
   static String buildJoinLink({
     required String groupId,
     required String inviterPeerId,
     String? groupCid,
     String? inviteId,
     String? inviteNonceB64,
+    List<String> inviterAddrs = const [],
   }) {
     return Uri(
       scheme: scheme,
@@ -51,6 +56,7 @@ class DeepLinkHandler {
         'cid': ?groupCid,
         'invite': ?inviteId,
         'n': ?inviteNonceB64,
+        if (inviterAddrs.isNotEmpty) 'addrs': inviterAddrs.join(','),
       },
     ).toString();
   }
@@ -113,6 +119,11 @@ class DeepLinkHandler {
           groupCid: nonEmpty('cid'),
           inviteId: nonEmpty('invite'),
           inviteNonceB64: nonEmpty('n'),
+          inviterAddrs: (nonEmpty('addrs') ?? '')
+              .split(',')
+              .map((a) => a.trim())
+              .where((a) => a.isNotEmpty)
+              .toList(),
           rawLink: raw,
         );
       case 'restore':
@@ -144,6 +155,8 @@ class DeepLinkResult {
   final String? groupCid;
   final String? inviteId;
   final String? inviteNonceB64;
+  /// Inviter's dialable multiaddrs from the link (may be empty).
+  final List<String> inviterAddrs;
   final String? backupId;
   final String? rawLink;
   final String? error;
@@ -155,6 +168,7 @@ class DeepLinkResult {
     this.groupCid,
     this.inviteId,
     this.inviteNonceB64,
+    this.inviterAddrs = const [],
     this.backupId,
     this.rawLink,
     this.error,

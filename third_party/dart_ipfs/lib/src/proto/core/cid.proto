@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package ipfs.core;
+
+enum IPFSCIDVersion {
+    IPFS_CID_VERSION_UNSPECIFIED = 0;
+    IPFS_CID_VERSION_0 = 1;
+    IPFS_CID_VERSION_1 = 2;
+}
+
+message IPFSCIDProto {
+    IPFSCIDVersion version = 1;
+    bytes multihash = 2;
+    string codec = 3;
+    string multibase_prefix = 4;
+    int32 codec_type = 5;
+}

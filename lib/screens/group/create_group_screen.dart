@@ -69,7 +69,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           children: [
             LabeledField(
               label: 'Group name',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _name,
                 placeholder: const Text('e.g. Village Savings Group'),
                 textCapitalization: TextCapitalization.words,
@@ -78,7 +78,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             const Gap(20),
             LabeledField(
               label: 'Contribution amount (ZMW)',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _amount,
                 placeholder: const Text('e.g. 50'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -99,7 +99,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               label: 'Group passphrase',
               helper: 'Shared secret that encrypts the group\'s records. Tell it to members in person — '
                   'anyone who knows it can join and read the group\'s data.',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _passphrase,
                 obscureText: true,
                 placeholder: const Text('e.g. chilenje-savings-2026'),
@@ -111,7 +111,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             const Gap(20),
             LabeledField(
               label: 'Confirm passphrase',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _confirm,
                 obscureText: true,
                 features: [InputFeature.passwordToggle()],

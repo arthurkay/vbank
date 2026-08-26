@@ -112,7 +112,7 @@ class _IdentityBackupScreenState extends ConsumerState<IdentityBackupScreen> {
               const Gap(16),
               LabeledField(
                 label: 'PIN',
-                child: TextField(
+                child: TextField(cursorOpacityAnimates: false, 
                   controller: c1,
                   obscureText: true,
                   autofocus: true,
@@ -125,7 +125,7 @@ class _IdentityBackupScreenState extends ConsumerState<IdentityBackupScreen> {
               LabeledField(
                 label: 'Confirm PIN',
                 helper: error,
-                child: TextField(
+                child: TextField(cursorOpacityAnimates: false, 
                   controller: c2,
                   obscureText: true,
                   autocorrect: false,

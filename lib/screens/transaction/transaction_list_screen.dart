@@ -39,6 +39,8 @@ class TransactionListScreen extends ConsumerWidget {
                 final group = groupOf(tx);
                 return TransactionTile(
                   transaction: tx,
+                  group: group,
+                  showGroup: true,
                   onTap: () {
                     if (group != null) ref.read(selectedGroupProvider.notifier).state = group;
                     pushScreen(context, TransactionDetailScreen(transaction: tx));

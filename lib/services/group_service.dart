@@ -550,6 +550,7 @@ class GroupService {
     String groupId, {
     required String publisherPeerId,
     required SimpleKeyPair publisherKeyPair,
+    List<String> publisherAddrs = const [],
   }) async {
     final group = await getGroup(groupId);
     if (group == null) throw StateError('Group $groupId not found');
@@ -569,6 +570,7 @@ class GroupService {
       'removals': removals.map((r) => r.toJson()).toList(),
       'dissolution': dissolution?.toJson(),
       'publisher': publisherPeerId,
+      'publisherAddrs': publisherAddrs,
       'publishedAt': (groupData.updatedAt ?? DateTime.now().toUtc()).toIso8601String(),
     };
     final sig = await SigningService.sign(snapshotSigningBytes(body), publisherKeyPair);

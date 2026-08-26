@@ -36,6 +36,14 @@ class TransactionService {
 
   /// The canonical bytes the author signs. Covers *every* field so nothing
   /// can be altered after the fact (DESIGN_PLAN §1 "immutable, signed").
+  /// Timestamps in signed payloads are formatted at millisecond precision.
+  ///
+  /// `DateTime.now()` carries microseconds, the database stores milliseconds,
+  /// and records are re-read from the database before they are sent — so a
+  /// payload signed in memory would never match the one a peer rebuilds.
+  static String signedInstant(DateTime t) =>
+      DateTime.fromMillisecondsSinceEpoch(t.toUtc().millisecondsSinceEpoch, isUtc: true).toIso8601String();
+
   static List<int> signingPayload(Transaction tx) {
     return utf8.encode(jsonEncode({
       'v': 2,
@@ -48,7 +56,7 @@ class TransactionService {
       'amount': tx.amount,
       'currency': tx.currency,
       'note': tx.note,
-      'timestamp': tx.timestamp.toUtc().toIso8601String(),
+      'timestamp': signedInstant(tx.timestamp),
       'seq': tx.sequenceNumber,
       'loanId': tx.loanId,
     }));

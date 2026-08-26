@@ -6,7 +6,8 @@
 <title>vBank user guide</title>
 <meta name="description" content="A complete guide to running a savings group in vBank: creating a group, inviting members, recording contributions, running loans, meetings, reports, corrections, backups and sync.">
 <link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2318181b'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' font-weight='bold' fill='%23fafafa'>vB</text></svg>">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
 
@@ -204,7 +205,9 @@
   <li><strong>Sync status</strong> lists your node state, your peer ID, how many records are queued, syncing, synced or failed, and a live activity log.</li>
   <li><strong>Settings → Sync now</strong> forces a round.</li>
   <li>A record that fails five times is marked failed and can be retried by hand from the Sync screen.</li>
-  <li>The node runs while the app is open and for a while after; it stops about 15 minutes after you background the app to save battery.</li>
+  <li>Members find each other directly: an invite link carries the inviter's network address, and every record a member publishes carries theirs, so once two phones have exchanged anything they can reach each other again without any directory or server.</li>
+  <li>Nothing is lost if a phone is asleep when a record is published: on every round each phone asks the members it knows for a list of what they hold and fetches whatever it is missing.</li>
+  <li>Pressing Back on the home screen sends vBank to the background rather than closing it, so it keeps syncing; it stops about 15 minutes later to save battery.</li>
 </ul>
 <p><strong>Tip for meetings:</strong> if the mobile network is poor, put the phones on the same Wi-Fi (a hotspot works) and tap Sync now — members' phones will find each other on the local network.</p>
 

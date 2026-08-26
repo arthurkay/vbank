@@ -1,0 +1,34 @@
+  // lib/src/proto/core/blockstore.proto
+  syntax = "proto3";
+
+  package ipfs.core.data_structures;
+
+  // Import necessary proto definitions
+  import "core/block.proto"; // Import BlockProto definition
+  import "core/cid.proto";   // Import IPFSCIDProto definition
+  import "google/protobuf/empty.proto";
+  // Response message for adding a block
+  message AddBlockResponse {
+    bool success = 1;          // Indicates if the operation was successful
+    string message = 2;       // Message providing additional information
+  }
+
+  // Response message for retrieving a block
+  message GetBlockResponse {
+    BlockProto block = 1;     // The block retrieved
+    bool found = 2;           // Indicates if the block was found
+  }
+
+  // Response message for removing a block
+  message RemoveBlockResponse {
+    bool success = 1;          // Indicates if the operation was successful
+    string message = 2;       // Message providing additional information
+  }
+
+  // The BlockStore service definition
+  service BlockStoreService {
+    rpc AddBlock(BlockProto) returns (AddBlockResponse);  // Adds a block
+    rpc GetBlock(IPFSCIDProto) returns (GetBlockResponse);    // Retrieves a block by IPFSCIDProto
+    rpc RemoveBlock(IPFSCIDProto) returns (RemoveBlockResponse); // Removes a block by IPFSCIDProto
+    rpc GetAllBlocks(google.protobuf.Empty) returns (stream BlockProto); // Retrieves all blocks
+  }

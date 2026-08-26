@@ -144,7 +144,7 @@ class _RestoreBackupScreenState extends ConsumerState<RestoreBackupScreen> {
             const Gap(24),
             LabeledField(
               label: 'Backup PIN',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _pinController,
                 obscureText: true,
                 keyboardType: TextInputType.visiblePassword,

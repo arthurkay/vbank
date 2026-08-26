@@ -44,6 +44,7 @@ dependencies:
   intl: ^0.20.2
   path_provider: ^2.1.0
   path: ^1.9.0
+  crypto: ^3.0.3
   app_links: ^7.0.0
   sqflite_sqlcipher: ^3.4.1
   flutter_secure_storage: ^10.3.1
@@ -71,6 +72,38 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
+
+# dart_ipfs 1.11.7 with one patch: NetworkHandler passes
+# IPFSConfig.libp2pIdentitySeed to the router, so a node keeps its peer id
+# across restarts (upstream declares the field but never reads it). See
+# third_party/dart_ipfs/VBANK_PATCHES.md.
+dependency_overrides:
+  dart_ipfs:
+    path: third_party/dart_ipfs
+
+# App icon — generated from assets/brand/icon.svg (see tool/brand/README.md):
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: assets/brand/icon_1024.png
+  android: true
+  adaptive_icon_background: "#0B0B0C"
+  adaptive_icon_foreground: assets/brand/icon_foreground_1024.png
+  adaptive_icon_monochrome: assets/brand/icon_foreground_1024.png
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: assets/brand/icon_1024.png
+    background_color: "#0B0B0C"
+    theme_color: "#0B0B0C"
+  macos:
+    generate: true
+    image_path: assets/brand/icon_1024.png
+  windows:
+    generate: true
+    image_path: assets/brand/icon_1024.png
+    icon_size: 256

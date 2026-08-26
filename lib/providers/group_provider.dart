@@ -174,7 +174,11 @@ final selectedGroupProvider = StateProvider<Group?>((ref) => null);
 
 /// The current user's membership in the selected group (null if not a member).
 final myMembershipProvider = Provider<Member?>((ref) {
-  final group = ref.watch(selectedGroupProvider);
+  // `selectedGroupProvider` is the copy taken when the group was opened; a
+  // snapshot from the owner (e.g. approving this member) updates the list, so
+  // read the live copy or the "waiting for approval" screen never goes away.
+  final selected = ref.watch(selectedGroupProvider);
+  final group = ref.watch(groupListProvider).value?.where((g) => g.id == selected?.id).firstOrNull ?? selected;
   final me = ref.watch(authProvider).identity?.peerId;
   if (group == null || me == null) return null;
   return group.members.where((m) => m.peerId == me).firstOrNull;

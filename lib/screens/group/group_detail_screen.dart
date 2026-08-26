@@ -174,6 +174,7 @@ class _TransactionsTab extends ConsumerWidget {
                 final tx = visible[index];
                 return TransactionTile(
                   transaction: tx,
+                  group: group,
                   onTap: () => pushScreen(context, TransactionDetailScreen(transaction: tx)),
                 );
               },

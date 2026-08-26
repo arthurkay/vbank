@@ -1,4 +1,7 @@
+import 'dart:io';
 
+
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
@@ -73,6 +76,7 @@ class VBankApp extends ConsumerStatefulWidget {
 }
 
 class _VBankAppState extends ConsumerState<VBankApp> {
+
   /// The widget's own context sits *above* the MaterialApp's Navigator, so
   /// deep-link navigation must go through this key instead.
   final _navigatorKey = GlobalKey<NavigatorState>();
@@ -117,12 +121,12 @@ class _VBankAppState extends ConsumerState<VBankApp> {
       builder: (context, child) => VBankTheme.pageTransitionShim(context, child ?? const SizedBox.shrink()),
       initialRoute: '/',
       routes: {
-        '/': (context) => const WelcomeScreen(),
+        '/': (context) => const _BackgroundOnBack(child: WelcomeScreen()),
         '/create-account': (context) => const CreateAccountScreen(),
         '/restore-backup': (context) => RestoreBackupScreen(
               backupId: (ModalRoute.of(context)?.settings.arguments as DeepLinkResult?)?.backupId,
             ),
-        '/home': (context) => const HomeScreen(),
+        '/home': (context) => const _BackgroundOnBack(child: HomeScreen()),
         '/create-group': (context) => const CreateGroupScreen(),
         '/group-detail': (context) => const GroupDetailScreen(),
         '/transactions': (context) => const TransactionListScreen(),
@@ -143,6 +147,36 @@ class _VBankAppState extends ConsumerState<VBankApp> {
       }.map(_withSheetLayer),
       ),
       ),
+    );
+  }
+}
+
+/// Back on a root route sends the app to the background instead of quitting.
+///
+/// On Android, finishing the activity tears down the Dart root isolate and with
+/// it the sync node (a worker isolate) — while the user expects the app to keep
+/// syncing like a messenger. `canPop: false` also makes the framework claim the
+/// back event, so predictive back does not finish the activity on its own.
+class _BackgroundOnBack extends StatelessWidget {
+  final Widget child;
+  const _BackgroundOnBack({required this.child});
+
+  static const _platform = MethodChannel('vbank/platform');
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Platform.isAndroid) return child;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        try {
+          await _platform.invokeMethod<void>('moveToBackground');
+        } catch (_) {
+          await SystemNavigator.pop();
+        }
+      },
+      child: child,
     );
   }
 }

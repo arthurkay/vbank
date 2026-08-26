@@ -694,6 +694,7 @@ Future<void> fluentShowInvite(BuildContext context, WidgetRef ref, Group group) 
       groupCid: invite.cid,
       inviteId: invite.id,
       inviteNonceB64: base64Encode(invite.nonce!),
+      inviterAddrs: ref.read(syncManagerProvider).dialableAddresses,
     );
   } catch (e) {
     error = e;
@@ -784,6 +785,7 @@ Future<void> fluentJoinGroup(BuildContext context, WidgetRef ref) async {
           groupCid: result.groupCid,
           inviteId: result.inviteId,
           inviteNonceB64: result.inviteNonceB64,
+          inviterAddrs: result.inviterAddrs,
           passphrase: passphrase,
           self: self,
           keyPair: keyPair,

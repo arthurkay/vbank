@@ -160,10 +160,12 @@ final loanListProvider =
 
 final loanScheduleProvider = FutureProvider.family<List<RepaymentSchedule>, String>((ref, loanId) async {
   ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider); // local approve/disburse/repay
   return ref.watch(loanServiceProvider).schedule(loanId);
 });
 
 final loanProvider = FutureProvider.family<LoanRequest?, String>((ref, loanId) async {
   ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider); // local approve/disburse/repay
   return ref.watch(loanServiceProvider).getById(loanId);
 });

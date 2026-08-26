@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
@@ -71,6 +72,22 @@ void main() {
   });
 
   tearDown(closeTestDatabase);
+
+  group('Signed payloads survive storage and the wire', () {
+    // Regression: `DateTime.now()` has microseconds, the database keeps
+    // milliseconds, and records are re-read from the database before they are
+    // sent — so signatures made over the in-memory timestamp never verified on
+    // the receiving phone ("invalid author signature" in the two-device E2E).
+    test('a transaction re-read from the database still verifies', () async {
+      final tx = await txs.createTransaction(
+          groupId: circle.id, authorPeerId: owner.peerId, authorKeyPair: owner.kp,
+          fromPeerId: member.peerId, toPeerId: 'group', type: TransactionType.contribution, amount: 20);
+      final stored = (await txs.getByGroupId(circle.id)).where((t) => t.id == tx.id).single;
+      expect(await txs.verifySignature(stored, owner.pub), isTrue);
+      final wire = Transaction.fromJson(jsonDecode(jsonEncode(stored.toJson())) as Map<String, dynamic>);
+      expect(await txs.verifySignature(wire, owner.pub), isTrue);
+    });
+  });
 
   group('Permissions (DESIGN_PLAN §13)', () {
     test('members cannot record transactions; admins can', () async {

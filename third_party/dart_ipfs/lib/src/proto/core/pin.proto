@@ -1,0 +1,19 @@
+// lib/src/proto/core/pin.proto
+
+syntax = "proto3";
+
+package ipfs.core.data_structures;
+
+import "core/cid.proto";
+
+enum PinTypeProto {
+  PIN_TYPE_UNSPECIFIED = 0;
+  PIN_TYPE_DIRECT = 1;
+  PIN_TYPE_RECURSIVE = 2;
+}
+
+message PinProto {
+  IPFSCIDProto cid = 1;
+  PinTypeProto type = 2;
+  int64 timestamp = 3;
+}

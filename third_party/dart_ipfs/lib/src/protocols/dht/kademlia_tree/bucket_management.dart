@@ -1,0 +1,289 @@
+import 'dart:math' as math;
+
+import 'package:dart_ipfs/src/core/types/peer_id.dart';
+
+import '../kademlia_tree.dart';
+import '../red_black_tree.dart';
+import 'helpers.dart' as helpers;
+import 'kademlia_tree_node.dart';
+import 'lru_cache.dart';
+
+/// Extension for managing k-bucket operations in a Kademlia tree.
+///
+/// Handles bucket splitting, merging, and peer replacement strategies.
+extension BucketManagement on KademliaTree {
+  /// Handler for full bucket situations.
+  Future<void> Function(int, PeerId, PeerId) get handleBucketFullness =>
+      _handleBucketFullness;
+
+  /// Checks if a node was in a recent lookup.
+  bool Function(PeerId) get wasNodeContactInRecentLookup =>
+      _wasNodeContactInRecentLookup;
+
+  /// Finds the least recently seen node in a bucket.
+  KademliaTreeNode? Function(int) get findLeastRecentlySeenNode =>
+      _findLeastRecentlySeenNode;
+
+  /// Splits a bucket into two.
+  void Function(int) get splitBucket => _splitBucket;
+
+  /// Merges two adjacent buckets.
+  void Function(int, int) get mergeBuckets => _mergeBuckets;
+
+  /// Checks if a bucket can be split.
+  bool Function(int) get canSplitBucket => _canSplitBucket;
+
+  /// Checks if two buckets can be merged.
+  bool Function(int, int) get canMergeBuckets => _canMergeBuckets;
+
+  /// Gets the bucket index for a distance.
+  int Function(int) get getBucketIndex => _getBucketIndex;
+
+  // Bucket splitting logic
+  void _splitBucket(int bucketIndex) {
+    // 1. Create a new bucket
+    buckets.insert(
+      bucketIndex + 1,
+      RedBlackTree<PeerId, KademliaTreeNode>(
+        compare: (PeerId a, PeerId b) {
+          final distanceA = helpers.calculateDistance(root!.peerId, a);
+          final distanceB = helpers.calculateDistance(root!.peerId, b);
+          if (distanceA != distanceB) {
+            return distanceA.compareTo(distanceB);
+          }
+          return a.toString().compareTo(b.toString());
+        },
+      ),
+    );
+
+    // 2. Move peers
+    var nodesToMove = buckets[bucketIndex].entries
+        .map((entry) => entry.value)
+        .toList();
+    for (var node in nodesToMove) {
+      if (_getBucketIndex(node.distance) == bucketIndex + 1) {
+        buckets[bucketIndex].delete(node.peerId);
+        buckets[bucketIndex + 1].insert(node.peerId, node);
+        node.bucketIndex = bucketIndex + 1;
+      }
+    }
+
+    // Handle edge cases
+    if (buckets[bucketIndex].isEmpty) {
+      buckets.removeAt(bucketIndex);
+    }
+
+    if (bucketIndex == 0) {
+      // Handle root bucket edge case
+    }
+
+    if (bucketIndex == buckets.length - 1) {
+      // Handle last bucket edge case
+    }
+  }
+
+  // Bucket merging logic
+  void _mergeBuckets(int bucketIndex1, int bucketIndex2) {
+    // Ensure bucketIndex1 is smaller
+    if (bucketIndex1 > bucketIndex2) {
+      final temp = bucketIndex1;
+      bucketIndex1 = bucketIndex2;
+      bucketIndex2 = temp;
+    }
+
+    // Check for adjacency
+    if (bucketIndex2 != bucketIndex1 + 1) {
+      return;
+    }
+
+    // Move peers
+    var nodesToMove = buckets[bucketIndex2].entries
+        .map((entry) => entry.value)
+        .toList();
+    for (var node in nodesToMove) {
+      buckets[bucketIndex1].insert(node.peerId, node);
+      node.bucketIndex = bucketIndex1;
+    }
+
+    // Remove the empty bucket
+    buckets.removeAt(bucketIndex2);
+  }
+
+  bool _canSplitBucket(int bucketIndex) {
+    if (bucketIndex >= buckets.length - 1) {
+      return false;
+    }
+
+    // For testing and practical purposes, we allow splitting for lower indices
+    // but prefer replacement for higher indices to maintain tree balance.
+    return bucketIndex < 100;
+  }
+
+  bool _canMergeBuckets(int bucketIndex1, int bucketIndex2) {
+    // Buckets can be merged if they are adjacent and their combined size
+    // would not exceed the k-bucket limit.
+    if ((bucketIndex1 - bucketIndex2).abs() != 1) return false;
+    return (buckets[bucketIndex1].size + buckets[bucketIndex2].size) <=
+        KademliaTree.K;
+  }
+
+  bool _wasNodeContactInRecentLookup(PeerId peerId) {
+    return recentContacts.contains(peerId);
+  }
+
+  KademliaTreeNode? _findLeastRecentlySeenNode(int bucketIndex) {
+    if (buckets[bucketIndex].isEmpty) {
+      return null;
+    }
+
+    KademliaTreeNode? leastRecentlySeenNode;
+    DateTime? oldestLastSeenTime;
+
+    for (var nodeEntry in buckets[bucketIndex].entries) {
+      var node = nodeEntry.value;
+      DateTime? lastSeenTime = lastSeen[node.peerId];
+
+      if (lastSeenTime == null) {
+        leastRecentlySeenNode = node;
+        break;
+      } else if (oldestLastSeenTime == null ||
+          lastSeenTime.isBefore(oldestLastSeenTime)) {
+        oldestLastSeenTime = lastSeenTime;
+        leastRecentlySeenNode = node;
+      }
+    }
+
+    return leastRecentlySeenNode;
+  }
+
+  int _getBucketIndex(int distance) {
+    return helpers.getBucketIndex(distance);
+  }
+
+  Future<bool> _pingNode(KademliaTreeNode node) async {
+    try {
+      final isAlive = await sendPing(
+        node.peerId,
+      ); // Uses sendPing returning bool
+      return isAlive;
+    } catch (e) {
+      // print('Ping failed for node ${node.peerId}: $e');
+      return false;
+    }
+  }
+
+  LRUCache _getOrCreateCache(int bucketIndex) {
+    return bucketCaches.putIfAbsent(
+      bucketIndex,
+      () => LRUCache(KademliaTree.K * 2), // Cache size twice the k-bucket size
+    );
+  }
+
+  Future<void> _handleBucketFullness(
+    int bucketIndex,
+    PeerId peerId,
+    PeerId associatedPeerId,
+  ) async {
+    if (_canSplitBucket(bucketIndex)) {
+      _splitBucket(bucketIndex);
+      return;
+    }
+
+    final cache = _getOrCreateCache(bucketIndex);
+    final leastRecentNode = _findLeastRecentlySeenNode(bucketIndex);
+
+    if (leastRecentNode == null) return;
+
+    // Try pinging the least recently seen node
+    final isAlive = await _pingNode(leastRecentNode);
+
+    if (!isAlive) {
+      // If node is unresponsive, replace it
+      buckets[bucketIndex].delete(leastRecentNode.peerId);
+      final newNode = KademliaTreeNode(
+        peerId,
+        helpers.calculateDistance(peerId, root!.peerId),
+        associatedPeerId,
+        lastSeen: DateTime.now().millisecondsSinceEpoch,
+      );
+      buckets[bucketIndex].insert(peerId, newNode);
+      cache.put(peerId, newNode);
+      return;
+    }
+
+    // Update LRU cache with the successful ping
+    cache.put(leastRecentNode.peerId, leastRecentNode);
+
+    // If the node is alive but we have a better candidate
+    if (_shouldReplaceNode(leastRecentNode, peerId)) {
+      buckets[bucketIndex].delete(leastRecentNode.peerId);
+      final newNode = KademliaTreeNode(
+        peerId,
+        helpers.calculateDistance(peerId, root!.peerId),
+        associatedPeerId,
+        lastSeen: DateTime.now().millisecondsSinceEpoch,
+      );
+      buckets[bucketIndex].insert(peerId, newNode);
+      cache.put(peerId, newNode);
+    }
+  }
+
+  bool _shouldReplaceNode(KademliaTreeNode existingNode, PeerId newPeerId) {
+    // Check if the new peer was recently active in lookups
+    if (_wasNodeContactInRecentLookup(newPeerId)) {
+      return true;
+    }
+
+    // Check connection stability
+    final existingStability = calculateConnectionStabilityScore(existingNode);
+    final newStability = calculateConnectionStabilityScore(
+      KademliaTreeNode(
+        newPeerId,
+        helpers.calculateDistance(newPeerId, root!.peerId),
+        root!.peerId,
+        lastSeen: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+
+    return newStability > existingStability;
+  }
+
+  /// Calculates a stability score for a node.
+  double calculateConnectionStabilityScore(KademliaTreeNode node) {
+    // Base score starts at 1.0
+    double score = 1.0;
+
+    // Factor 1: Connection state
+    switch (node.state) {
+      case KademliaNodeState.active:
+        score *= 1.0;
+        break;
+      case KademliaNodeState.stale:
+        score *= 0.5;
+        break;
+      case KademliaNodeState.failed:
+        score *= 0.1;
+        break;
+    }
+
+    // Factor 2: Failed requests penalty
+    score *= math.pow(0.9, node.failedRequests);
+
+    // Factor 3: Recent activity bonus
+    final lastSeenDuration = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(node.lastSeen),
+    );
+    if (lastSeenDuration < const Duration(minutes: 30)) {
+      score *= 1.2; // 20% bonus for recent activity
+    }
+
+    // Factor 4: RTT (Round Trip Time) consideration
+    if (node.lastRtt > 0) {
+      // Normalize RTT between 0 and 1, assuming 1000ms as high latency
+      final rttScore = 1.0 - (node.lastRtt / 1000.0).clamp(0.0, 1.0);
+      score *= (0.5 + (0.5 * rttScore)); // RTT affects up to 50% of score
+    }
+
+    return score;
+  }
+}

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:dart_ipfs/dart_ipfs.dart' show PubSubMessage;
@@ -21,6 +22,8 @@ import '../crypto/signing.dart';
 import '../crypto/sync_envelope.dart';
 import '../storage/invite_dao.dart';
 import 'ipfs_service.dart';
+import 'peer_book.dart';
+import 'sync_ledger.dart';
 
 enum SyncState { idle, syncing, error }
 
@@ -60,10 +63,22 @@ class SyncManager {
   final MeetingService _meetingService;
   final GovernanceService _governanceService;
   final InviteService _inviteService;
+  final PeerBook _peerBook = PeerBook();
+  final SyncLedger _ledger = SyncLedger();
+
+  /// CIDs whose fetch/apply failed this session; not retried until restart.
+  final _failedCids = <String>{};
+
+  /// Per-address dial backoff (see [_dialKnownPeers]).
+  final _dialFailures = <String, int>{};
+  final _dialBackoffUntil = <String, DateTime>{};
+
+  /// CIDs already handled from notifications (insertion-ordered, capped).
+  final _seenNotifications = <String>{};
 
   SyncState _state = SyncState.idle;
   DateTime? _lastSyncTime;
-  Duration _syncInterval = const Duration(minutes: 5);
+  Duration _syncInterval = const Duration(minutes: 2);
   Timer? _periodicSyncTimer;
   Timer? _backgroundStopTimer;
 
@@ -191,10 +206,127 @@ class SyncManager {
     await _discoverPeers();
   }
 
+  /// Where other members can dial this node (empty until the node is up).
+  List<String> get dialableAddresses => _ipfsService.dialableAddresses;
+
+  /// Dials every address we know for [groupId]'s members. Failures are
+  /// expected (phones move, addresses go stale) and ignored.
+  ///
+  /// With [force] peers the router already lists as connected are dialed too:
+  /// libp2p's connect is a no-op on a live connection and a reconnect on one
+  /// that died without the router noticing — which is what a failed fetch from
+  /// a supposedly connected peer usually means.
+  Future<void> _dialKnownPeers(String groupId, {bool force = true}) async {
+    // Always dial, even peers the router lists as connected: libp2p's connect
+    // is a no-op on a live connection, a reconnect on a dead one, and — the
+    // part that matters — it re-registers the address in the peer store,
+    // whose entries expire after ten minutes ("No addresses found for peer").
+    final connected = force ? <String>{} : (await _ipfsService.connectedPeers).toSet();
+    for (final addr in await _peerBook.addrsFor(groupId)) {
+      final peerId = addr.split('/p2p/').last;
+      if (peerId == _ipfsService.peerId) continue;
+      if (connected.contains(peerId)) continue;
+      final until = _dialBackoffUntil[addr];
+      if (until != null && DateTime.now().isBefore(until)) continue;
+      try {
+        await _ipfsService.connectToPeer(addr).timeout(const Duration(seconds: 8));
+        _dialFailures.remove(addr);
+        _dialBackoffUntil.remove(addr);
+        connected.add(peerId);
+        _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected to $addr'));
+      } catch (e) {
+        // Unreachable right now (asleep, restarting, Wi-Fi hiccup, moved
+        // network). Peer ids are stable, so the address is either still right
+        // or will be replaced by the peer's next announcement — never drop it,
+        // just back off so a dead address does not cost 8 s every round.
+        final failures = (_dialFailures[addr] = (_dialFailures[addr] ?? 0) + 1);
+        final backoff = Duration(seconds: (15 << (failures - 1)).clamp(15, 300));
+        _dialBackoffUntil[addr] = DateTime.now().add(backoff);
+        _log(SyncEvent(type: SyncEventType.error, message: 'Dial failed $addr (retry in ${backoff.inSeconds}s): $e'));
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pull-based catch-up (see SyncLedger)
+  // ---------------------------------------------------------------------------
+
+  static const _maxCatchUpPerRound = 25;
+
+  /// Answers `/vbank/sync` requests: currently only `inventory`, which lists
+  /// the record CIDs we hold for a group we are in. CIDs are opaque and every
+  /// record is encrypted with the group key, so this reveals nothing to a
+  /// stranger beyond "there is a group with this id".
+  Future<Uint8List> _onSyncRequest(String from, Uint8List payload) async {
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Sync request from $from (${payload.length} bytes)'));
+    Map<String, dynamic> req;
+    try {
+      req = jsonDecode(utf8.decode(payload)) as Map<String, dynamic>;
+    } catch (_) {
+      return Uint8List(0);
+    }
+    if (req['op'] != 'inventory') return Uint8List(0);
+    final groupId = req['groupId'] as String?;
+    if (groupId == null || await _groupKeyService.getKey(groupId) == null) return Uint8List(0);
+    final cids = await _ledger.cidsFor(groupId);
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Served inventory (${cids.length}) to $from'));
+    return Uint8List.fromList(utf8.encode(jsonEncode({'v': 1, 'cids': cids})));
+  }
+
+  /// Asks every known peer of [groupId] what it holds and fetches what we lack.
+  /// Notifications are best effort; this is what makes sync converge.
+  Future<void> _pullInventory(String groupId) async {
+    final peers = (await _peerBook.addrsFor(groupId)).map(PeerBook.peerIdOf).toSet()..remove(_ipfsService.peerId);
+    if (peers.isEmpty) return;
+    final request = Uint8List.fromList(utf8.encode(jsonEncode({'op': 'inventory', 'groupId': groupId})));
+    var applied = 0;
+    for (final peer in peers) {
+      final reply = await _ipfsService.request(peer, request);
+      if (reply == null || reply.isEmpty) {
+        _log(SyncEvent(type: SyncEventType.error, message: 'No inventory from $peer for $groupId'));
+        continue;
+      }
+      List<String> theirs;
+      try {
+        theirs = ((jsonDecode(utf8.decode(reply)) as Map)['cids'] as List).cast<String>();
+      } catch (_) {
+        continue;
+      }
+      final mine = (await _ledger.cidsFor(groupId)).toSet();
+      // Their list is newest first; apply oldest first so snapshots and the
+      // records that depend on them arrive in order.
+      final missing = theirs.reversed.where((c) => !mine.contains(c) && !_failedCids.contains(c)).take(_maxCatchUpPerRound);
+      for (final cid in missing) {
+        try {
+          await _fetchAndApply(groupId, cid, from: peer);
+          applied++;
+        } catch (e) {
+          _failedCids.add(cid);
+          _log(SyncEvent(type: SyncEventType.error, message: 'Catch-up rejected $cid: $e'));
+        }
+      }
+    }
+    if (applied > 0) {
+      _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Caught up $applied record(s) for $groupId'));
+    }
+  }
+
+  /// Waits briefly for [peerId] to show up as connected (the libp2p notifiee
+  /// can lag the dial), then reports whether it did.
+  Future<bool> _awaitConnected(String peerId, {Duration timeout = const Duration(seconds: 3)}) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if ((await _ipfsService.connectedPeers).contains(peerId)) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    return false;
+  }
+
   Future<void> _ensureNode() async {
+    _ipfsService.requestHandler ??= _onSyncRequest;
     if (!_ipfsService.isRunning) {
       await _ipfsService.start();
-      _log(SyncEvent(type: SyncEventType.nodeStarted, message: 'IPFS node started'));
+      _log(SyncEvent(type: SyncEventType.nodeStarted, message: 'IPFS node started as ${_ipfsService.peerId}'));
       await _pubsubSub?.cancel();
       _pubsubSub = null;
       _subscribedGroups.clear();
@@ -239,6 +371,8 @@ class SyncManager {
   /// and dial them, so Bitswap/PubSub have direct connections.
   Future<void> _discoverPeers() async {
     for (final g in await _groupService.getAllGroups()) {
+      await _dialKnownPeers(g.id);
+      await _pullInventory(g.id);
       final cid = g.cid;
       if (cid == null) continue;
       try {
@@ -300,7 +434,12 @@ class SyncManager {
     if (me == null || kp == null) throw StateError('Not signed in');
     await _ensureNode();
     final key = await _groupKeyService.requireKey(groupId);
-    final snapshot = await _groupService.buildSnapshot(groupId, publisherPeerId: me, publisherKeyPair: kp);
+    final snapshot = await _groupService.buildSnapshot(
+      groupId,
+      publisherPeerId: me,
+      publisherKeyPair: kp,
+      publisherAddrs: dialableAddresses,
+    );
 
     final bytes = await SyncEnvelope.seal(
       type: SyncPayloadType.groupSnapshot,
@@ -311,6 +450,7 @@ class SyncManager {
     final cid = await _ipfsService.addData(bytes);
     await _ipfsService.pin(cid);
     await _groupService.setCid(groupId, cid);
+    await _ledger.record(groupId, cid);
     await _announce(groupId, 'group', cid);
     _log(SyncEvent(type: SyncEventType.snapshotPublished, message: 'Group snapshot → $cid'));
     return cid;
@@ -321,9 +461,22 @@ class SyncManager {
     await _ensureNode();
     final key = await _groupKeyService.requireKey(groupId);
     final bytes = await SyncEnvelope.seal(type: type, groupId: groupId, plaintextJson: json, groupKey: key);
-    final cid = await _ipfsService.addData(bytes);
-    await _ipfsService.pin(cid);
-    await _announce(groupId, type.name, cid);
+    final String cid;
+    try {
+      cid = await _ipfsService.addData(bytes);
+      await _ipfsService.pin(cid);
+      await _ledger.record(groupId, cid);
+    } catch (e) {
+      _log(SyncEvent(type: SyncEventType.error, message: 'Storing ${type.name} failed: $e'));
+      rethrow;
+    }
+    try {
+      await _announce(groupId, type.name, cid);
+    } catch (e) {
+      // The record is stored and pinned; peers still pick it up on their next
+      // sync round, so a failed nudge must not fail the caller's operation.
+      _log(SyncEvent(type: SyncEventType.error, message: 'Announcing ${type.name} $cid failed: $e'));
+    }
     return cid;
   }
 
@@ -363,16 +516,21 @@ class SyncManager {
     }
   }
 
-  /// PubSub notification: only a CID and the group id (both opaque).
+  /// Notification: a CID, the group id (both opaque) and where to reach us so
+  /// the receiver can dial back before fetching.
   Future<void> _announce(String groupId, String kind, String cid) async {
     if (!_subscribedGroups.contains(groupId)) {
       await _ipfsService.subscribe(topicFor(groupId));
       _subscribedGroups.add(groupId);
     }
-    await _ipfsService.publish(
+    final known = await _peerBook.addrsFor(groupId);
+    await _dialKnownPeers(groupId);
+    final delivered = await _ipfsService.publish(
       topicFor(groupId),
-      jsonEncode({'v': 1, 'kind': kind, 'groupId': groupId, 'cid': cid}),
+      jsonEncode({'v': 1, 'kind': kind, 'groupId': groupId, 'cid': cid, 'addrs': dialableAddresses}),
+      peers: known.map(PeerBook.peerIdOf),
     );
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Announced $kind $cid to $delivered peer(s)'));
   }
 
   // ---------------------------------------------------------------------------
@@ -390,19 +548,60 @@ class SyncManager {
     final cid = note['cid'] as String?;
     if (groupId == null || cid == null) return;
     if (msg.topic != topicFor(groupId)) return;
+    // Peers may hold two connections to us and notify over both.
+    if (!_seenNotifications.add(cid)) return;
+    if (_seenNotifications.length > 500) _seenNotifications.remove(_seenNotifications.first);
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Notified of ${note['kind']} $cid from ${msg.sender}'));
 
     try {
-      await _fetchAndApply(groupId, cid);
+      // Make sure we hold a connection to the sender before asking bitswap,
+      // which only talks to peers the router currently lists as connected.
+      final addrs = (note['addrs'] as List?)?.cast<String>() ?? const [];
+      if (addrs.isNotEmpty) await _peerBook.remember(groupId, addrs, exceptPeerId: _ownPeerId);
+      await _dialKnownPeers(groupId);
+      await _fetchAndApply(groupId, cid, from: msg.sender);
+      // A notification proves the sender is reachable: use the moment to pick
+      // up anything of theirs we missed (notifications are best effort).
+      await _pullInventory(groupId);
     } catch (e) {
       _log(SyncEvent(type: SyncEventType.error, message: 'Rejected ${note['kind']} $cid: $e'));
     }
   }
 
-  Future<void> _fetchAndApply(String groupId, String cid) async {
+  /// Fetches [cid]: local store, then the group's known vBank peers directly
+  /// (plus [extraPeers], typically whoever announced it), then bitswap.
+  Future<Uint8List?> _getData(String groupId, String cid, {Iterable<String> extraPeers = const []}) async {
+    final sw = Stopwatch()..start();
+    final local = await _ipfsService.getDataLocal(cid);
+    if (local != null) return local;
+    final known = (await _peerBook.addrsFor(groupId)).map(PeerBook.peerIdOf);
+    final peers = {...extraPeers, ...known}.toList();
+    final direct = await _ipfsService.fetchFromPeers(cid, peers);
+    if (direct != null) {
+      _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Fetched $cid directly in ${sw.elapsedMilliseconds} ms'));
+      return direct;
+    }
+    _log(SyncEvent(type: SyncEventType.error, message: 'Direct fetch of $cid from ${peers.length} peer(s) failed after ${sw.elapsedMilliseconds} ms; trying bitswap'));
+    final viaBitswap = await _ipfsService.getData(cid);
+    _log(SyncEvent(
+      type: viaBitswap == null ? SyncEventType.error : SyncEventType.peersDiscovered,
+      message: 'Bitswap ${viaBitswap == null ? 'missed' : 'fetched'} $cid after ${sw.elapsedMilliseconds} ms',
+    ));
+    return viaBitswap;
+  }
+
+  Future<void> _fetchAndApply(String groupId, String cid, {String? from}) async {
     final key = await _groupKeyService.getKey(groupId);
     if (key == null) return;
 
-    final bytes = await _ipfsService.getData(cid);
+    final extra = from == null ? const <String>[] : [from];
+    var bytes = await _getData(groupId, cid, extraPeers: extra);
+    if (bytes == null) {
+      // Connections die without the router noticing, both ways. Reconnect to
+      // everyone we know for this group and ask once more before giving up.
+      await _dialKnownPeers(groupId, force: true);
+      bytes = await _getData(groupId, cid, extraPeers: extra);
+    }
     if (bytes == null) throw StateError('CID $cid not found');
 
     final envelope = SyncEnvelope.tryDecode(bytes);
@@ -431,6 +630,7 @@ class SyncManager {
         await _applyReversal(groupId, payload);
         break;
     }
+    await _ledger.record(groupId, cid);
   }
 
   /// Looks up the member the sync layer will trust as the author of a record.
@@ -460,15 +660,33 @@ class SyncManager {
     }
     _log(SyncEvent(type: SyncEventType.transactionReceived,
         message: 'Received ${tx.type.name} ${tx.amount} in $groupId'));
+    final group = await _groupService.getGroup(groupId);
+    String nameOf(String peerId) =>
+        group?.members.where((m) => m.peerId == peerId).firstOrNull?.name ?? (peerId == 'group' ? 'the group fund' : 'a member');
+    final amount = '${tx.currency} ${tx.amount.toStringAsFixed(2)}';
+    final body = switch (tx.type) {
+      TransactionType.contribution => '${nameOf(tx.fromPeerId)} contributed $amount',
+      TransactionType.repayment => '${nameOf(tx.fromPeerId)} repaid $amount',
+      TransactionType.loan => '${nameOf(tx.toPeerId)} received a loan of $amount',
+      TransactionType.withdrawal => '${nameOf(tx.toPeerId)} withdrew $amount',
+      TransactionType.penalty => '${nameOf(tx.fromPeerId)} was charged a penalty of $amount',
+      TransactionType.fee => '${nameOf(tx.fromPeerId)} paid a fee of $amount',
+      TransactionType.reversal => 'A transaction of $amount was reversed',
+    };
     _emitChange(SyncChange(
       SyncChangeType.transaction,
       groupId,
-      title: 'New ${tx.type.name}',
-      body: '${tx.currency} ${tx.amount.toStringAsFixed(2)}',
+      title: '${_titleCase(tx.type.name)} · ${group?.name ?? 'group'}',
+      body: body,
     ));
   }
 
   Future<void> _applySnapshot(Map<String, dynamic> json, String cid) async {
+    final groupId = (json['group'] as Map?)?['id'] as String?;
+    final addrs = (json['publisherAddrs'] as List?)?.cast<String>() ?? const [];
+    if (groupId != null && addrs.isNotEmpty) {
+      await _peerBook.remember(groupId, addrs, exceptPeerId: _ownPeerId);
+    }
     final result = await _groupService.importSnapshot(json, cid: cid, ownPeerId: _ownPeerId);
     if (!result.applied) return;
     // If ownership was just handed to us, countersign and republish.
@@ -489,6 +707,8 @@ class SyncManager {
   /// invite used and republish (DESIGN_PLAN §16).
   Future<void> _applyMemberJoin(String groupId, Map<String, dynamic> json) async {
     final member = Member.fromJson(json['member'] as Map<String, dynamic>);
+    final joinerAddrs = (json['addrs'] as List?)?.cast<String>() ?? const [];
+    if (joinerAddrs.isNotEmpty) await _peerBook.remember(groupId, joinerAddrs, exceptPeerId: _ownPeerId);
     final signature = (json['signature'] as List).cast<int>();
     final inviteId = json['inviteId'] as String?;
     final nonceB64 = json['nonce'] as String?;
@@ -536,7 +756,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.member,
       groupId,
-      title: group.requireApproval ? 'Join request' : 'New member',
+      title: group.requireApproval ? 'Join request · ${group.name}' : 'New member · ${group.name}',
       body: group.requireApproval
           ? '${member.name} is waiting for approval in ${group.name}'
           : '${member.name} joined ${group.name}',
@@ -567,8 +787,8 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.loan,
       groupId,
-      title: 'Loan ${loan.status.name}',
-      body: '${borrower.name}: ${loan.requestedAmount.toStringAsFixed(2)}',
+      title: 'Loan ${loan.status.name} · ${(await _groupService.getGroup(groupId))?.name ?? 'group'}',
+      body: '${borrower.name} · ${loan.requestedAmount.toStringAsFixed(2)} over ${loan.termWeeks} weeks',
     ));
   }
 
@@ -589,8 +809,8 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.meeting,
       groupId,
-      title: 'Meeting ${meeting.status.name}',
-      body: meeting.scheduledAt.toLocal().toString(),
+      title: 'Meeting ${meeting.status.name} · ${(await _groupService.getGroup(groupId))?.name ?? 'group'}',
+      body: _fmtWhen(meeting.scheduledAt.toLocal()),
     ));
   }
 
@@ -633,6 +853,7 @@ class SyncManager {
     required String passphrase,
     required Member self,
     required SimpleKeyPair keyPair,
+    List<String> inviterAddrs = const [],
   }) async {
     final passphraseError = GroupKeyService.validatePassphrase(passphrase);
     if (passphraseError != null) throw JoinGroupException(passphraseError);
@@ -651,9 +872,29 @@ class SyncManager {
 
     final key = await GroupKeyService.deriveKey(passphrase, groupId);
 
+    // The invite link carries the inviter's addresses: dial them before asking
+    // bitswap, which only talks to peers we are already connected to.
+    if (inviterAddrs.isNotEmpty) {
+      await _peerBook.remember(groupId, inviterAddrs, exceptPeerId: _ownPeerId);
+    }
+    final inviterPeerId = inviterAddrs.isEmpty ? null : PeerBook.peerIdOf(inviterAddrs.first);
+    await _dialKnownPeers(groupId);
+    if (inviterPeerId != null) await _awaitConnected(inviterPeerId);
+
+    final peers = await _ipfsService.connectedPeers;
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected peers before fetch: ${peers.length} $peers'));
     Uint8List? bytes;
     try {
-      bytes = await _ipfsService.getData(groupCid).timeout(const Duration(seconds: 45));
+      bytes = await _getData(groupId, groupCid).timeout(const Duration(seconds: 45));
+      if (bytes == null && inviterPeerId != null) {
+        // The connection can be dropped underneath us (see PeerBook.remember);
+        // one redial covers the common case before we tell the user "not found".
+        await _dialKnownPeers(groupId, force: true);
+        if (await _awaitConnected(inviterPeerId)) {
+          bytes = await _getData(groupId, groupCid).timeout(const Duration(seconds: 45));
+        }
+      }
+      _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Fetched $groupCid: ${bytes?.length ?? 'null'} bytes'));
     } on TimeoutException {
       throw const JoinGroupException(
         'Timed out fetching the group from the network. Make sure the inviter\'s '
@@ -703,6 +944,7 @@ class SyncManager {
       throw JoinGroupException('Group data failed verification: $e');
     }
     await _groupKeyService.setKey(groupId, key);
+    await _ledger.record(groupId, groupCid);
 
     final me = Member(
       peerId: self.peerId,
@@ -721,6 +963,7 @@ class SyncManager {
       'inviteId': inviteId,
       'nonce': inviteNonceB64,
       'signature': signature.bytes,
+      'addrs': dialableAddresses,
     });
 
     _log(SyncEvent(type: SyncEventType.memberJoined, message: 'Joined ${result.group.name}'));
@@ -769,7 +1012,21 @@ class SyncManager {
     if (!_stateController.isClosed) _stateController.add(newState);
   }
 
+  static String _titleCase(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+  /// "Tue 2 Sep, 09:00" — no locale data needed.
+  static String _fmtWhen(DateTime t) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '${days[t.weekday - 1]} ${t.day} ${months[t.month - 1]}, $hh:$mm';
+  }
+
   void _log(SyncEvent event) {
+    // Visible in debug and profile builds (the two-device E2E runs a profile
+    // build on the phone); compiled out of release.
+    if (kDebugMode || kProfileMode) debugPrint('[sync] ${event.type.name}: ${event.message}');
     _recentLog.insert(0, event);
     if (_recentLog.length > _maxLog) _recentLog.removeLast();
     if (!_syncLogController.isClosed) _syncLogController.add(event);

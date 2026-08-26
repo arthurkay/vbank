@@ -82,7 +82,7 @@ class _RequestLoanScreenState extends ConsumerState<RequestLoanScreen> {
             const Gap(20),
             LabeledField(
               label: 'Loan amount (${cfg?.currency ?? 'ZMW'})',
-              child: TextField(
+              child: TextField(cursorOpacityAnimates: false, 
                 controller: _amount,
                 autofocus: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -100,12 +100,12 @@ class _RequestLoanScreenState extends ConsumerState<RequestLoanScreen> {
             const Gap(20),
             LabeledField(
               label: 'Term (weeks)',
-              child: TextField(controller: _term, keyboardType: TextInputType.number),
+              child: TextField(cursorOpacityAnimates: false, controller: _term, keyboardType: TextInputType.number),
             ),
             const Gap(20),
             LabeledField(
               label: 'Reason (optional)',
-              child: TextField(controller: _reason, maxLines: 3),
+              child: TextField(cursorOpacityAnimates: false, controller: _reason, maxLines: 3),
             ),
             const Gap(32),
             Button.primary(

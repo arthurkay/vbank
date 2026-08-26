@@ -16,7 +16,8 @@ class NotificationService {
 
     tz.initializeTimeZones();
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Status-bar glyph: white silhouette of the app mark (assets/brand/notification.svg).
+    const androidSettings = AndroidInitializationSettings('@drawable/ic_stat_vbank');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,

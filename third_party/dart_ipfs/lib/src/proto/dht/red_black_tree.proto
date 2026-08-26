@@ -1,0 +1,24 @@
+// lib/src/proto/dht/red_black_tree.proto
+syntax = "proto3";
+
+package ipfs.dht.red_black_tree;
+
+import "dht/common_red_black_tree.proto";
+
+// Represents a node in a Red-Black Tree.
+message RedBlackTreeNode {
+  // The key associated with this node.
+  ipfs.dht.common_red_black_tree.K_PeerId key = 1;
+
+  // The value associated with this node.
+  ipfs.dht.common_red_black_tree.V_PeerInfo value = 2;
+
+  // The color of this node (RED or BLACK).
+  ipfs.dht.common_red_black_tree.NodeColor color = 3;
+
+  // The left child of this node.
+  RedBlackTreeNode left = 4;
+
+  // The right child of this node.
+  RedBlackTreeNode right = 5;
+}

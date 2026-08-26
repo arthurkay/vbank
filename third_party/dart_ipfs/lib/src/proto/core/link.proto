@@ -1,0 +1,36 @@
+// lib/src/proto/core/link.proto
+syntax = "proto3";
+
+package ipfs.core.data_structures;
+
+// Import the standard PBLink from dag.proto
+import "core/dag.proto";
+
+// Link types for different DAG structures
+enum LinkType {
+  LINK_TYPE_UNSPECIFIED = 0;
+  LINK_TYPE_DIRECT = 1;
+  LINK_TYPE_HAMT = 2;
+  LINK_TYPE_TRICKLE = 3;
+}
+
+// Extended link with additional metadata (uses standard PBLink)
+message LinkMetadata {
+  // Reference to the standard PBLink
+  PBLink link = 1;
+  
+  // Unix timestamp of when the link was created
+  int64 timestamp = 2;
+  
+  // Custom metadata or additional fields
+  map<string, string> metadata = 3;
+  
+  // Link type for different DAG structures
+  LinkType type = 4;
+  
+  // For HAMT links
+  int32 bucket_index = 5;
+  
+  // For trickle-dag links
+  int32 depth = 6;
+}
