@@ -23,23 +23,51 @@ import '../../providers/ipfs_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../providers/meeting_provider.dart';
 import '../../providers/transaction_provider.dart';
+import 'linux_accent.dart';
 import 'yaru_actions.dart';
 import 'yaru_kit.dart';
 import 'yaru_pages.dart';
 
-class VBankYaruApp extends ConsumerWidget {
+class VBankYaruApp extends ConsumerStatefulWidget {
   const VBankYaruApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return YaruTheme(
-      builder: (context, yaru, child) => MaterialApp(
-        title: 'vBank',
-        debugShowCheckedModeBanner: false,
-        theme: yaru.theme,
-        darkTheme: yaru.darkTheme,
-        home: const AppBootstrap(child: _YaruRoot()),
-      ),
+  ConsumerState<VBankYaruApp> createState() => _VBankYaruAppState();
+}
+
+class _VBankYaruAppState extends ConsumerState<VBankYaruApp> {
+  final _accent = LinuxAccent();
+
+  @override
+  void initState() {
+    super.initState();
+    _accent.start();
+  }
+
+  @override
+  void dispose() {
+    _accent.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Follow the desktop's accent (Zorin, Pop!_OS, Mint, GNOME 47 accents…)
+    // rather than Yaru's Canonical-orange default. When nothing can be read,
+    // fall through to Yaru's own variant detection so Ubuntu stays Ubuntu.
+    return ValueListenableBuilder<Color?>(
+      valueListenable: _accent,
+      builder: (context, accent, _) {
+        return YaruTheme(
+        builder: (context, yaru, child) => MaterialApp(
+          title: 'vBank',
+          debugShowCheckedModeBanner: false,
+          theme: accent == null ? yaru.theme : createYaruLightTheme(primaryColor: accent),
+          darkTheme: accent == null ? yaru.darkTheme : createYaruDarkTheme(primaryColor: accent),
+          home: const AppBootstrap(child: _YaruRoot()),
+        ),
+      );
+      },
     );
   }
 }

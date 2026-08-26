@@ -55,6 +55,7 @@ dependencies:
   fluent_ui: 4.15.1
   sqlcipher_flutter_libs: ^0.7.0+eol
   sqflite_common_ffi: ^2.4.0+3
+  system_theme: 3.2.0
 
 # package:sqlite3 (used by sqflite_common_ffi on desktop) bundles a SQLCipher
 # build, so Linux and Windows get the same encrypted database as the mobile
