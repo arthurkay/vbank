@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' as ffi;
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 import '../security/device_secret.dart';
@@ -15,6 +17,14 @@ import '../security/device_secret.dart';
 /// which is ambiguous once a device belongs to several groups. We derive it
 /// from the device secret alone — the group keys themselves are rows inside
 /// the (encrypted) database.
+///
+/// Two engines, one behaviour: Android, iOS and macOS use `sqflite_sqlcipher`
+/// (native SQLCipher). Linux and Windows have no such plugin, so they open the
+/// same file through `sqflite_common_ffi` against the SQLite3MultipleCiphers
+/// build of `package:sqlite3` (selected by `hooks.user_defines.sqlite3.source`
+/// in pubspec.yaml), put it in SQLCipher-compatible mode and key it with
+/// `PRAGMA key`. SQLite3MC is bundled, so Linux and Windows need no system
+/// SQLCipher package.
 class AppDatabase {
   static Database? _database;
 
@@ -55,9 +65,12 @@ class AppDatabase {
       );
     }
 
+    final password = await _databasePassword();
+
+    if (_useFfi) return _openWithFfi(password);
+
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _fileName);
-    final password = await _databasePassword();
 
     await _migratePlaintextIfNeeded(path, password);
 
@@ -69,6 +82,48 @@ class AppDatabase {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Linux and Windows: sqflite_common_ffi + SQLCipher-enabled sqlite3.
+  static bool get _useFfi => Platform.isLinux || Platform.isWindows;
+
+  static Future<Database> _openWithFfi(String password) async {
+    ffi.sqfliteFfiInit();
+    final dir = await getApplicationSupportDirectory();
+    await dir.create(recursive: true);
+    final path = join(dir.path, _fileName);
+
+    return ffi.databaseFactoryFfi.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: schemaVersion,
+        onConfigure: (db) async {
+          // Order matters: pick the cipher, then key the connection before any
+          // other statement — everything after this is read and written
+          // encrypted.
+          await db.execute("PRAGMA cipher = 'sqlcipher'");
+          await db.execute('PRAGMA key = "x\'$password\'"');
+          await _assertKeyed(db);
+          await _onConfigure(db);
+        },
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      ),
+    );
+  }
+
+  /// A wrong key (or a plain sqlite3 without SQLCipher) only fails when the
+  /// first page is read, so probe it and fail loudly rather than corrupting.
+  static Future<void> _assertKeyed(Database db) async {
+    try {
+      await db.rawQuery('SELECT count(*) FROM sqlite_master');
+    } catch (e) {
+      throw StateError(
+        'Could not open the encrypted database — the sqlite3 library in use '
+        'probably has no encryption support. Check '
+        'hooks.user_defines.sqlite3.source in pubspec.yaml. ($e)',
+      );
+    }
   }
 
   /// SQLCipher passphrase: HKDF-SHA256(device secret, info "vbank-local-db"),

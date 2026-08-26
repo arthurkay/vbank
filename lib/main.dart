@@ -1,15 +1,14 @@
-import 'dart:async';
 
-import 'package:cryptography/cryptography.dart' show SimpleKeyPair;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
-import 'core/ipfs/sync_manager.dart' show SyncChange;
-import 'providers/auth_provider.dart';
-import 'providers/ipfs_provider.dart';
-import 'providers/notification_provider.dart';
 import 'ui/ui.dart' show VBankTheme, showMessage;
+import 'core/app_bootstrap.dart';
+import 'core/app_platform.dart';
 import 'core/deeplink/deeplink_handler.dart';
+import 'desktop/linux/yaru_app.dart';
+import 'desktop/macos/macos_app.dart';
+import 'desktop/windows/fluent_app.dart';
 import 'core/ipfs/ipfs_service.dart';
 import 'core/notifications/notification_service.dart';
 
@@ -37,9 +36,26 @@ void main() async {
 
   // Must precede any dart_ipfs usage (see IpfsService.prepareWorkingDirectory).
   await IpfsService.prepareWorkingDirectory();
-  await NotificationService().initialize();
+  // flutter_local_notifications has no Windows backend in this version.
+  if (AppPlatform.canNotify) await NotificationService().initialize();
 
-  runApp(const ProviderScope(child: VBankApp()));
+  runApp(const ProviderScope(child: VBankRoot()));
+}
+
+/// Picks the presentation for the host platform: shadcn_flutter on phones and
+/// each desktop's own design system — Yaru on Linux, macos_ui on macOS, Fluent
+/// on Windows (DESIGN_PLAN §37). Everything below the shell — services,
+/// providers, crypto, storage, sync — is shared.
+class VBankRoot extends StatelessWidget {
+  const VBankRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) => switch (AppPlatform.shell) {
+        AppShell.mobile => const VBankApp(),
+        AppShell.linux => const VBankYaruApp(),
+        AppShell.macos => const VBankMacosApp(),
+        AppShell.windows => const VBankFluentApp(),
+      };
 }
 
 /// Every route gets its own sheet layer so `showAppSheet`/`confirmSheet`
@@ -56,87 +72,10 @@ class VBankApp extends ConsumerStatefulWidget {
   ConsumerState<VBankApp> createState() => _VBankAppState();
 }
 
-class _VBankAppState extends ConsumerState<VBankApp>
-    with WidgetsBindingObserver {
+class _VBankAppState extends ConsumerState<VBankApp> {
   /// The widget's own context sits *above* the MaterialApp's Navigator, so
   /// deep-link navigation must go through this key instead.
   final _navigatorKey = GlobalKey<NavigatorState>();
-  final _deepLinkHandler = DeepLinkHandler();
-  StreamSubscription<DeepLinkResult>? _deepLinkSub;
-  StreamSubscription<SyncChange>? _syncChangesSub;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initApp();
-  }
-
-  Future<void> _initApp() async {
-    await ref.read(authProvider.notifier).loadIdentity();
-
-    // The sync manager signs snapshots/invites as us and decides whether to
-    // act as an admin, so it needs our identity and key pair.
-    await _pushIdentityToSync();
-    ref.listenManual(authProvider, (_, _) => _pushIdentityToSync());
-
-    // Surface inbound changes as local notifications (DESIGN_PLAN §20).
-    _syncChangesSub = ref.read(syncManagerProvider).changes.listen((change) {
-      final title = change.title;
-      if (title == null) return;
-      ref.read(notificationSchedulerProvider).notifyActivity(
-            key: 'activity:${change.type.name}:${DateTime.now().millisecondsSinceEpoch}',
-            title: title,
-            body: change.body ?? '',
-            groupId: change.groupId,
-          );
-    });
-
-    // Subscribe first: app_links emits the cold-start link on the stream as
-    // soon as the handler subscribes, so a listener must already be attached.
-    _deepLinkSub = _deepLinkHandler.onDeepLink.listen(_onDeepLink);
-    _deepLinkHandler.init();
-
-    // Bring the IPFS node up and start periodic background syncs. Not awaited:
-    // node start can take a while and must never block the UI.
-    _startNode();
-  }
-
-  Future<void> _pushIdentityToSync() async {
-    final auth = ref.read(authProvider.notifier);
-    final identity = ref.read(authProvider).identity;
-    SimpleKeyPair? keyPair;
-    if (identity != null && identity.canSign) {
-      try {
-        keyPair = await auth.requireSigningKeyPair();
-      } catch (_) {}
-    }
-    ref.read(syncManagerProvider).setIdentity(peerId: identity?.peerId, keyPair: keyPair);
-  }
-
-  void _startNode() {
-    // ignore: discarded_futures
-    ref.read(syncManagerProvider).startBackground().catchError((Object e) {
-      debugPrint('IPFS background start failed: $e');
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final sync = ref.read(syncManagerProvider);
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _startNode(); // idempotent: re-arms the timer and syncs once
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-        sync.pauseBackground();
-        break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-        break;
-    }
-  }
 
   void _onDeepLink(DeepLinkResult result) {
     if (!mounted) return;
@@ -162,17 +101,10 @@ class _VBankAppState extends ConsumerState<VBankApp>
   }
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _syncChangesSub?.cancel();
-    _deepLinkSub?.cancel();
-    _deepLinkHandler.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return VBankTheme.componentThemes(
+    return AppBootstrap(
+      onDeepLink: _onDeepLink,
+      child: VBankTheme.componentThemes(
       child: ShadcnApp(
       navigatorKey: _navigatorKey,
       title: 'vBank',
@@ -209,6 +141,7 @@ class _VBankAppState extends ConsumerState<VBankApp>
         '/notification-settings': (context) => const NotificationSettingsScreen(),
         '/identity-backup': (context) => const IdentityBackupScreen(),
       }.map(_withSheetLayer),
+      ),
       ),
     );
   }

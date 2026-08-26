@@ -13,11 +13,14 @@
 library;
 
 import 'package:flutter/material.dart' as m;
+import '../core/presentation/list_filters.dart' as shared;
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 export 'package:shadcn_flutter/shadcn_flutter.dart';
 export 'package:flutter/services.dart' show TextCapitalization;
+export '../core/presentation/list_filters.dart'
+    show ListFilter, matchesQuery, fmtDate, fmtDateTime, fmtMoney, titleCase;
 
 // -----------------------------------------------------------------------------
 // Theme
@@ -632,15 +635,10 @@ class SearchField extends StatelessWidget {
       );
 }
 
-/// One chip in a [FilterableList]: a label and the test an item must pass.
-class FilterOption<T> {
-  final String label;
-  final bool Function(T) test;
-  const FilterOption(this.label, this.test);
-
-  /// Chip that matches everything.
-  static FilterOption<T> all<T>([String label = 'All']) => FilterOption<T>(label, (_) => true);
-}
+/// One chip in a [FilterableList]. Alias of the platform-neutral
+/// `ListFilter`, so the same filter definitions drive the mobile chips and the
+/// desktop shells' own controls.
+typedef FilterOption<T> = shared.ListFilter<T>;
 
 /// A searchable, filterable list section.
 ///
@@ -822,7 +820,4 @@ class ActionMenuItem {
   const ActionMenuItem(this.label, this.onSelected, {this.icon});
 }
 
-/// `yyyy-mm-dd hh:mm` in local time.
-String fmtDateTime(DateTime d) => d.toLocal().toString().split('.').first.substring(0, 16);
-String fmtDate(DateTime d) => d.toLocal().toString().split(' ').first;
-String fmtMoney(String currency, double amount) => '$currency ${amount.toStringAsFixed(2)}';
+

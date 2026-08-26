@@ -8,6 +8,7 @@ import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
 import '../../providers/meeting_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../core/presentation/list_filters.dart';
 import '../../ui/ui.dart';
 import '../../widgets/sync_status_indicator.dart';
 import '../../widgets/transaction_tile.dart';
@@ -344,33 +345,7 @@ class _SettingsTab extends ConsumerWidget {
   }
 }
 
-/// Searchable text for a transaction: type, note, amount, date, and the names
-/// of the people and group involved.
-String txHaystack(Transaction tx, {Group? group}) {
-  String nameOf(String peerId) => peerId == 'group'
-      ? 'group fund'
-      : group?.members.where((m) => m.peerId == peerId).firstOrNull?.name ?? '';
-  return [
-    tx.type.name,
-    tx.status.name,
-    tx.note ?? '',
-    tx.currency,
-    tx.amount.toStringAsFixed(2),
-    fmtDate(tx.timestamp),
-    nameOf(tx.fromPeerId),
-    nameOf(tx.toPeerId),
-    group?.name ?? '',
-  ].join(' ');
-}
-
-/// Type filters shared by the Activity tab, the group Transactions tab and the
-/// standalone transaction list.
-List<FilterOption<Transaction>> txFilters() => [
-      FilterOption.all<Transaction>(),
-      FilterOption('Contributions', (t) => t.type == TransactionType.contribution),
-      FilterOption('Loans', (t) => t.type == TransactionType.loan),
-      FilterOption('Repayments', (t) => t.type == TransactionType.repayment),
-      FilterOption('Penalties', (t) => t.type == TransactionType.penalty),
-      FilterOption('Withdrawals', (t) => t.type == TransactionType.withdrawal),
-      FilterOption('Reversed', (t) => t.status == TransactionStatus.reversed || t.type == TransactionType.reversal),
-    ];
+/// Kept as thin wrappers so screens read naturally; the definitions live in
+/// `core/presentation/list_filters.dart` and are shared with the desktop shells.
+String txHaystack(Transaction tx, {Group? group}) => transactionHaystack(tx, group: group);
+List<FilterOption<Transaction>> txFilters() => transactionFilters();

@@ -153,11 +153,19 @@ class IpfsService {
 
   void _setState(IpfsNodeState newState) {
     _state = newState;
-    _stateController.add(newState);
+    // Shutdown races: `stop()` reports progress while the provider is being
+    // disposed, and the controller may already be closed by then.
+    if (!_stateController.isClosed) _stateController.add(newState);
   }
 
-  void dispose() {
-    _stateController.close();
-    stop();
+  /// Stops the node, then closes the state stream. Awaiting the stop first
+  /// keeps the final transitions observable; closing first would make them
+  /// throw.
+  Future<void> dispose() async {
+    try {
+      await stop();
+    } finally {
+      await _stateController.close();
+    }
   }
 }

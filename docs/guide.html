@@ -48,6 +48,7 @@
     <li><a href="#troubleshooting">15. Troubleshooting</a></li>
     <li><a href="#practices">16. Good practice for groups</a></li>
     <li><a href="#search">17. Finding things: search and filters</a></li>
+    <li><a href="#desktop">18. vBank on the desktop</a></li>
   </ol>
 </nav>
 
@@ -321,6 +322,45 @@
   Useful things to type: a member's name to see everything they have paid or borrowed; an amount like
   <code>27.50</code> to find a specific installment; a date like <code>2026-09-01</code> to see what a
   particular meeting day recorded; or <code>reversed</code> under Activity to review corrections.
+</p>
+
+
+<h2 id="desktop">18. vBank on the desktop</h2>
+<p>
+  The same app runs on Linux, macOS and Windows, with the same records, the same encryption and the same
+  peer-to-peer sync. What changes is the look: each build follows its platform's own design language
+  rather than imposing the phone's UI on your computer.
+</p>
+<table>
+  <tr><th>Platform</th><th>What it looks like</th></tr>
+  <tr>
+    <td>Linux</td>
+    <td>Ubuntu's Yaru: a left pane of destinations (Groups, Activity, Meetings, Sync, Settings), tabbed
+    group sections, settings grouped in sections of tiles, Ubuntu-style dialogs.</td>
+  </tr>
+  <tr>
+    <td>macOS</td>
+    <td>A source-list sidebar window with a toolbar per page, tabbed group sections, sheets for forms and
+    standard macOS alerts.</td>
+  </tr>
+  <tr>
+    <td>Windows</td>
+    <td>Fluent: a navigation pane, page headers with a command bar, tabbed group sections, content
+    dialogs, and info bars for feedback.</td>
+  </tr>
+</table>
+<h4>Two differences from the phone</h4>
+<ul>
+  <li><strong>Joining a group:</strong> Linux and Windows have no camera scanner, so paste the invite
+  link (Groups → Join a group) instead of scanning a QR code. You still need the group passphrase.</li>
+  <li><strong>Reminders:</strong> desktop notifications work on Linux and macOS. On Windows this build
+  has no notification backend, so meeting and repayment reminders appear in the app rather than as
+  system toasts.</li>
+</ul>
+<p class="muted" style="font-size:14px">
+  Everything else — recording transactions, the full loan lifecycle, meetings and attendance, invites,
+  reversals, backups, search and filters — is the same on desktop as on the phone, and the local database
+  is encrypted on every platform.
 </p>
 
 </main>

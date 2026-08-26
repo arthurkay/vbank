@@ -50,12 +50,26 @@ dependencies:
   file_picker: ^11.0.3
   shadcn_flutter: ^0.0.51
   cbor: ^6.3.7
+  yaru: ^10.2.0
+  macos_ui: ^2.2.2
+  fluent_ui: 4.15.1
+  sqlcipher_flutter_libs: ^0.7.0+eol
+  sqflite_common_ffi: ^2.4.0+3
+
+# package:sqlite3 (used by sqflite_common_ffi on desktop) bundles a SQLCipher
+# build, so Linux and Windows get the same encrypted database as the mobile
+# builds get through sqflite_sqlcipher.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  sqflite_common_ffi: ^2.4.0+3
 
 flutter:
   uses-material-design: true

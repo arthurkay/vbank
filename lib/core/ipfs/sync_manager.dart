@@ -460,7 +460,7 @@ class SyncManager {
     }
     _log(SyncEvent(type: SyncEventType.transactionReceived,
         message: 'Received ${tx.type.name} ${tx.amount} in $groupId'));
-    _changesController.add(SyncChange(
+    _emitChange(SyncChange(
       SyncChangeType.transaction,
       groupId,
       title: 'New ${tx.type.name}',
@@ -478,7 +478,7 @@ class SyncManager {
       final signed = await _groupService.countersignTransfer(groupId: result.group.id, ownPeerId: me, ownKeyPair: kp);
       if (signed) await publishGroupSnapshot(result.group.id);
     }
-    _changesController.add(SyncChange(SyncChangeType.group, result.group.id));
+    _emitChange(SyncChange(SyncChangeType.group, result.group.id));
   }
 
   static List<int> joinSigningPayload(String groupId, String peerId, String inviteId) =>
@@ -533,7 +533,7 @@ class SyncManager {
     }
     await _inviteService.markUsed(inviteId, member.peerId);
     _log(SyncEvent(type: SyncEventType.memberJoined, message: '${member.name} joined ${group.name}'));
-    _changesController.add(SyncChange(
+    _emitChange(SyncChange(
       SyncChangeType.member,
       groupId,
       title: group.requireApproval ? 'Join request' : 'New member',
@@ -564,7 +564,7 @@ class SyncManager {
       }
     }
     await _loanService.importRemote(loan);
-    _changesController.add(SyncChange(
+    _emitChange(SyncChange(
       SyncChangeType.loan,
       groupId,
       title: 'Loan ${loan.status.name}',
@@ -586,7 +586,7 @@ class SyncManager {
     final meeting = Meeting.fromJson(meetingJson);
     if (meeting.groupId != groupId) throw StateError('Meeting group mismatch');
     await _meetingService.importRemote(meeting);
-    _changesController.add(SyncChange(
+    _emitChange(SyncChange(
       SyncChangeType.meeting,
       groupId,
       title: 'Meeting ${meeting.status.name}',
@@ -613,7 +613,7 @@ class SyncManager {
     final r = TransactionReversal.fromJson(json);
     if (r.groupId != groupId) throw StateError('Reversal group mismatch');
     await _governanceService.importRemote(r);
-    _changesController.add(SyncChange(
+    _emitChange(SyncChange(
       SyncChangeType.reversal,
       groupId,
       title: 'Reversal ${r.status.name}',
@@ -758,15 +758,21 @@ class SyncManager {
 
   // ---------------------------------------------------------------------------
 
+  void _emitChange(SyncChange change) {
+    if (!_changesController.isClosed) _changesController.add(change);
+  }
+
   void _setState(SyncState newState) {
     _state = newState;
-    _stateController.add(newState);
+    // An in-flight sync can report progress while the app is shutting down and
+    // the controllers have already been closed.
+    if (!_stateController.isClosed) _stateController.add(newState);
   }
 
   void _log(SyncEvent event) {
     _recentLog.insert(0, event);
     if (_recentLog.length > _maxLog) _recentLog.removeLast();
-    _syncLogController.add(event);
+    if (!_syncLogController.isClosed) _syncLogController.add(event);
   }
 
   bool get shouldSync {

@@ -23,8 +23,18 @@ class NotificationService {
       requestSoundPermission: true,
     );
 
+    // macOS shares the Darwin settings; Linux needs its own (and rejects
+    // initialisation without them). Windows has no backend in this version, so
+    // main() skips notification setup there entirely.
+    const linuxSettings = LinuxInitializationSettings(defaultActionName: 'Open vBank');
+
     await _plugin.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+        macOS: iosSettings,
+        linux: linuxSettings,
+      ),
     );
     // Android 13+ runtime permission.
     await _plugin
