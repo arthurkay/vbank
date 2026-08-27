@@ -42,4 +42,5 @@ class SettingKeys {
   static const syncIntervalMinutes = 'sync.interval_minutes';
   static const syncWifiOnly = 'sync.wifi_only';
   static const pendingJoins = 'pendingJoins'; // joins waiting for a member to come online
+  static const relayAddrs = 'relay.addrs'; // always-on relay nodes (multiaddrs), see RelayNode
 }

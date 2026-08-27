@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/ipfs/sync_manager.dart';
 import '../../core/storage/transaction_dao.dart' as q;
@@ -53,6 +54,8 @@ class SyncStatusScreen extends ConsumerWidget {
             ),
           ),
           const Gap(12),
+          _RelayPanel(),
+          const Gap(12),
           Panel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,6 +102,71 @@ class SyncStatusScreen extends ConsumerWidget {
                 subtitle: Text(fmtDateTime(e.timestamp)).xSmall.muted,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Always-on relay nodes (see deploy/relay/README.md): the way members on
+/// different networks reach each other.
+class _RelayPanel extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final relays = ref.watch(relayAddressesProvider).value ?? const <String>[];
+    final sm = ref.read(syncManagerProvider);
+    Future<void> add() async {
+      final addr = await promptSheet(
+        context,
+        title: 'Relay server',
+        message: 'Paste the address printed by the relay, e.g. /ip4/203.0.113.7/tcp/4001/p2p/12D3KooW…. '
+            'Members on other networks reach each other through it. It never holds your group passphrase.',
+        label: 'Address',
+        hint: '/ip4/…/tcp/4001/p2p/…',
+        confirmLabel: 'Add',
+      );
+      if (addr == null || addr.trim().isEmpty || !context.mounted) return;
+      if (!addr.contains('/p2p/')) {
+        showMessage(context, 'That is not a relay address (it should end in /p2p/<peer id>)', error: true);
+        return;
+      }
+      await sm.addRelays([addr.trim()]);
+      ref.invalidate(relayAddressesProvider);
+      unawaited(sm.startManualSync());
+    }
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: const Text('Relay server').semiBold),
+              Button.ghost(onPressed: add, leading: const Icon(LucideIcons.plus, size: 16), child: const Text('Add')),
+            ],
+          ),
+          const Gap(4),
+          if (relays.isEmpty)
+            const Text('None. Members only reach each other on the same Wi-Fi. Add a relay to sync over the internet.').small.muted
+          else
+            for (final r in relays)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.server, size: 16),
+                    const Gap(8),
+                    Expanded(child: Text(r, maxLines: 2, overflow: TextOverflow.ellipsis).xSmall),
+                    IconButton.ghost(
+                      icon: const Icon(LucideIcons.x, size: 16),
+                      onPressed: () async {
+                        await sm.removeRelay(r);
+                        ref.invalidate(relayAddressesProvider);
+                      },
+                    ),
+                  ],
+                ),
+              ),
         ],
       ),
     );

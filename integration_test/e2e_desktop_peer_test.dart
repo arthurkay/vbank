@@ -28,6 +28,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:vbank/core/storage/settings_dao.dart';
 import 'package:vbank/main.dart' as app;
 import 'package:vbank/models/group.dart';
 import 'package:vbank/models/loan.dart';
@@ -90,6 +91,14 @@ void main() {
     // dart_ipfs/ipfs_libp2p leak the occasional async StateError ("Session
     // closed while opening stream") when a peer drops a connection. The app
     // shrugs those off; the test framework would fail the test, so contain them.
+    // E2E_RELAY=/ip4/…/tcp/4001/p2p/… makes the owner use a relay node; the
+    // invite link then carries it and the phone configures itself.
+    final relay = Platform.environment['E2E_RELAY'];
+    if (relay != null && relay.isNotEmpty) {
+      await SettingsDao().set(SettingKeys.relayAddrs, jsonEncode([relay]));
+      // ignore: avoid_print
+      print('[e2e] relay configured: $relay');
+    }
     runZonedGuarded(app.main, (e, st) {
       // ignore: avoid_print
       print('[e2e] background error ignored: $e');

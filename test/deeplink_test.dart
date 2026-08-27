@@ -105,4 +105,21 @@ void main() {
     // Any of the four can serve the snapshot; keep the QR readable (~v16).
     expect(link.length, lessThan(800), reason: 'link is ${link.length} chars');
   });
+
+  test('relay addresses ride in the link and parse back', () {
+    const relay = '/ip4/203.0.113.7/tcp/4001/p2p/12D3KooWRelayRelayRelayRelayRelayRelayRelayRelayRe';
+    final link = DeepLinkHandler.buildJoinLink(
+      groupId: 'g',
+      inviterPeerId: 'me',
+      groupCid: 'bafy',
+      inviteId: 'i',
+      inviteNonceB64: 'AA==',
+      inviterAddrs: const ['/ip4/192.168.1.2/tcp/4001/p2p/12D3KooWMe'],
+      relayAddrs: const [relay],
+    );
+    final r = DeepLinkHandler.parseString(link);
+    expect(r.relayAddrs, [relay]);
+    expect(r.inviterAddrs, ['/ip4/192.168.1.2/tcp/4001/p2p/12D3KooWMe']);
+    expect(DeepLinkHandler.parseString('vbank://join?group=g&inviter=me').relayAddrs, isEmpty);
+  });
 }

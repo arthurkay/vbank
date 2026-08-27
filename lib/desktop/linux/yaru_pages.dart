@@ -4,6 +4,7 @@
 /// [YaruSearchField] over long lists, [YaruSwitchListTile] for preferences.
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -728,6 +729,58 @@ class YaruSyncPage extends ConsumerWidget {
                 if (peerId != null) YaruInfoRow('Peer ID', peerId),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          YaruSection(
+            headline: Row(
+              children: [
+                const Expanded(child: Text('Relay server')),
+                TextButton.icon(
+                  icon: const Icon(YaruIcons.plus),
+                  label: const Text('Add'),
+                  onPressed: () async {
+                    final addr = await yaruPrompt(
+                      context,
+                      title: 'Relay server',
+                      message: 'Paste the address printed by the relay (/ip4/…/tcp/4001/p2p/…). Members on other '
+                          'networks reach each other through it; it never holds a group passphrase.',
+                      label: 'Address',
+                      confirmLabel: 'Add',
+                    );
+                    if (addr == null || !addr.contains('/p2p/') || !context.mounted) return;
+                    await manager.addRelays([addr.trim()]);
+                    ref.invalidate(relayAddressesProvider);
+                    unawaited(manager.startManualSync());
+                  },
+                ),
+              ],
+            ),
+            child: Builder(builder: (context) {
+              final relays = ref.watch(relayAddressesProvider).value ?? const <String>[];
+              if (relays.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('None. Members only reach each other on the same network. Add a relay to sync over the internet.'),
+                );
+              }
+              return Column(
+                children: [
+                  for (final r in relays)
+                    YaruListTile(
+                      leading: const Icon(YaruIcons.network),
+                      title: Text(r, style: theme.textTheme.bodySmall),
+                      trailing: IconButton(
+                        tooltip: 'Remove',
+                        icon: const Icon(YaruIcons.trash),
+                        onPressed: () async {
+                          await manager.removeRelay(r);
+                          ref.invalidate(relayAddressesProvider);
+                        },
+                      ),
+                    ),
+                ],
+              );
+            }),
           ),
           const SizedBox(height: 16),
           YaruSection(

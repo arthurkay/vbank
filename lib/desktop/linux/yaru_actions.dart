@@ -740,6 +740,7 @@ Future<void> yaruShowInvite(BuildContext context, WidgetRef ref, Group group) as
       inviteId: invite.id,
       inviteNonceB64: base64Encode(invite.nonce!),
       inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
+      relayAddrs: await ref.read(syncManagerProvider).relayAddresses(),
     );
   } catch (e) {
     error = e;
@@ -827,6 +828,7 @@ Future<void> yaruJoinGroup(BuildContext context, WidgetRef ref) async {
       joinedAt: DateTime.now().toUtc(),
       publicKey: identity.publicKey,
     );
+    if (result.relayAddrs.isNotEmpty) await ref.read(syncManagerProvider).addRelays(result.relayAddrs);
     final group = await ref.read(syncManagerProvider).joinGroup(
           groupId: groupId,
           groupCid: result.groupCid,

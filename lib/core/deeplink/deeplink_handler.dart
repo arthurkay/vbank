@@ -46,6 +46,7 @@ class DeepLinkHandler {
     String? inviteId,
     String? inviteNonceB64,
     List<String> inviterAddrs = const [],
+    List<String> relayAddrs = const [],
   }) {
     return Uri(
       scheme: scheme,
@@ -57,6 +58,9 @@ class DeepLinkHandler {
         'invite': ?inviteId,
         'n': ?inviteNonceB64,
         if (inviterAddrs.isNotEmpty) 'addrs': inviterAddrs.join(','),
+        // Relay nodes the group uses (see RelayNode): a joiner configures them
+        // automatically, so members never have to type a server address.
+        if (relayAddrs.isNotEmpty) 'relay': relayAddrs.join(','),
       },
     ).toString();
   }
@@ -124,6 +128,11 @@ class DeepLinkHandler {
               .map((a) => a.trim())
               .where((a) => a.isNotEmpty)
               .toList(),
+          relayAddrs: (nonEmpty('relay') ?? '')
+              .split(',')
+              .map((a) => a.trim())
+              .where((a) => a.isNotEmpty)
+              .toList(),
           rawLink: raw,
         );
       case 'restore':
@@ -157,6 +166,9 @@ class DeepLinkResult {
   final String? inviteNonceB64;
   /// Inviter's dialable multiaddrs from the link (may be empty).
   final List<String> inviterAddrs;
+
+  /// Relay nodes named in the link (`relay=`), empty for older links.
+  final List<String> relayAddrs;
   final String? backupId;
   final String? rawLink;
   final String? error;
@@ -169,6 +181,7 @@ class DeepLinkResult {
     this.inviteId,
     this.inviteNonceB64,
     this.inviterAddrs = const [],
+    this.relayAddrs = const [],
     this.backupId,
     this.rawLink,
     this.error,

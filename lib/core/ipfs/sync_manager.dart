@@ -21,6 +21,7 @@ import '../../services/transaction_service.dart';
 import '../crypto/signing.dart';
 import '../crypto/sync_envelope.dart';
 import '../storage/invite_dao.dart';
+import '../storage/settings_dao.dart';
 import 'ipfs_service.dart';
 import 'peer_book.dart';
 import 'pending_join.dart';
@@ -79,6 +80,14 @@ class SyncManager {
   final PeerBook _peerBook = PeerBook();
   final SyncLedger _ledger = SyncLedger();
   final PendingJoinBook _pendingJoins = PendingJoinBook();
+  final SettingsDao _settings = SettingsDao();
+
+  /// Always-on relay nodes (multiaddrs). Phones sit behind carrier NAT and can
+  /// only reach each other through a node that accepts connections, so every
+  /// device dials the relays out, pushes its records to them and pulls what it
+  /// lacks from them. The relays hold no group key. Loaded lazily.
+  List<String>? _relayAddrs;
+  static const _maxRelayPushPerRound = 40;
 
   /// Groups with a join in flight (interactive or retried), so the two paths
   /// cannot both import the snapshot and publish a join request.
@@ -259,7 +268,9 @@ class SyncManager {
     await _ensureNode();
     await _subscribeGroupTopics();
     await _refreshOverdueLoans();
+    await _dialRelays();
     await publishLocalChanges();
+    await _reconcileRelays();
     await _discoverPeers();
     if (_rerunRequested) {
       _rerunRequested = false;
@@ -289,6 +300,128 @@ class SyncManager {
   /// them holds the snapshot the joiner needs.
   Future<List<String>> inviteAddresses(String groupId) async =>
       PeerBook.mergeForInvite(dialableAddresses, await _peerBook.addrsFor(groupId));
+
+  // ---------------------------------------------------------------------------
+  // Relays
+  // ---------------------------------------------------------------------------
+
+  Future<List<String>> relayAddresses() async {
+    if (_relayAddrs != null) return _relayAddrs!;
+    final raw = await _settings.get<String>(SettingKeys.relayAddrs);
+    List<String> list = const [];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        list = (jsonDecode(raw) as List).cast<String>();
+      } catch (_) {}
+    }
+    return _relayAddrs = list;
+  }
+
+  Future<Set<String>> _relayPeerIds() async =>
+      (await relayAddresses()).map(PeerBook.peerIdOf).toSet()..remove(_ownPeerId);
+
+  /// Adds relays (e.g. from an invite link); returns whether anything changed.
+  Future<bool> addRelays(Iterable<String> addrs) async {
+    final current = await relayAddresses();
+    final clean = addrs.map((a) => a.trim()).where((a) => a.contains('/p2p/') && !current.contains(a)).toList();
+    if (clean.isEmpty) return false;
+    await _saveRelays([...current, ...clean]);
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Relay added: ${clean.join(', ')}'));
+    return true;
+  }
+
+  Future<void> removeRelay(String addr) async {
+    final current = await relayAddresses();
+    if (!current.contains(addr)) return;
+    await _saveRelays(current.where((a) => a != addr).toList());
+  }
+
+  Future<void> _saveRelays(List<String> addrs) async {
+    _relayAddrs = addrs;
+    if (addrs.isEmpty) {
+      await _settings.delete(SettingKeys.relayAddrs);
+    } else {
+      await _settings.set(SettingKeys.relayAddrs, jsonEncode(addrs));
+    }
+  }
+
+  /// Dials every relay (per-address backoff applies) and returns the relay
+  /// peer ids that are connected afterwards.
+  Future<Set<String>> _dialRelays() async {
+    final addrs = await relayAddresses();
+    if (addrs.isEmpty) return const {};
+    final connected = (await _ipfsService.connectedPeers).toSet();
+    for (final addr in addrs) {
+      final peerId = PeerBook.peerIdOf(addr);
+      if (connected.contains(peerId)) continue;
+      final until = _dialBackoffUntil[addr];
+      if (until != null && DateTime.now().isBefore(until)) continue;
+      try {
+        await _ipfsService.connectToPeer(addr).timeout(const Duration(seconds: 8));
+        _dialFailures.remove(addr);
+        _dialBackoffUntil.remove(addr);
+        _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected to relay $addr'));
+      } catch (e) {
+        final failures = (_dialFailures[addr] = (_dialFailures[addr] ?? 0) + 1);
+        final backoff = Duration(seconds: (15 << (failures - 1)).clamp(15, 300));
+        _dialBackoffUntil[addr] = DateTime.now().add(backoff);
+        _log(SyncEvent(type: SyncEventType.warning, message: 'Relay unreachable $addr (retry in ${backoff.inSeconds}s)'));
+      }
+    }
+    final relays = await _relayPeerIds();
+    return (await _ipfsService.connectedPeers).toSet().intersection(relays);
+  }
+
+  /// Hands a stored block to every connected relay (`put`), so members on other
+  /// networks can fetch it from there. Best effort; [_reconcileRelays] catches
+  /// up on anything missed.
+  Future<void> _pushToRelays(String groupId, String cid, {Uint8List? bytes}) async {
+    final relays = (await _ipfsService.connectedPeers).toSet().intersection(await _relayPeerIds());
+    if (relays.isEmpty) return;
+    final block = bytes ?? await _ipfsService.getDataLocal(cid);
+    if (block == null) return;
+    final payload = Uint8List.fromList(utf8.encode(jsonEncode({
+      'op': 'put',
+      'groupId': groupId,
+      'cid': cid,
+      'block': base64Encode(block),
+      'addrs': dialableAddresses,
+    })));
+    for (final relay in relays) {
+      final reply = await _ipfsService.request(relay, payload);
+      if (reply == null) _log(SyncEvent(type: SyncEventType.warning, message: 'Relay $relay did not take $cid'));
+    }
+  }
+
+  /// Makes sure each connected relay holds everything in our ledger for every
+  /// group we hold a key for (bounded per round).
+  Future<void> _reconcileRelays() async {
+    final relays = await _dialRelays();
+    if (relays.isEmpty) return;
+    var pushed = 0;
+    for (final g in await _groupService.getAllGroups()) {
+      if (!await _groupKeyService.hasKey(g.id)) continue;
+      final mine = await _ledger.cidsFor(g.id);
+      if (mine.isEmpty) continue;
+      final request = Uint8List.fromList(utf8.encode(jsonEncode({'op': 'inventory', 'groupId': g.id})));
+      for (final relay in relays) {
+        final reply = await _ipfsService.request(relay, request);
+        if (reply == null) continue;
+        Set<String> theirs;
+        try {
+          theirs = reply.isEmpty ? {} : ((jsonDecode(utf8.decode(reply)) as Map)['cids'] as List).cast<String>().toSet();
+        } catch (_) {
+          continue;
+        }
+        for (final cid in mine.reversed) {
+          if (theirs.contains(cid) || pushed >= _maxRelayPushPerRound) continue;
+          await _pushToRelays(g.id, cid);
+          pushed++;
+        }
+      }
+    }
+    if (pushed > 0) _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Pushed $pushed record(s) to relays'));
+  }
 
   /// Dials every address we know for [groupId]'s members. Failures are
   /// expected (phones move, addresses go stale) and ignored.
@@ -362,7 +495,10 @@ class SyncManager {
   /// Asks every known peer of [groupId] what it holds and fetches what we lack.
   /// Notifications are best effort; this is what makes sync converge.
   Future<void> _pullInventory(String groupId) async {
-    final peers = (await _peerBook.addrsFor(groupId)).map(PeerBook.peerIdOf).toSet()..remove(_ipfsService.peerId);
+    final peers = {
+      ...(await _peerBook.addrsFor(groupId)).map(PeerBook.peerIdOf),
+      ...await _relayPeerIds(),
+    }..remove(_ipfsService.peerId);
     if (peers.isEmpty) return;
     final request = Uint8List.fromList(utf8.encode(jsonEncode({'op': 'inventory', 'groupId': groupId})));
     var applied = 0;
@@ -609,10 +745,13 @@ class SyncManager {
     }
     final known = await _peerBook.addrsFor(groupId);
     await _dialKnownPeers(groupId);
+    // Relays get the block itself (they cannot dial back to fetch it); members
+    // get the nudge and fetch from us or from a relay.
+    await _pushToRelays(groupId, cid);
     final delivered = await _ipfsService.publish(
       topicFor(groupId),
       jsonEncode({'v': 1, 'kind': kind, 'groupId': groupId, 'cid': cid, 'addrs': dialableAddresses}),
-      peers: known.map(PeerBook.peerIdOf),
+      peers: {...known.map(PeerBook.peerIdOf), ...await _relayPeerIds()},
     );
     _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Announced $kind $cid to $delivered peer(s)'));
   }
@@ -658,6 +797,7 @@ class SyncManager {
     final sw = Stopwatch()..start();
     final local = await _ipfsService.getDataLocal(cid);
     if (local != null) return local;
+    extraPeers = {...extraPeers, ...await _relayPeerIds()};
     final known = (await _peerBook.addrsFor(groupId)).map(PeerBook.peerIdOf);
     final peers = {...extraPeers, ...known}.toList();
     final direct = await _ipfsService.fetchFromPeers(cid, peers);
@@ -1015,7 +1155,8 @@ class SyncManager {
     Set<String> peerIds, {
     Duration timeout = const Duration(seconds: 45),
   }) async {
-    peerIds = {...peerIds}..remove(_ownPeerId);
+    peerIds = {...peerIds, ...await _relayPeerIds()}..remove(_ownPeerId);
+    await _dialRelays();
     await _dialKnownPeers(groupId);
     var up = await _awaitAnyConnected(peerIds);
     if (up.isEmpty && peerIds.isNotEmpty) {
@@ -1191,7 +1332,9 @@ class SyncManager {
       return; // no node, nothing to do this round
     }
     if (j.addrs.isNotEmpty) await _peerBook.remember(j.groupId, j.addrs, exceptPeerId: _ownPeerId);
-    final peers = {...j.peerIds, ...(await _peerBook.addrsFor(j.groupId)).map(PeerBook.peerIdOf)}..remove(_ownPeerId);
+    final peers = {...j.peerIds, ...(await _peerBook.addrsFor(j.groupId)).map(PeerBook.peerIdOf), ...await _relayPeerIds()}
+      ..remove(_ownPeerId);
+    await _dialRelays();
     await _dialKnownPeers(j.groupId);
     final up = await _awaitAnyConnected(peers);
     if (up.isEmpty) {

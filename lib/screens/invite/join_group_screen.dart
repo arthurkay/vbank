@@ -110,6 +110,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
         joinedAt: DateTime.now().toUtc(),
         publicKey: identity.publicKey,
       );
+      if (result.relayAddrs.isNotEmpty) await ref.read(syncManagerProvider).addRelays(result.relayAddrs);
       final group = await ref.read(syncManagerProvider).joinGroup(
             groupId: groupId,
             groupCid: result.groupCid,

@@ -143,6 +143,7 @@
 </ol>
 <p>The group's <strong>Transactions</strong> tab lists everything newest first; <strong>Activity</strong> on the home screen shows the same across all your groups. Tap any entry for full details: who recorded it, when, its sequence number and its ID.</p>
 <p><strong>Nobody online?</strong> A group lives only on its members' phones, so joining needs one member with the group to be reachable. The invite link now points at several members, not just the person who made it — any of them can let you in. If none of them is online when you open the link, vBank keeps the invite and shows "Joining a group…" in your Groups list; it keeps trying every couple of minutes and notifies you as soon as you are in. You can retry, fix a mistyped passphrase or cancel from that row.</p>
+<p><strong>Members on different networks.</strong> Phones only find each other directly on the same Wi‑Fi. To sync over the internet the group needs a <em>relay</em>: a small always-on vBank node on a server that every phone connects to. Whoever runs the group adds its address once (Settings → Sync status → Relay server); after that every invite link carries it, so new members are set up automatically. The relay stores only encrypted records and never has the group passphrase. Setting one up takes a few minutes with Docker — see <code>deploy/relay/README.md</code> in the project.</p>
 
 <h2 id="loans">6. Loans</h2>
 <h4>Requesting</h4>

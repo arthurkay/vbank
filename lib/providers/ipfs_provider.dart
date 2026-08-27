@@ -64,3 +64,6 @@ final pendingJoinsProvider = FutureProvider<List<PendingJoin>>((ref) {
   ref.watch(dataVersionProvider);
   return ref.watch(syncManagerProvider).pendingJoins();
 });
+
+/// Configured relay nodes (multiaddrs).
+final relayAddressesProvider = FutureProvider<List<String>>((ref) => ref.watch(syncManagerProvider).relayAddresses());
