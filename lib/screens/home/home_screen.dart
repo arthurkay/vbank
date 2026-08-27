@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/ipfs/sync_manager.dart' show SyncState;
+import '../../core/ipfs/pending_join.dart';
+import '../../core/ipfs/sync_manager.dart' show SyncState, JoinGroupException;
 import '../../models/group.dart';
 import '../../models/meeting.dart';
 import '../../models/transaction.dart';
@@ -108,11 +109,18 @@ class _GroupsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final groupsAsync = ref.watch(groupListProvider);
     final me = ref.watch(authProvider).identity?.peerId;
+    final pending = ref.watch(pendingJoinsProvider).value ?? const <PendingJoin>[];
 
     return groupsAsync.when(
       loading: () => const LoadingView(),
       error: (e, _) => ErrorView(e),
       data: (groups) {
+        if (groups.isEmpty && pending.isNotEmpty) {
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
+            children: [for (final p in pending) _PendingJoinRow(p)],
+          );
+        }
         if (groups.isEmpty) {
           return EmptyState(
             icon: LucideIcons.userPlus,
@@ -145,6 +153,7 @@ class _GroupsTab extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
               children: [
+                for (final p in pending) _PendingJoinRow(p),
                 for (final group in visible)
                   _GroupRow(group: group, me: me),
               ],
@@ -152,6 +161,95 @@ class _GroupsTab extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// A join parked because nobody from the group was reachable (PendingJoin).
+class _PendingJoinRow extends ConsumerWidget {
+  final PendingJoin join;
+  const _PendingJoinRow(this.join);
+
+  Future<void> _actions(BuildContext context, WidgetRef ref) async {
+    final sm = ref.read(syncManagerProvider);
+    void bump() => ref.read(dataVersionProvider.notifier).state++;
+    await showAppSheet<void>(
+      context,
+      title: 'Joining a group',
+      builder: (context, close) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(join.statusText).small.muted,
+          ),
+          if (!join.permanent)
+            ListRow(
+              leading: const Icon(LucideIcons.refreshCw),
+              title: const Text('Retry now'),
+              subtitle: const Text('Look for an online member right away'),
+              onTap: () async {
+                close();
+                await sm.retryPendingJoinsNow();
+                bump();
+                if (context.mounted) showMessage(context, 'Tried again — see the Groups list');
+              },
+            ),
+          ListRow(
+            leading: const Icon(LucideIcons.keyRound),
+            title: const Text('Change passphrase'),
+            subtitle: const Text('If the group passphrase was mistyped'),
+            onTap: () async {
+              close();
+              final passphrase = await promptSheet(
+                context,
+                title: 'Group passphrase',
+                label: 'Passphrase',
+                obscure: true,
+                confirmLabel: 'Save',
+              );
+              if (passphrase == null || passphrase.trim().isEmpty || !context.mounted) return;
+              try {
+                await sm.updatePendingJoinPassphrase(join.groupId, passphrase.trim());
+              } on JoinGroupException catch (e) {
+                if (context.mounted) showMessage(context, e.message, error: true);
+              }
+              bump();
+            },
+          ),
+          ListRow(
+            leading: const Icon(LucideIcons.x),
+            title: const Text('Cancel this join'),
+            subtitle: const Text('Forget the invite'),
+            onTap: () async {
+              close();
+              final ok = await confirmSheet(
+                context,
+                title: 'Cancel joining?',
+                message: 'The invite is forgotten. You can open the link again later.',
+                confirmLabel: 'Cancel join',
+                destructive: true,
+              );
+              if (!ok) return;
+              await sm.cancelPendingJoin(join.groupId);
+              bump();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListRow(
+      leading: Icon(join.permanent ? LucideIcons.triangleAlert : LucideIcons.hourglass,
+          color: join.permanent ? VBankTheme.danger : scheme.mutedForeground),
+      title: const Text('Joining a group…'),
+      subtitle: Text(join.statusText).small.muted,
+      trailing: const Icon(LucideIcons.ellipsisVertical, size: 18),
+      onTap: () => _actions(context, ref),
     );
   }
 }

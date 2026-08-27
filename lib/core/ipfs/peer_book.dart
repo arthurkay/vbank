@@ -93,6 +93,25 @@ class PeerBook {
 
   Future<void> forget(String groupId) => _settings.delete(_key(groupId));
 
+  /// Addresses to put in an invite link: our [own] first, then [known]
+  /// members (newest first, as the book keeps them), one per transport, at
+  /// most [max]. Any of them can serve the group snapshot to a joiner, so an
+  /// invite keeps working while the inviter is offline. The cap keeps the QR
+  /// code scannable: every `/` is percent-encoded, so one multiaddr is ~96
+  /// characters of link.
+  static List<String> mergeForInvite(List<String> own, List<String> known, {int max = 4}) {
+    final out = <String>[];
+    final transports = <String>{};
+    for (final a in [...own, ...known]) {
+      final t = a.trim();
+      if (t.isEmpty || !t.contains('/p2p/')) continue;
+      if (!transports.add(transportOf(t))) continue;
+      out.add(t);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+
   /// `/ip4/1.2.3.4/tcp/4001/p2p/Qm…` → `/ip4/1.2.3.4/tcp/4001`.
   static String transportOf(String addr) => addr.split('/p2p/').first;
   static String peerIdOf(String addr) => addr.split('/p2p/').last;

@@ -23,6 +23,7 @@ import '../crypto/sync_envelope.dart';
 import '../storage/invite_dao.dart';
 import 'ipfs_service.dart';
 import 'peer_book.dart';
+import 'pending_join.dart';
 import 'sync_ledger.dart';
 
 enum SyncState { idle, syncing, error }
@@ -33,6 +34,14 @@ class JoinGroupException implements Exception {
   const JoinGroupException(this.message);
   @override
   String toString() => message;
+}
+
+/// Nobody holding the group was reachable; the join has been parked and will
+/// be retried at the end of every sync round (see [PendingJoin]).
+class JoinParkedException extends JoinGroupException {
+  const JoinParkedException()
+      : super('Nobody from the group is online right now. vBank will keep trying in the '
+            'background and tell you when you are in.');
 }
 
 /// Something that arrived from a peer and changed local state. The UI layer
@@ -69,6 +78,11 @@ class SyncManager {
   final InviteService _inviteService;
   final PeerBook _peerBook = PeerBook();
   final SyncLedger _ledger = SyncLedger();
+  final PendingJoinBook _pendingJoins = PendingJoinBook();
+
+  /// Groups with a join in flight (interactive or retried), so the two paths
+  /// cannot both import the snapshot and publish a join request.
+  final _joiningGroups = <String>{};
 
   /// CIDs whose fetch/apply failed this session; not retried until restart.
   final _failedCids = <String>{};
@@ -236,6 +250,9 @@ class SyncManager {
       _setState(SyncState.error);
       _log(SyncEvent(type: SyncEventType.error, message: _lastError!));
     }
+    // Outside the round budget: a parked join dials addresses nobody has
+    // answered from, and must not starve the groups we are already in.
+    await retryPendingJoinsNow();
   }
 
   Future<void> _runSync() async {
@@ -266,6 +283,12 @@ class SyncManager {
 
   /// Where other members can dial this node (empty until the node is up).
   List<String> get dialableAddresses => _ipfsService.dialableAddresses;
+
+  /// Addresses for an invite link: ours plus every member of [groupId] we know
+  /// how to reach, so the invite still works while we are offline — any of
+  /// them holds the snapshot the joiner needs.
+  Future<List<String>> inviteAddresses(String groupId) async =>
+      PeerBook.mergeForInvite(dialableAddresses, await _peerBook.addrsFor(groupId));
 
   /// Dials every address we know for [groupId]'s members. Failures are
   /// expected (phones move, addresses go stale) and ignored.
@@ -384,15 +407,16 @@ class SyncManager {
     }
   }
 
-  /// Waits briefly for [peerId] to show up as connected (the libp2p notifiee
-  /// can lag the dial), then reports whether it did.
-  Future<bool> _awaitConnected(String peerId, {Duration timeout = const Duration(seconds: 3)}) async {
+  /// Waits briefly (the libp2p notifiee can lag the dial) until any of
+  /// [peerIds] shows up as connected, and returns the connected subset.
+  Future<Set<String>> _awaitAnyConnected(Set<String> peerIds, {Duration timeout = const Duration(seconds: 3)}) async {
+    if (peerIds.isEmpty) return const {};
     final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      if ((await _ipfsService.connectedPeers).contains(peerId)) return true;
+    while (true) {
+      final up = (await _ipfsService.connectedPeers).toSet().intersection(peerIds);
+      if (up.isNotEmpty || !DateTime.now().isBefore(deadline)) return up;
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    return false;
   }
 
   Future<void> _ensureNode() async {
@@ -918,7 +942,9 @@ class SyncManager {
     required String passphrase,
     required Member self,
     required SimpleKeyPair keyPair,
+    String? inviterPeerId,
     List<String> inviterAddrs = const [],
+    bool parkIfUnreachable = true,
   }) async {
     final passphraseError = GroupKeyService.validatePassphrase(passphrase);
     if (passphraseError != null) throw JoinGroupException(passphraseError);
@@ -928,58 +954,119 @@ class SyncManager {
         'to share a new link from the Invite screen.',
       );
     }
-
     try {
       await _ensureNode();
     } catch (e) {
       throw JoinGroupException('Could not start the network node: $e');
     }
-
-    final key = await GroupKeyService.deriveKey(passphrase, groupId);
-
-    // The invite link carries the inviter's addresses: dial them before asking
-    // bitswap, which only talks to peers we are already connected to.
-    if (inviterAddrs.isNotEmpty) {
-      await _peerBook.remember(groupId, inviterAddrs, exceptPeerId: _ownPeerId);
-    }
-    final inviterPeerId = inviterAddrs.isEmpty ? null : PeerBook.peerIdOf(inviterAddrs.first);
-    await _dialKnownPeers(groupId);
-    if (inviterPeerId != null) await _awaitConnected(inviterPeerId);
-
-    final peers = await _ipfsService.connectedPeers;
-    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected peers before fetch: ${peers.length} $peers'));
-    Uint8List? bytes;
+    if (!_joiningGroups.add(groupId)) throw const JoinGroupException('Already joining this group');
     try {
-      bytes = await _getData(groupId, groupCid).timeout(const Duration(seconds: 45));
-      if (bytes == null && inviterPeerId != null) {
-        // The connection can be dropped underneath us (see PeerBook.remember);
-        // one redial covers the common case before we tell the user "not found".
-        await _dialKnownPeers(groupId, force: true);
-        if (await _awaitConnected(inviterPeerId)) {
-          bytes = await _getData(groupId, groupCid).timeout(const Duration(seconds: 45));
-        }
+      final key = await GroupKeyService.deriveKey(passphrase, groupId);
+      // The invite link carries the addresses of the inviter and of other
+      // members: dial them before asking, bitswap only talks to peers we are
+      // already connected to.
+      if (inviterAddrs.isNotEmpty) {
+        await _peerBook.remember(groupId, inviterAddrs, exceptPeerId: _ownPeerId);
       }
-      _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Fetched $groupCid: ${bytes?.length ?? 'null'} bytes'));
-    } on TimeoutException {
-      throw const JoinGroupException(
-        'Timed out fetching the group from the network. Make sure the inviter\'s '
-        'phone is online (or on the same Wi-Fi) and try again.',
+      final bytes = await _fetchSnapshot(groupId, groupCid, inviterAddrs.map(PeerBook.peerIdOf).toSet());
+      if (bytes == null) {
+        if (!parkIfUnreachable) {
+          throw const JoinGroupException(
+            'Timed out fetching the group from the network. Make sure a member\'s '
+            'phone is online (or on the same Wi-Fi) and try again.',
+          );
+        }
+        await _pendingJoins.put(PendingJoin(
+          groupId: groupId,
+          groupCid: groupCid,
+          inviteId: inviteId,
+          inviteNonceB64: inviteNonceB64,
+          inviterPeerId: inviterPeerId,
+          addrs: inviterAddrs,
+          keyB64: base64Encode(await key.extractBytes()),
+          self: self,
+          createdAt: DateTime.now().toUtc(),
+        ));
+        _log(SyncEvent(type: SyncEventType.warning, message: 'Nobody reachable for $groupId — join parked'));
+        throw const JoinParkedException();
+      }
+      final group = await _completeJoin(
+        bytes: bytes,
+        key: key,
+        self: self,
+        keyPair: keyPair,
+        groupId: groupId,
+        groupCid: groupCid,
+        inviteId: inviteId,
+        inviteNonceB64: inviteNonceB64,
       );
+      await _pendingJoins.remove(groupId);
+      return group;
+    } finally {
+      _joiningGroups.remove(groupId);
     }
-    if (bytes == null) throw const JoinGroupException('Group data not found on the network yet');
+  }
 
+  /// Dials what we know for [groupId] and fetches the snapshot [cid] from any
+  /// connected member. Null when nobody answered in time.
+  Future<Uint8List?> _fetchSnapshot(
+    String groupId,
+    String cid,
+    Set<String> peerIds, {
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    peerIds = {...peerIds}..remove(_ownPeerId);
+    await _dialKnownPeers(groupId);
+    var up = await _awaitAnyConnected(peerIds);
+    if (up.isEmpty && peerIds.isNotEmpty) {
+      // One redial, then give up quickly: with no member connected neither a
+      // direct fetch nor bitswap can succeed, and the caller parks the join.
+      await _dialKnownPeers(groupId, force: true);
+      up = await _awaitAnyConnected(peerIds);
+      if (up.isEmpty) {
+        _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'No member reachable for $groupId'));
+        return null;
+      }
+    }
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Reachable members before fetch: ${up.length}'));
+    try {
+      var bytes = await _getData(groupId, cid, extraPeers: up).timeout(timeout);
+      if (bytes == null && peerIds.isNotEmpty) {
+        // The connection can be dropped underneath us (see PeerBook.remember);
+        // one redial covers the common case.
+        await _dialKnownPeers(groupId, force: true);
+        up = await _awaitAnyConnected(peerIds);
+        if (up.isNotEmpty) bytes = await _getData(groupId, cid, extraPeers: up).timeout(timeout);
+      }
+      _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Fetched $cid: ${bytes?.length ?? 'null'} bytes'));
+      return bytes;
+    } on TimeoutException {
+      return null;
+    }
+  }
+
+  /// Verifies, imports and announces a join once the snapshot bytes are here.
+  /// Every failure in here is permanent for this invite/passphrase pair.
+  Future<Group> _completeJoin({
+    required Uint8List bytes,
+    required SecretKey key,
+    required Member self,
+    required SimpleKeyPair keyPair,
+    required String groupId,
+    required String groupCid,
+    required String inviteId,
+    required String inviteNonceB64,
+  }) async {
     final envelope = SyncEnvelope.tryDecode(bytes);
     if (envelope == null || envelope.type != SyncPayloadType.groupSnapshot || envelope.groupId != groupId) {
       throw const JoinGroupException('Invite does not point at a valid group');
     }
-
     Map<String, dynamic> snapshot;
     try {
       snapshot = await envelope.open(key);
     } on EnvelopeAuthException {
       throw const JoinGroupException('Wrong group passphrase');
     }
-
     // Validate the invite against the roster *before* touching local state.
     final incomingGroup = Group.fromJson(snapshot['group'] as Map<String, dynamic>);
     final invites = ((snapshot['invites'] as List?) ?? const [])
@@ -1001,7 +1088,6 @@ class SyncManager {
     } on InviteException catch (e) {
       throw JoinGroupException(e.message);
     }
-
     SnapshotImportResult result;
     try {
       result = await _groupService.importSnapshot(snapshot, cid: groupCid, ownPeerId: self.peerId);
@@ -1033,6 +1119,127 @@ class SyncManager {
 
     _log(SyncEvent(type: SyncEventType.memberJoined, message: 'Joined ${result.group.name}'));
     return (await _groupService.getGroup(groupId)) ?? result.group;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Parked joins
+  // ---------------------------------------------------------------------------
+
+  Future<List<PendingJoin>> pendingJoins() => _pendingJoins.all();
+
+  Future<void> cancelPendingJoin(String groupId) async {
+    await _pendingJoins.remove(groupId);
+    await _peerBook.forget(groupId);
+  }
+
+  /// Replaces the key of a parked join (after "Wrong group passphrase") and
+  /// tries again right away.
+  Future<void> updatePendingJoinPassphrase(String groupId, String passphrase) async {
+    final error = GroupKeyService.validatePassphrase(passphrase);
+    if (error != null) throw JoinGroupException(error);
+    final current = await _pendingJoins.get(groupId);
+    if (current == null) return;
+    final key = await GroupKeyService.deriveKey(passphrase, groupId);
+    await _pendingJoins.put(current.copyWith(
+      keyB64: base64Encode(await key.extractBytes()),
+      clearError: true,
+      permanent: false,
+    ));
+    await retryPendingJoinsNow();
+  }
+
+  bool _retryingJoins = false;
+
+  /// Tries every parked join whose peers are not all in dial backoff. Cheap
+  /// when nobody is home: a dial, a 3 s wait, done. Called after each sync
+  /// round and by the "Retry now" action.
+  Future<void> retryPendingJoinsNow() async {
+    if (_retryingJoins) return;
+    _retryingJoins = true;
+    try {
+      final joins = await _pendingJoins.all();
+      if (joins.isEmpty) return;
+      final me = _ownPeerId;
+      final kp = _ownKeyPair;
+      if (me == null || kp == null) return;
+      final now = DateTime.now();
+      for (final j in joins) {
+        if (j.self.peerId != me) {
+          // A different account than the one that parked it: drop it.
+          await _pendingJoins.remove(j.groupId);
+          continue;
+        }
+        if (!j.shouldAttempt(now, _dialBackoffUntil)) continue;
+        if (!_joiningGroups.add(j.groupId)) continue;
+        try {
+          await _retryPendingJoin(j, kp);
+        } finally {
+          _joiningGroups.remove(j.groupId);
+        }
+      }
+    } catch (e) {
+      _log(SyncEvent(type: SyncEventType.warning, message: 'Retrying parked joins failed: $e'));
+    } finally {
+      _retryingJoins = false;
+    }
+  }
+
+  Future<void> _retryPendingJoin(PendingJoin j, SimpleKeyPair kp) async {
+    try {
+      await _ensureNode();
+    } catch (_) {
+      return; // no node, nothing to do this round
+    }
+    if (j.addrs.isNotEmpty) await _peerBook.remember(j.groupId, j.addrs, exceptPeerId: _ownPeerId);
+    final peers = {...j.peerIds, ...(await _peerBook.addrsFor(j.groupId)).map(PeerBook.peerIdOf)}..remove(_ownPeerId);
+    await _dialKnownPeers(j.groupId);
+    final up = await _awaitAnyConnected(peers);
+    if (up.isEmpty) {
+      for (final p in peers) {
+        _peerFailed(p);
+      }
+      await _pendingJoins.put(j.copyWith(attempts: j.attempts + 1, lastError: 'No member online'));
+      _log(SyncEvent(type: SyncEventType.warning, message: 'Parked join ${j.groupId}: no member online (attempt ${j.attempts + 1})'));
+      return;
+    }
+    Uint8List? bytes;
+    try {
+      bytes = await _getData(j.groupId, j.groupCid, extraPeers: up).timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      bytes = null;
+    }
+    if (bytes == null) {
+      await _pendingJoins.put(j.copyWith(attempts: j.attempts + 1, lastError: 'A member is online but did not answer'));
+      _log(SyncEvent(type: SyncEventType.warning, message: 'Parked join ${j.groupId}: fetch failed (attempt ${j.attempts + 1})'));
+      return;
+    }
+    try {
+      final group = await _completeJoin(
+        bytes: bytes,
+        key: SecretKey(j.keyBytes),
+        self: j.self,
+        keyPair: kp,
+        groupId: j.groupId,
+        groupCid: j.groupCid,
+        inviteId: j.inviteId,
+        inviteNonceB64: j.inviteNonceB64,
+      );
+      await _pendingJoins.remove(j.groupId);
+      _emitChange(SyncChange(
+        SyncChangeType.group,
+        j.groupId,
+        title: 'Joined ${group.name}',
+        body: group.requireApproval ? 'Waiting for an admin to approve you' : 'You are now a member',
+      ));
+    } on JoinGroupException catch (e) {
+      // Fetch worked, the invite or passphrase did not: retrying cannot help.
+      await _pendingJoins.put(j.copyWith(attempts: j.attempts + 1, lastError: e.message, permanent: true));
+      _log(SyncEvent(type: SyncEventType.error, message: 'Parked join ${j.groupId} failed: ${e.message}'));
+      _emitChange(SyncChange(SyncChangeType.group, j.groupId, title: 'Could not join a group', body: e.message));
+    } catch (e) {
+      await _pendingJoins.put(j.copyWith(attempts: j.attempts + 1, lastError: '$e'));
+      _log(SyncEvent(type: SyncEventType.warning, message: 'Parked join ${j.groupId}: $e'));
+    }
   }
 
   /// Creates a signed invite and returns the deep-link parameters

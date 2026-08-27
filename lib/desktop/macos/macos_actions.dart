@@ -17,6 +17,7 @@ import '../../models/meeting.dart';
 import '../../models/repayment_schedule.dart';
 import '../../models/transaction.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/data_version.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
 import '../../providers/loan_provider.dart';
@@ -730,7 +731,7 @@ Future<void> macosShowInvite(BuildContext context, WidgetRef ref, Group group) a
       groupCid: invite.cid,
       inviteId: invite.id,
       inviteNonceB64: base64Encode(invite.nonce!),
-      inviterAddrs: ref.read(syncManagerProvider).dialableAddresses,
+      inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
     );
   } catch (e) {
     error = e;
@@ -824,6 +825,7 @@ Future<void> macosJoinGroup(BuildContext context, WidgetRef ref) async {
           groupCid: result.groupCid,
           inviteId: result.inviteId,
           inviteNonceB64: result.inviteNonceB64,
+          inviterPeerId: result.inviterPeerId,
           inviterAddrs: result.inviterAddrs,
           passphrase: passphrase,
           self: self,
@@ -837,6 +839,9 @@ Future<void> macosJoinGroup(BuildContext context, WidgetRef ref) async {
         group.requireApproval ? 'Join request sent to “${group.name}”' : 'Joined “${group.name}”',
       );
     }
+  } on JoinParkedException catch (e) {
+    ref.read(dataVersionProvider.notifier).state++;
+    if (context.mounted) await macosToast(context, e.message);
   } on JoinGroupException catch (e) {
     if (context.mounted) await macosToast(context, e.message, error: true);
   } catch (e) {

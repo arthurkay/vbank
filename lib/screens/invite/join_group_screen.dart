@@ -4,6 +4,7 @@ import '../../core/deeplink/deeplink_handler.dart';
 import '../../core/ipfs/sync_manager.dart';
 import '../../models/group.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/data_version.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
 import '../../services/group_key_service.dart';
@@ -114,6 +115,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
             groupCid: result.groupCid,
             inviteId: result.inviteId,
             inviteNonceB64: result.inviteNonceB64,
+            inviterPeerId: inviterPeerId,
             inviterAddrs: result.inviterAddrs,
             passphrase: passphrase,
             self: self,
@@ -129,6 +131,13 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       );
       ref.read(selectedGroupProvider.notifier).state = group;
       Navigator.pushReplacementNamed(context, '/group-detail');
+    } on JoinParkedException catch (e) {
+      // Nobody reachable: the join is saved and retried every sync round; the
+      // Groups list shows it until it completes.
+      ref.read(dataVersionProvider.notifier).state++;
+      if (!mounted) return;
+      showMessage(context, e.message);
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
     } on JoinGroupException catch (e) {
       debugPrint('[join] ${e.message}');
       if (mounted) showMessage(context, e.message, error: true);

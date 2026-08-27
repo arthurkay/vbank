@@ -89,4 +89,20 @@ void main() {
       expect(r.groupCid, isNull);
     });
   });
+
+  test('a link with four member addresses round-trips and stays QR-sized', () {
+    final addrs = List.generate(4, (i) => '/ip4/192.168.10.${i + 2}/tcp/4001/p2p/12D3KooW${'x' * 44}$i');
+    final link = DeepLinkHandler.buildJoinLink(
+      groupId: 'a1dfc2d2-6988-4bb2-9f38-0fa0d209d297',
+      inviterPeerId: addrs.first.split('/p2p/').last,
+      groupCid: 'bafkreib4war74cp6shsjl5ximm7ncaubc4luv7dpgqh6pwtkw4rxrchlpe',
+      inviteId: 'a1dfc2d2-6988-4bb2-9f38-0fa0d209d298',
+      inviteNonceB64: 'AAECAwQFBgcICQoLDA0ODw==',
+      inviterAddrs: addrs,
+    );
+    final r = DeepLinkHandler.parseString(link);
+    expect(r.inviterAddrs, addrs);
+    // Any of the four can serve the snapshot; keep the QR readable (~v16).
+    expect(link.length, lessThan(800), reason: 'link is ${link.length} chars');
+  });
 }

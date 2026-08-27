@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../../core/app_bootstrap.dart';
+import '../../core/ipfs/pending_join.dart';
+import '../../providers/data_version.dart';
 import '../../core/ipfs/sync_manager.dart';
 import '../../core/presentation/list_filters.dart';
 import '../../core/storage/settings_dao.dart';
@@ -212,6 +214,14 @@ class MacosGroupsPage extends ConsumerWidget {
               subtitle: '$e',
             ),
             data: (list) {
+              final pending = ref.watch(pendingJoinsProvider).value ?? const <PendingJoin>[];
+              if (list.isEmpty && pending.isNotEmpty) {
+                return ListView(
+                  controller: controller,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                  children: [for (final p in pending) _MacosPendingJoinRow(p)],
+                );
+              }
               if (list.isEmpty) {
                 return MacosEmpty(
                   icon: CupertinoIcons.person_2,
@@ -243,14 +253,57 @@ class MacosGroupsPage extends ConsumerWidget {
                 builder: (context, visible) => ListView.builder(
                   controller: controller,
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-                  itemCount: visible.length,
-                  itemBuilder: (context, i) => _MacosGroupRow(group: visible[i], onOpen: onOpen),
+                  itemCount: pending.length + visible.length,
+                  itemBuilder: (context, i) => i < pending.length
+                      ? _MacosPendingJoinRow(pending[i])
+                      : _MacosGroupRow(group: visible[i - pending.length], onOpen: onOpen),
                 ),
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A join parked because nobody from the group was reachable.
+class _MacosPendingJoinRow extends ConsumerWidget {
+  final PendingJoin join;
+  const _MacosPendingJoinRow(this.join);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sm = ref.read(syncManagerProvider);
+    void bump() => ref.read(dataVersionProvider.notifier).state++;
+    return MacosListTile(
+      leading: MacosIcon(join.permanent ? CupertinoIcons.exclamationmark_triangle : CupertinoIcons.hourglass),
+      title: Text('Joining a group…', style: MacosTheme.of(context).typography.headline),
+      subtitle: Text(join.statusText),
+      onClick: () async {
+        final choice = await macosPrompt(
+          context,
+          title: 'Joining a group',
+          message: '${join.statusText}\n\nType "retry" to look for an online member now, "cancel" to forget the invite, '
+              'or a new group passphrase if it was mistyped.',
+          placeholder: 'retry / cancel / passphrase',
+          confirmLabel: 'Apply',
+        );
+        final v = choice?.trim();
+        if (v == null || v.isEmpty || !context.mounted) return;
+        try {
+          if (v == 'retry') {
+            await sm.retryPendingJoinsNow();
+          } else if (v == 'cancel') {
+            await sm.cancelPendingJoin(join.groupId);
+          } else {
+            await sm.updatePendingJoinPassphrase(join.groupId, v);
+          }
+        } on JoinGroupException catch (e) {
+          if (context.mounted) await macosToast(context, e.message, error: true);
+        }
+        bump();
+      },
     );
   }
 }

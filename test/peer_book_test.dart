@@ -67,4 +67,24 @@ void main() {
     await book.forget('g1');
     expect(await book.addrsFor('g1'), isEmpty);
   });
+
+  test('mergeForInvite: own addresses first, one per transport, capped', () {
+    final merged = PeerBook.mergeForInvite(
+      ['/ip4/192.168.1.5/tcp/4001/p2p/ME', ' ', 'garbage-without-peer'],
+      [
+        '/ip4/10.0.0.3/tcp/4001/p2p/B',
+        '/ip4/192.168.1.5/tcp/4001/p2p/STALE', // same transport as ours: dropped
+        '/ip4/10.0.0.4/tcp/4001/p2p/C',
+        '/ip4/10.0.0.5/tcp/4001/p2p/D',
+        '/ip4/10.0.0.6/tcp/4001/p2p/E',
+      ],
+    );
+    expect(merged, [
+      '/ip4/192.168.1.5/tcp/4001/p2p/ME',
+      '/ip4/10.0.0.3/tcp/4001/p2p/B',
+      '/ip4/10.0.0.4/tcp/4001/p2p/C',
+      '/ip4/10.0.0.5/tcp/4001/p2p/D',
+    ]);
+    expect(PeerBook.mergeForInvite([], []), isEmpty);
+  });
 }

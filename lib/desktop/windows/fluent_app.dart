@@ -9,6 +9,8 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_bootstrap.dart';
+import '../../core/ipfs/pending_join.dart';
+import '../../providers/data_version.dart';
 import '../../core/app_platform.dart';
 import '../../core/ipfs/sync_manager.dart';
 import '../../core/presentation/list_filters.dart';
@@ -220,6 +222,13 @@ class FluentGroupsPage extends ConsumerWidget {
         loading: () => const Center(child: ProgressRing()),
         error: (e, _) => FluentEmpty(icon: FluentIcons.error, title: 'Could not load groups', subtitle: '$e'),
         data: (list) {
+          final pending = ref.watch(pendingJoinsProvider).value ?? const <PendingJoin>[];
+          if (list.isEmpty && pending.isNotEmpty) {
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+              children: [for (final p in pending) _FluentPendingJoinRow(p)],
+            );
+          }
           if (list.isEmpty) {
             return FluentEmpty(
               icon: FluentIcons.group,
@@ -247,11 +256,72 @@ class FluentGroupsPage extends ConsumerWidget {
             searchText: groupHaystack,
             builder: (context, visible) => ListView.builder(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-              itemCount: visible.length,
-              itemBuilder: (context, i) => _FluentGroupRow(group: visible[i], onOpen: onOpen),
+              itemCount: pending.length + visible.length,
+              itemBuilder: (context, i) => i < pending.length
+                  ? _FluentPendingJoinRow(pending[i])
+                  : _FluentGroupRow(group: visible[i - pending.length], onOpen: onOpen),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// A join parked because nobody from the group was reachable.
+class _FluentPendingJoinRow extends ConsumerWidget {
+  final PendingJoin join;
+  const _FluentPendingJoinRow(this.join);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sm = ref.read(syncManagerProvider);
+    void bump() => ref.read(dataVersionProvider.notifier).state++;
+    Future<void> run(Future<void> Function() action) async {
+      try {
+        await action();
+      } on JoinGroupException catch (e) {
+        if (context.mounted) fluentInfo(context, e.message, error: true);
+      }
+      bump();
+    }
+    return Card(
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        leading: Icon(join.permanent ? FluentIcons.warning : FluentIcons.clock, size: 18),
+        title: const Text('Joining a group…'),
+        subtitle: Text(join.statusText),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!join.permanent)
+              Button(onPressed: () => run(sm.retryPendingJoinsNow), child: const Text('Retry now')),
+            const SizedBox(width: 6),
+            Button(
+              onPressed: () async {
+                final passphrase = await fluentPrompt(context,
+                    title: 'Group passphrase', placeholder: 'Passphrase', obscure: true, confirmLabel: 'Save');
+                if (passphrase == null || passphrase.trim().isEmpty || !context.mounted) return;
+                await run(() => sm.updatePendingJoinPassphrase(join.groupId, passphrase.trim()));
+              },
+              child: const Text('Passphrase'),
+            ),
+            const SizedBox(width: 6),
+            Button(
+              onPressed: () async {
+                final ok = await fluentConfirm(context,
+                    title: 'Cancel joining?',
+                    message: 'The invite is forgotten. You can open the link again later.',
+                    confirmLabel: 'Cancel join',
+                    destructive: true);
+                if (!ok) return;
+                await run(() => sm.cancelPendingJoin(join.groupId));
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
       ),
     );
   }

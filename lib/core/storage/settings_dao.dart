@@ -41,4 +41,5 @@ class SettingKeys {
   static const notifyActivity = 'notifications.activity'; // tx / joins / approvals
   static const syncIntervalMinutes = 'sync.interval_minutes';
   static const syncWifiOnly = 'sync.wifi_only';
+  static const pendingJoins = 'pendingJoins'; // joins waiting for a member to come online
 }

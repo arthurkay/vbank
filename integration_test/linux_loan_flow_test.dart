@@ -20,7 +20,6 @@ import 'package:vbank/main.dart' as app;
 import 'package:vbank/services/group_service.dart';
 import 'package:vbank/services/loan_service.dart';
 import 'package:vbank/services/transaction_service.dart';
-import 'package:yaru/yaru.dart';
 
 const passphrase = 'e2e-passphrase-2026';
 

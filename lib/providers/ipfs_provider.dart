@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/ipfs/ipfs_service.dart';
+import '../core/ipfs/pending_join.dart';
 import '../core/ipfs/sync_manager.dart';
+import 'data_version.dart';
 import 'group_provider.dart';
 import 'loan_provider.dart' show loanServiceProvider;
 import 'meeting_provider.dart' show meetingServiceProvider;
-import 'transaction_provider.dart' show transactionServiceProvider;
+import 'transaction_provider.dart' show transactionServiceProvider, syncTickProvider;
 
 final ipfsServiceProvider = Provider<IpfsService>((ref) {
   final service = IpfsService();
@@ -54,4 +56,11 @@ final syncLogProvider = StreamProvider<List<SyncEvent>>((ref) {
       yield syncManager.recentLog;
     }
   }();
+});
+
+/// Joins waiting for a member of the group to come online (see PendingJoin).
+final pendingJoinsProvider = FutureProvider<List<PendingJoin>>((ref) {
+  ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider);
+  return ref.watch(syncManagerProvider).pendingJoins();
 });

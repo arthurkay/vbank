@@ -66,6 +66,18 @@ void main() {
     expect(utf8.decode(got!), utf8.decode(data));
   });
 
+  test('direct fetch falls through an unreachable peer to one that has the block', () async {
+    final data = Uint8List.fromList(utf8.encode('seeded by any member ${DateTime.now()}'));
+    final cid = await a.addData(data);
+    // The first peer id is nobody we know; the second is A. This is the
+    // "any online member can serve the snapshot" case of an invite link.
+    // A well-formed id nobody answers to: A's id with its last character changed.
+    final ghost = a.peerId!.substring(0, a.peerId!.length - 1) + (a.peerId!.endsWith('a') ? 'b' : 'a');
+    final got = await b.fetchFromPeers(cid, [ghost, a.peerId!], const Duration(seconds: 10));
+    expect(got, isNotNull);
+    expect(utf8.decode(got!), utf8.decode(data));
+  });
+
   test('request/response round-trips through the responder', () async {
     final reply = await b.request(a.peerId!, Uint8List.fromList(utf8.encode('ping')), const Duration(seconds: 10));
     expect(reply, isNotNull);

@@ -11,6 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:yaru/yaru.dart';
 
 import '../../core/app_bootstrap.dart';
+import '../../core/ipfs/pending_join.dart';
+import '../../core/ipfs/sync_manager.dart' show JoinGroupException;
+import '../../providers/data_version.dart';
 import '../../core/presentation/list_filters.dart';
 import '../../models/group.dart';
 import '../../models/loan.dart';
@@ -191,6 +194,13 @@ class _YaruGroupsPageState extends ConsumerState<YaruGroupsPage> {
         loading: () => const Center(child: YaruCircularProgressIndicator()),
         error: (e, _) => YaruEmpty(icon: YaruIcons.warning, title: 'Could not load groups', subtitle: '$e'),
         data: (list) {
+          final pending = ref.watch(pendingJoinsProvider).value ?? const <PendingJoin>[];
+          if (list.isEmpty && pending.isNotEmpty) {
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              children: [for (final p in pending) _PendingJoinTile(p)],
+            );
+          }
           if (list.isEmpty) {
             return YaruEmpty(
               icon: YaruIcons.users,
@@ -218,14 +228,70 @@ class _YaruGroupsPageState extends ConsumerState<YaruGroupsPage> {
             searchText: groupHaystack,
             builder: (context, visible) => ListView.builder(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-              itemCount: visible.length,
-              itemBuilder: (context, i) => _GroupRow(
-                group: visible[i],
-                onOpen: () => setState(() => _openGroupId = visible[i].id),
-              ),
+              itemCount: pending.length + visible.length,
+              itemBuilder: (context, i) => i < pending.length
+                  ? _PendingJoinTile(pending[i])
+                  : _GroupRow(
+                      group: visible[i - pending.length],
+                      onOpen: () => setState(() => _openGroupId = visible[i - pending.length].id),
+                    ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// A join parked because nobody from the group was reachable.
+class _PendingJoinTile extends ConsumerWidget {
+  final PendingJoin join;
+  const _PendingJoinTile(this.join);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final sm = ref.read(syncManagerProvider);
+    void bump() => ref.read(dataVersionProvider.notifier).state++;
+    return YaruListTile(
+      leading: CircleAvatar(
+        backgroundColor: join.permanent ? theme.colorScheme.errorContainer : theme.colorScheme.surfaceContainerHighest,
+        child: Icon(join.permanent ? YaruIcons.warning : YaruIcons.clock, size: 18),
+      ),
+      title: const Text('Joining a group…'),
+      subtitle: Text(join.statusText),
+      trailing: PopupMenuButton<String>(
+        tooltip: 'Options',
+        onSelected: (v) async {
+          switch (v) {
+            case 'retry':
+              await sm.retryPendingJoinsNow();
+              bump();
+            case 'passphrase':
+              final passphrase = await yaruPrompt(context, title: 'Group passphrase', label: 'Passphrase', obscure: true, confirmLabel: 'Save');
+              if (passphrase == null || passphrase.trim().isEmpty || !context.mounted) return;
+              try {
+                await sm.updatePendingJoinPassphrase(join.groupId, passphrase.trim());
+              } on JoinGroupException catch (e) {
+                if (context.mounted) yaruToast(context, e.message, error: true);
+              }
+              bump();
+            case 'cancel':
+              final ok = await yaruConfirm(context,
+                  title: 'Cancel joining?',
+                  message: 'The invite is forgotten. You can open the link again later.',
+                  confirmLabel: 'Cancel join',
+                  destructive: true);
+              if (!ok) return;
+              await sm.cancelPendingJoin(join.groupId);
+              bump();
+          }
+        },
+        itemBuilder: (_) => [
+          if (!join.permanent) const PopupMenuItem(value: 'retry', child: Text('Retry now')),
+          const PopupMenuItem(value: 'passphrase', child: Text('Change passphrase')),
+          const PopupMenuItem(value: 'cancel', child: Text('Cancel this join')),
+        ],
       ),
     );
   }
