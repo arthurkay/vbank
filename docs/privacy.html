@@ -7,7 +7,6 @@
 <meta name="description" content="vBank privacy policy: what the app stores, what it never collects, how peer-to-peer sync works, permissions, children, security, retention and deletion, and how to contact us.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -16,7 +15,7 @@
 
 <header class="site">
   <div class="wrap">
-    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="30" height="30"> vBank</a>
+    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="28" height="28"> vBank</a>
     <nav class="top">
       <a href="index.html">Home</a>
       <a href="guide.html">Guide</a>
@@ -32,7 +31,7 @@
 <p class="updated">Effective 25 August 2026 · Last updated 25 August 2026</p>
 
 <p>
-  This policy explains how the vBank mobile application (“vBank”, “the app”) handles information. It is
+  This policy explains how the vBank mobile application ("vBank", "the app") handles information. It is
   written to be read by the people who actually use it — members of savings groups — and to satisfy the
   disclosure requirements of the Google Play Store and the Apple App Store.
 </p>
@@ -47,7 +46,7 @@
 
 <h2>1. Who is responsible</h2>
 <p>
-  vBank is published by the vBank project (“we”, “us”). Because the app has no backend, we do not act as a
+  vBank is published by the vBank project ("we", "us"). Because the app has no backend, we do not act as a
   processor or controller of your group's records — we never receive them. For questions about this policy,
   write to <a href="mailto:privacy@vbank.zm">privacy@vbank.zm</a>.
 </p>
@@ -61,7 +60,7 @@
     <td>Encrypted database on your device</td>
   </tr>
   <tr>
-    <td>A cryptographic identity (signing key pair and peer ID) generated on your device</td>
+    <td>A cryptographic identity (signing key and peer ID) generated on your device</td>
     <td>To sign your records so other members can verify them, and to be addressable on the peer-to-peer network</td>
     <td>Encrypted database; the device's secure keystore holds the key that protects it</td>
   </tr>
@@ -100,24 +99,22 @@
 
 <h2>4. What is shared with other people, and how</h2>
 <p>
-  When you record something in a group, that record is encrypted and published to the peer-to-peer IPFS
-  network so the other members of that group can receive it. This means:
+  When you record something in a group, that record is encrypted and shared directly with the other members'
+  phones so they can receive it. This means:
 </p>
 <ul>
   <li><strong>Who can read it:</strong> only people holding your group's passphrase — in practice, the members
-  your admins invited. Encryption is XChaCha20-Poly1305 with a key derived from that passphrase
-  (PBKDF2-HMAC-SHA256, 100,000 iterations, salted per group).</li>
+  your admins invited. Encryption uses a key derived from that passphrase.</li>
   <li><strong>What other members see:</strong> your display name, your public key, the records you signed, and
   the amounts and dates in them. This is the same information a paper ledger would show the group.</li>
-  <li><strong>What third parties see:</strong> other computers participating in the IPFS network may relay,
-  store or cache the encrypted blocks and can observe network-level metadata (that a peer with a given peer
-  ID is publishing or requesting content identifiers, and its IP address). They cannot read the contents.</li>
+  <li><strong>What third parties see:</strong> other computers on the peer-to-peer network may relay
+  encrypted blocks and can observe that a peer is sharing data — but they cannot read the contents.</li>
   <li><strong>What we see:</strong> nothing.</li>
 </ul>
 <div class="note">
   <strong>Public network, private contents.</strong>
-  IPFS is a public, distributed network. Encrypted blocks that other nodes have cached cannot be recalled
-  or deleted by us or by you. They remain unreadable without your group's passphrase, but you should treat
+  The peer-to-peer network is public and distributed. Encrypted blocks that other nodes have cached cannot
+  be recalled. They remain unreadable without your group's passphrase, but you should treat
   publication as permanent — which is also why the passphrase must never be shared outside the group.
 </div>
 
@@ -136,12 +133,12 @@
 
 <h2>6. Security</h2>
 <ul>
-  <li>The on-device database is encrypted with SQLCipher (AES-256). Its key is derived from a device secret
+  <li>The on-device database is encrypted. Its key is derived from a device secret
   stored in the platform's secure storage (Android Keystore / iOS Keychain), not in the app's files.</li>
-  <li>Every record is signed with Ed25519 and verified on receipt; records that fail verification, or that
+  <li>Every record is signed and verified on receipt; records that fail verification, or that
   come from someone without the role to write them, are rejected.</li>
-  <li>Records in transit and at rest on the network are encrypted with XChaCha20-Poly1305 using your group's
-  derived key. Backup files use the same construction with a key derived from your PIN.</li>
+  <li>Records in transit and at rest are encrypted using your group's
+  derived key. Backup files use the same protection with a key derived from your PIN.</li>
   <li>Invites are one-use, expiring and signed by the admin who created them.</li>
 </ul>
 <p>
@@ -154,7 +151,7 @@
   vBank is intended for adults managing group finances and is not directed at children. We do not knowingly
   collect information from anyone — including children — because we collect nothing at all. Where a minor
   participates in a family or school savings group, a parent, guardian or group administrator should manage
-  the app on their behaf and is responsible for the records entered.
+  the app on their behalf and is responsible for the records entered.
 </p>
 
 <h2>8. Retention and deletion</h2>
@@ -165,7 +162,7 @@
   <li><strong>Other members' devices:</strong> records you sent are their copies of the group's books and remain
   with them, exactly as entries in a paper ledger would. Ask your group's admins to remove you from the roster to
   stop receiving further updates.</li>
-  <li><strong>The network:</strong> encrypted blocks already cached by other IPFS nodes cannot be withdrawn (see
+  <li><strong>The network:</strong> encrypted blocks already distributed on the peer-to-peer network cannot be withdrawn (see
   section 4).</li>
   <li><strong>Us:</strong> we hold nothing, so there is nothing for us to delete and no data-deletion request to make.
   Details are on the <a href="index.html#delete-data">deleting your data</a> section of the home page.</li>
@@ -174,7 +171,7 @@
 <h2>9. International transfers</h2>
 <p>
   Because sync is peer-to-peer, your encrypted records travel directly to the devices of your group members
-  and through IPFS nodes that may be located in other countries. The contents remain encrypted end to end
+  and through network nodes that may be located in other countries. The contents remain encrypted end to end
   with a key only your group holds. We do not transfer data ourselves because we do not receive any.
 </p>
 
@@ -185,7 +182,7 @@
   because you hold the data:
 </p>
 <ul>
-  <li><strong>Access and portability:</strong> everything about you is visible in the app; “Create backup” gives
+  <li><strong>Access and portability:</strong> everything about you is visible in the app; "Create backup" gives
   you a complete, portable copy.</li>
   <li><strong>Correction:</strong> ask an admin to record a reversal and the corrected entry.</li>
   <li><strong>Deletion:</strong> log out or uninstall (see section 8).</li>
@@ -197,7 +194,7 @@
 <h2>11. Third-party services</h2>
 <p>
   vBank includes no advertising, attribution or analytics SDKs. It uses open-source libraries that run entirely
-  on your device (for cryptography, local storage, QR scanning, notifications and IPFS networking). The only
+  on your device (for cryptography, local storage, QR scanning, notifications and networking). The only
   external systems involved are the peer-to-peer network itself and, if you choose to use them, the apps you
   pick from the system share sheet when exporting a backup or an invite link — those apps' own privacy policies
   then apply.
@@ -219,11 +216,11 @@
 
 <footer class="site">
   <div class="wrap">
-    <span>© 2026 vBank</span>
+    <span>&copy; 2026 vBank</span>
     <nav>
       <a href="index.html">Home</a>
       <a href="guide.html">Guide</a>
-      <a href="terms.html">Terms of use</a>
+      <a href="terms.html">Terms</a>
       <a href="mailto:support@vbank.zm">Support</a>
     </nav>
   </div>

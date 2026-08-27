@@ -7,7 +7,6 @@
 <meta name="description" content="A complete guide to running a savings group in vBank: creating a group, inviting members, recording contributions, running loans, meetings, reports, corrections, backups and sync.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -16,7 +15,7 @@
 
 <header class="site">
   <div class="wrap">
-    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="30" height="30"> vBank</a>
+    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="28" height="28"> vBank</a>
     <nav class="top">
       <a href="index.html#features">Features</a>
       <a href="index.html#how">How it works</a>
@@ -59,17 +58,17 @@
 <h2 id="roles">Who can do what</h2>
 <table>
   <tr><th>Action</th><th>Owner</th><th>Admin</th><th>Member</th></tr>
-  <tr><td>See the group's books, balances and reports</td><td>✓</td><td>✓</td><td>✓</td></tr>
-  <tr><td>Record contributions, penalties, withdrawals</td><td>✓</td><td>✓</td><td>—</td></tr>
-  <tr><td>Request a loan / request a reversal</td><td>✓</td><td>✓</td><td>✓</td></tr>
-  <tr><td>Approve loans, disburse, record repayments</td><td>✓</td><td>✓</td><td>—</td></tr>
-  <tr><td>Schedule meetings, take attendance, close a meeting</td><td>✓</td><td>✓</td><td>—</td></tr>
-  <tr><td>Invite members, approve join requests</td><td>✓</td><td>✓</td><td>—</td></tr>
-  <tr><td>Change group settings</td><td>✓</td><td>✓</td><td>—</td></tr>
-  <tr><td>Promote/demote admins, suspend or remove members</td><td>✓</td><td>partly*</td><td>—</td></tr>
-  <tr><td>Transfer ownership, dissolve the group</td><td>✓</td><td>—</td><td>—</td></tr>
+  <tr><td>See the group's books, balances and reports</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+  <tr><td>Record contributions, penalties, withdrawals</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+  <tr><td>Request a loan / request a reversal</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+  <tr><td>Approve loans, disburse, record repayments</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+  <tr><td>Schedule meetings, take attendance, close a meeting</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+  <tr><td>Invite members, approve join requests</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+  <tr><td>Change group settings</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+  <tr><td>Promote/demote admins, suspend or remove members</td><td>&check;</td><td>partly*</td><td>&mdash;</td></tr>
+  <tr><td>Transfer ownership, dissolve the group</td><td>&check;</td><td>&mdash;</td><td>&mdash;</td></tr>
 </table>
-<p class="muted" style="font-size:14px">* An admin can suspend or reinstate ordinary members; only the owner can change admin roles or remove people.</p>
+<p style="color:var(--muted-fg);font-size:14px">* An admin can suspend or reinstate ordinary members; only the owner can change admin roles or remove people.</p>
 <div class="note">
   <strong>Why members can't write records.</strong>
   In a savings group the books are kept by the people the group trusts with them. vBank mirrors that: the
@@ -79,16 +78,16 @@
 
 <h2 id="first-run">1. Your identity</h2>
 <ol class="steps">
-  <li><strong>Open the app and tap “Get started”.</strong> Enter the name your group knows you by — this is what appears next to your entries.</li>
-  <li><strong>That's it.</strong> vBank creates a signing key and a peer ID on the phone. There is no password to remember at this stage, no phone number, no email, and nothing is sent anywhere.</li>
-  <li><strong>Make a backup early.</strong> Settings → Backup &amp; Restore → “Create new backup”. See <a href="#backup">section 12</a> — this identity cannot be recreated from scratch.</li>
+  <li><strong>Open the app and tap "Get started".</strong> Enter the name your group knows you by — this is what appears next to your entries.</li>
+  <li><strong>That's it.</strong> vBank creates a signing key on the phone. No password to remember at this stage, no phone number, no email, and nothing is sent anywhere.</li>
+  <li><strong>Make a backup early.</strong> Settings → Backup &amp; Restore → "Create new backup". See <a href="#backup">section 12</a> — this identity cannot be recreated from scratch.</li>
 </ol>
 
 <h2 id="create-group">2. Creating a group</h2>
 <p>Whoever keeps the books creates the group and becomes its <strong>owner</strong>.</p>
 <ol class="steps">
-  <li><strong>Groups → “New group”.</strong></li>
-  <li><strong>Name it</strong> the way members will recognise it, e.g. “Ngombe Circle”.</li>
+  <li><strong>Groups → "New group".</strong></li>
+  <li><strong>Name it</strong> the way members will recognise it, e.g. "Ngombe Circle".</li>
   <li><strong>Set the contribution</strong> amount and how often it is due — weekly, biweekly or monthly.</li>
   <li><strong>Choose a group passphrase.</strong> This encrypts the group's records. Pick something your members can repeat but strangers can't guess, and plan how you will tell it to new members <em>in person</em>. It is never included in an invite link, and it cannot be recovered or reset.</li>
   <li><strong>Decide whether new members need approval.</strong> On: joining puts someone in a pending list until an admin approves them. Off: a valid invite admits them immediately.</li>
@@ -97,7 +96,7 @@
 <p>You can adjust the rest of the rules any time in <strong>group → ⚙ Settings → Group configuration</strong>:</p>
 <table>
   <tr><th>Setting</th><th>What it does</th></tr>
-  <tr><td>Contribution &amp; frequency</td><td>The expected amount per member per cycle. Used for meeting totals and the “contribution due” reminder.</td></tr>
+  <tr><td>Contribution &amp; frequency</td><td>The expected amount per member per cycle. Used for meeting totals and the "contribution due" reminder.</td></tr>
   <tr><td>Loan interest (%)</td><td>Flat interest added to a loan when it is approved. A 50.00 loan at 10% is repaid as 55.00.</td></tr>
   <tr><td>Late penalty (%)</td><td>Charged on an installment that passes its due date unpaid.</td></tr>
   <tr><td>Max loan (× contributions)</td><td>Ceiling on what a member may borrow, as a multiple of what they have contributed.</td></tr>
@@ -113,11 +112,11 @@
 
 <h2 id="invite">3. Adding members</h2>
 <ol class="steps">
-  <li><strong>Open the group → tap the “add person” icon.</strong> vBank publishes a fresh snapshot of the group and shows a QR code.</li>
-  <li><strong>Have the new member scan it</strong> from their phone (Groups → “Join another group” → Scan QR code), or send them the link with “Share invite link”.</li>
+  <li><strong>Open the group → tap the "add person" icon.</strong> vBank publishes a fresh snapshot of the group and shows a QR code.</li>
+  <li><strong>Have the new member scan it</strong> from their phone (Groups → "Join another group" → Scan QR code), or send them the link with "Share invite link".</li>
   <li><strong>Tell them the group passphrase in person.</strong> Not over the same channel as the link — the link alone cannot decrypt anything.</li>
-  <li><strong>Each invite works once</strong> and expires after a few days. Generate a new one per member with “New invite”.</li>
-  <li><strong>If approval is on,</strong> approve them under ⚙ Settings → “Waiting for approval”.</li>
+  <li><strong>Each invite works once</strong> and expires after a few days. Generate a new one per member with "New invite".</li>
+  <li><strong>If approval is on,</strong> approve them under ⚙ Settings → "Waiting for approval".</li>
 </ol>
 <div class="note">
   <strong>Why two separate things?</strong> The QR gets the joiner to the right group and proves an admin
@@ -127,19 +126,19 @@
 
 <h2 id="join">4. Joining a group</h2>
 <ol class="steps">
-  <li><strong>Groups → “Join another group”.</strong></li>
-  <li><strong>Scan the QR</strong> the admin is showing you, or tap “Enter code manually” and paste the link.</li>
+  <li><strong>Groups → "Join another group".</strong></li>
+  <li><strong>Scan the QR</strong> the admin is showing you, or tap "Enter code manually" and paste the link.</li>
   <li><strong>Type the group passphrase</strong> when prompted.</li>
-  <li><strong>Wait for the fetch.</strong> vBank finds the group's snapshot on the network, verifies the owner's signature and decrypts it. This needs a connection — do it while you have signal.</li>
-  <li><strong>If the group requires approval,</strong> you'll see “Waiting for approval” until an admin lets you in. Pull down to refresh later.</li>
+  <li><strong>Wait for the fetch.</strong> vBank finds the group's snapshot on the network, verifies it and decrypts it. This needs a connection — do it while you have signal.</li>
+  <li><strong>If the group requires approval,</strong> you'll see "Waiting for approval" until an admin lets you in. Pull down to refresh later.</li>
 </ol>
 
 <h2 id="contributions">5. Recording contributions and penalties</h2>
 <ol class="steps">
-  <li><strong>Open the group → “+ Transaction”.</strong></li>
-  <li><strong>Pick the type.</strong> <em>Contribution</em> (money in from a member), <em>Penalty</em> (a fine, e.g. for lateness), <em>Withdrawal</em> (money out to a member that isn't a loan). Loans and repayments are not recorded here — they are recorded from the loan itself.</li>
+  <li><strong>Open the group → "+ Transaction".</strong></li>
+  <li><strong>Pick the type.</strong> <em>Contribution</em> (money in from a member), <em>Penalty</em> (a fine, e.g. for lateness), <em>Withdrawal</em> (money out to a member that isn't a loan). Loans and repayments are recorded from the loan itself.</li>
   <li><strong>Choose the member</strong> and enter the amount; the contribution amount is pre-filled.</li>
-  <li><strong>Add a note</strong> if it needs explaining later — “paid for August, was travelling”.</li>
+  <li><strong>Add a note</strong> if it needs explaining later — "paid for August, was travelling".</li>
   <li><strong>Record it.</strong> The entry is signed, added to your books immediately, and queued to sync.</li>
 </ol>
 <p>The group's <strong>Transactions</strong> tab lists everything newest first; <strong>Activity</strong> on the home screen shows the same across all your groups. Tap any entry for full details: who recorded it, when, its sequence number and its ID.</p>
@@ -147,7 +146,7 @@
 <h2 id="loans">6. Loans</h2>
 <h4>Requesting</h4>
 <ol class="steps">
-  <li><strong>Group → Loans → “Request a loan”.</strong></li>
+  <li><strong>Group → Loans → "Request a loan".</strong></li>
   <li><strong>Enter the amount</strong>; vBank checks eligibility as you type and tells you plainly if you are not eligible yet (too few contributions, over the multiple, or an open loan already).</li>
   <li><strong>Choose the term in weeks</strong> and add a reason if the group expects one.</li>
   <li><strong>Submit.</strong> If the group doesn't require approval and you're eligible, it is approved on the spot.</li>
@@ -156,11 +155,11 @@
 <ol class="steps">
   <li><strong>Open the loan</strong> from the Loans tab.</li>
   <li><strong>Approve</strong> — you can approve less than requested — or <strong>Reject</strong>. An admin cannot approve their own request; another admin must.</li>
-  <li><strong>Hand over the cash, then tap “Record disbursement”.</strong> This writes the loan transaction and builds the weekly repayment schedule with interest included.</li>
+  <li><strong>Hand over the cash, then tap "Record disbursement".</strong> This writes the loan transaction and builds the weekly repayment schedule with interest included.</li>
 </ol>
 <h4>Repayments</h4>
 <ol class="steps">
-  <li><strong>“Record repayment”</strong> on the loan. The amount is pre-filled with what the next installment needs, including any penalty.</li>
+  <li><strong>"Record repayment"</strong> on the loan. The amount is pre-filled with what the next installment needs, including any penalty.</li>
   <li><strong>Payments apply to the oldest unpaid installment first.</strong> Partial payments are fine — the installment shows what is still outstanding.</li>
   <li><strong>The loan closes itself</strong> when the total due is covered, and its status becomes <em>completed</em>.</li>
   <li><strong>Late installments</strong> attract the group's late penalty, and a loan left unpaid 30 days past its last due date is flagged as <em>defaulted</em>.</li>
@@ -169,12 +168,12 @@
 
 <h2 id="meetings">7. Meetings and attendance</h2>
 <ol class="steps">
-  <li><strong>Group → Meetings → “Schedule meeting”.</strong> Pick the date and time; members get a reminder the day before.</li>
-  <li><strong>On the day, open the meeting</strong> and set each member to Present, Excused or Absent, ticking “Paid” for those who contributed.</li>
-  <li><strong>Close it with “Complete meeting”.</strong> The total collected is pre-filled from who you ticked; correct it if the cash says otherwise, add notes, and complete.</li>
-  <li><strong>“Cancel meeting”</strong> if it doesn't happen — the record stays, marked cancelled.</li>
+  <li><strong>Group → Meetings → "Schedule meeting".</strong> Pick the date and time; members get a reminder the day before.</li>
+  <li><strong>On the day, open the meeting</strong> and set each member to Present, Excused or Absent, ticking "Paid" for those who contributed.</li>
+  <li><strong>Close it with "Complete meeting".</strong> The total collected is pre-filled from who you ticked; correct it if the cash says otherwise, add notes, and complete.</li>
+  <li><strong>"Cancel meeting"</strong> if it doesn't happen — the record stays, marked cancelled.</li>
 </ol>
-<p class="muted" style="font-size:14px">Attendance is a record of the meeting; it does not itself create contribution entries. Record the money in the Transactions flow so each member's balance is right.</p>
+<p style="color:var(--muted-fg);font-size:14px">Attendance is a record of the meeting; it does not itself create contribution entries. Record the money in the Transactions flow so each member's balance is right.</p>
 
 <h2 id="reports">8. Reports and member statements</h2>
 <p>Group → 📊 icon. Choose 1 month, 3 months, 1 year or all time, and you get:</p>
@@ -190,7 +189,7 @@
 <h2 id="corrections">9. Fixing mistakes</h2>
 <p>Nothing is deleted. To correct an entry:</p>
 <ol class="steps">
-  <li><strong>Open the transaction</strong> and tap “Request reversal”, giving the reason (“recorded twice”).</li>
+  <li><strong>Open the transaction</strong> and tap "Request reversal", giving the reason ("recorded twice").</li>
   <li><strong>An admin who didn't request it approves</strong> the reversal. The original is marked reversed, a compensating entry is written, and balances adjust.</li>
   <li><strong>Both entries stay visible</strong> with who requested and who approved, so the trail is auditable at the next meeting.</li>
 </ol>
@@ -206,27 +205,27 @@
 
 <h2 id="sync">11. Syncing between phones</h2>
 <p>
-  vBank syncs peer-to-peer: your phone publishes encrypted records for the group and looks for the other
-  members' phones over IPFS. There is no server, so “online” means “able to reach other members”, not
-  “able to reach vBank”.
+  vBank syncs directly between members' phones — no server involved. When two phones are near
+  each other (e.g. at a meeting on the same Wi-Fi), they find each other and exchange records.
+  When they're apart, records queue on each phone and go out when there's a connection.
 </p>
 <ul>
   <li>The indicator in the top-right of the home screen shows <em>Online</em>, <em>Syncing</em>, <em>Connecting</em> or <em>Offline</em>. Tap it for the Sync screen.</li>
-  <li><strong>Sync status</strong> lists your node state, your peer ID, how many records are queued, syncing, synced or failed, and a live activity log.</li>
+  <li><strong>Sync status</strong> lists your connection state, how many records are waiting, and a live activity log.</li>
   <li><strong>Settings → Sync now</strong> forces a round.</li>
   <li>A record that fails five times is marked failed and can be retried by hand from the Sync screen.</li>
-  <li>Members find each other directly: an invite link carries the inviter's network address, and every record a member publishes carries theirs, so once two phones have exchanged anything they can reach each other again without any directory or server.</li>
-  <li>Nothing is lost if a phone is asleep when a record is published: on every round each phone asks the members it knows for a list of what they hold and fetches whatever it is missing.</li>
+  <li>Members' phones find each other through the invite link and through records they've already exchanged — no directory or server needed.</li>
+  <li>Nothing is lost if a phone is asleep: on every round each phone asks the members it knows for what they hold and fetches whatever it is missing.</li>
   <li>Pressing Back on the home screen sends vBank to the background rather than closing it, so it keeps syncing; it stops about 15 minutes later to save battery.</li>
 </ul>
 <p><strong>Tip for meetings:</strong> if the mobile network is poor, put the phones on the same Wi-Fi (a hotspot works) and tap Sync now — members' phones will find each other on the local network.</p>
 
 <h2 id="backup">12. Backups and moving phones</h2>
 <ol class="steps">
-  <li><strong>Settings → Backup &amp; Restore → “Create new backup”.</strong></li>
+  <li><strong>Settings → Backup &amp; Restore → "Create new backup".</strong></li>
   <li><strong>Choose a PIN of at least 6 characters.</strong> The file contains your identity, your signing key, your groups and their encryption keys — anyone with the file <em>and</em> the PIN can act as you, so treat both carefully.</li>
   <li><strong>Export it</strong> to Drive, WhatsApp, a memory card, wherever you can find it again. Backups on the phone alone don't help if the phone is lost.</li>
-  <li><strong>On the new phone:</strong> “Restore from backup” on the welcome screen → import the file → enter the PIN. Your identity and groups come back, and you keep signing as the same person.</li>
+  <li><strong>On the new phone:</strong> "Restore from backup" on the welcome screen → import the file → enter the PIN. Your identity and groups come back, and you keep signing as the same person.</li>
 </ol>
 <div class="note">
   <strong>There is no recovery.</strong> No one can reset a forgotten backup PIN or a forgotten group
@@ -242,17 +241,17 @@
   <li><strong>Loan repayments</strong> — three days before an installment, and again when it is overdue.</li>
   <li><strong>Group activity</strong> — when new records, members or loan decisions arrive from other members.</li>
 </ul>
-<p class="muted" style="font-size:14px">Reminders are generated on your phone from your own records — nothing is scheduled through a server, so they work with no signal.</p>
+<p style="color:var(--muted-fg);font-size:14px">Reminders are generated on your phone from your own records — nothing is scheduled through a server, so they work with no signal.</p>
 
 <h2 id="winding-up">14. Ownership transfer and dissolution</h2>
 <h4>Transferring ownership</h4>
 <p>
-  Owner → ⚙ Settings → Members → ⋮ on an admin → “Transfer ownership”. You become an admin; the new owner's
+  Owner → ⚙ Settings → Members → ⋮ on an admin → "Transfer ownership". You become an admin; the new owner's
   phone countersigns the change the next time it syncs, so the group has a signed record of the handover.
 </p>
 <h4>Dissolving the group</h4>
 <p>
-  Owner → ⚙ Settings → “Dissolve group”. vBank refuses while any loan is still open or a reversal is
+  Owner → ⚙ Settings → "Dissolve group". vBank refuses while any loan is still open or a reversal is
   pending, and tells you what is blocking it. Once it goes through, every member is paid out their net
   balance as a recorded distribution and the group becomes read-only — the books stay for reference.
 </p>
@@ -260,14 +259,14 @@
 <h2 id="troubleshooting">15. Troubleshooting</h2>
 <table>
   <tr><th>What you see</th><th>What to do</th></tr>
-  <tr><td><em>Offline</em> that won't go away</td><td>Check the phone has data or Wi-Fi, then Settings → Sync now. The peer node needs a few seconds to start; the Sync screen's log shows progress.</td></tr>
-  <tr><td>Joining fails with “could not fetch the group”</td><td>The inviting phone must have published the group recently and be reachable. Have the admin open the app (ideally on the same Wi-Fi) and try again.</td></tr>
-  <tr><td>“Invalid passphrase” when joining</td><td>Passphrases are case-sensitive and include spaces exactly as typed. Ask the admin to say it out slowly; there is no reset.</td></tr>
+  <tr><td><em>Offline</em> that won't go away</td><td>Check the phone has data or Wi-Fi, then Settings → Sync now. The connection needs a few seconds to start; the Sync screen's log shows progress.</td></tr>
+  <tr><td>Joining fails with "could not fetch the group"</td><td>The inviting phone must have published the group recently and be reachable. Have the admin open the app (ideally on the same Wi-Fi) and try again.</td></tr>
+  <tr><td>"Invalid passphrase" when joining</td><td>Passphrases are case-sensitive and include spaces exactly as typed. Ask the admin to say it out slowly; there is no reset.</td></tr>
   <tr><td>Invite says used or expired</td><td>Invites work once. Ask for a new one from the invite screen.</td></tr>
-  <tr><td>Records stuck in “queued”</td><td>Nobody else is reachable yet. They will go out when a co-member's phone is online; nothing is lost meanwhile.</td></tr>
+  <tr><td>Records stuck in "queued"</td><td>Nobody else is reachable yet. They will go out when a co-member's phone is online; nothing is lost meanwhile.</td></tr>
   <tr><td>A record shows as failed</td><td>Sync screen → Retry next to it.</td></tr>
   <tr><td>My balance looks wrong</td><td>Open the Transactions tab and check for a duplicate or a missing entry, then use a reversal to correct it. Balances are derived from records, so fixing the record fixes the balance everywhere.</td></tr>
-  <tr><td>“Cannot dissolve: 1 loan(s) still outstanding”</td><td>Close or write off the loans first.</td></tr>
+  <tr><td>"Cannot dissolve: 1 loan(s) still outstanding"</td><td>Close or write off the loans first.</td></tr>
   <tr><td>Another member's phone shows different numbers</td><td>Both phones need to sync. After a sync, signed snapshots and per-author sequences reconcile the two copies automatically.</td></tr>
 </table>
 
@@ -281,16 +280,15 @@
   <li><strong>Agree the rules before you set them:</strong> interest, penalties and the loan ceiling are your group's decisions, and changing them mid-cycle causes arguments the app can't settle.</li>
 </ul>
 
-
 <h2 id="search">17. Finding things: search and filters</h2>
 <p>
   Once a group has run for a few months its lists get long. Every long list in vBank has the same two
   controls at the top: a search box and a row of filter chips. Search matches anywhere in the entry and
   ignores capitals, the chips narrow by kind or status, and the two combine — search inside the chip you
-  have selected. When a list is narrowed you see a small <em>“12 of 40”</em> counter, and if nothing matches
-  you get a “No matches” message naming what you searched for rather than an empty screen.
+  have selected. When a list is narrowed you see a small <em>"12 of 40"</em> counter, and if nothing matches
+  you get a "No matches" message naming what you searched for rather than an empty screen.
 </p>
-<p class="muted" style="font-size:14px">
+<p style="color:var(--muted-fg);font-size:14px">
   Search only appears once a list is long enough to need it, so a group with three transactions stays clean.
 </p>
 <table>
@@ -337,12 +335,11 @@
   particular meeting day recorded; or <code>reversed</code> under Activity to review corrections.
 </p>
 
-
 <h2 id="desktop">18. vBank on the desktop</h2>
 <p>
   The same app runs on Linux, macOS and Windows, with the same records, the same encryption and the same
-  peer-to-peer sync. What changes is the look: each build follows its platform's own design language
-  rather than imposing the phone's UI on your computer.
+  sync. What changes is the look: each build follows its platform's own design language rather than
+  imposing the phone's UI on your computer.
 </p>
 <table>
   <tr><th>Platform</th><th>What it looks like</th></tr>
@@ -370,7 +367,7 @@
   has no notification backend, so meeting and repayment reminders appear in the app rather than as
   system toasts.</li>
 </ul>
-<p class="muted" style="font-size:14px">
+<p style="color:var(--muted-fg);font-size:14px">
   Everything else — recording transactions, the full loan lifecycle, meetings and attendance, invites,
   reversals, backups, search and filters — is the same on desktop as on the phone, and the local database
   is encrypted on every platform.
@@ -380,11 +377,11 @@
 
 <footer class="site">
   <div class="wrap">
-    <span>© 2026 vBank</span>
+    <span>&copy; 2026 vBank</span>
     <nav>
       <a href="index.html">Home</a>
-      <a href="privacy.html">Privacy policy</a>
-      <a href="terms.html">Terms of use</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
       <a href="mailto:support@vbank.zm">Support</a>
     </nav>
   </div>
