@@ -1,19 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- vBank app icon: a member's passbook/ticket, monochrome. -->
-  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#0B0B0C"/>
-  <!-- ticket with side notches -->
-  <path fill="#FAFAFA" d="M268 176 H756 A56 56 0 0 1 812 232 V556 A44 44 0 0 0 812 644 V792 A56 56 0 0 1 756 848 H268 A56 56 0 0 1 212 792 V644 A44 44 0 0 0 212 556 V232 A56 56 0 0 1 268 176 Z"/>
-  <!-- perforation -->
-  <line x1="284" y1="600" x2="740" y2="600" stroke="#0B0B0C" stroke-width="10" stroke-dasharray="26 22" stroke-linecap="round"/>
-  <!-- the V mark -->
-  <path fill="#0B0B0C" d="M318 262 H412 L512 486 L612 262 H706 L560 546 H464 Z"/>
-  <!-- barcode -->
-  <g fill="#0B0B0C">
-    <rect x="300" y="672" width="14" height="96"/><rect x="326" y="672" width="8" height="96"/><rect x="346" y="672" width="22" height="96"/>
-    <rect x="380" y="672" width="8" height="96"/><rect x="400" y="672" width="14" height="96"/><rect x="426" y="672" width="28" height="96"/>
-    <rect x="466" y="672" width="8" height="96"/><rect x="486" y="672" width="14" height="96"/><rect x="512" y="672" width="8" height="96"/>
-    <rect x="532" y="672" width="22" height="96"/><rect x="566" y="672" width="14" height="96"/><rect x="592" y="672" width="8" height="96"/>
-    <rect x="612" y="672" width="28" height="96"/><rect x="652" y="672" width="8" height="96"/><rect x="672" y="672" width="14" height="96"/>
-    <rect x="698" y="672" width="26" height="96"/>
+  <!-- vBank app icon: the welcome-page mark — a dark rounded square with the landmark glyph. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="256" fill="#0B0B0C"/>
+  <g fill="none" stroke="#FAFAFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(256.0 256.0) scale(21.333333333333332)">
+    <line x1="3" x2="21" y1="22" y2="22"/>
+    <line x1="6" x2="6" y1="18" y2="11"/>
+    <line x1="10" x2="10" y1="18" y2="11"/>
+    <line x1="14" x2="14" y1="18" y2="11"/>
+    <line x1="18" x2="18" y1="18" y2="11"/>
+    <polygon points="12 2 20 7 4 7"/>
   </g>
 </svg>

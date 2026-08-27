@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/deeplink/pending_invite.dart';
 import '../../ui/ui.dart';
 
 class CreateAccountScreen extends ConsumerStatefulWidget {
@@ -28,7 +29,11 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(authProvider.notifier).createIdentity(name);
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        // Clear onboarding (Welcome included) so nothing underneath redirects.
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        continuePendingInvite(context);
+      }
     } catch (e) {
       if (mounted) showMessage(context, 'Error creating account: $e', error: true);
     } finally {
@@ -45,6 +50,18 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (PendingInvite.isPending) ...[
+              Panel(
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.mailOpen, size: 18),
+                    const Gap(12),
+                    Expanded(child: Text(PendingInvite.description).small),
+                  ],
+                ),
+              ),
+              const Gap(16),
+            ],
             const Text('What should we call you?').h3,
             const Gap(8),
             const Text('Your name is shown to the members of your groups. A signing key is created for you on this phone.').muted,

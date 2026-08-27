@@ -2,11 +2,13 @@ import '../models/report.dart';
 import '../core/storage/transaction_dao.dart';
 import '../core/storage/meeting_dao.dart';
 import '../core/storage/balance_dao.dart';
+import '../core/storage/member_dao.dart';
 
 class ReportService {
   final TransactionDao _transactionDao = TransactionDao();
   final MeetingDao _meetingDao = MeetingDao();
   final BalanceDao _balanceDao = BalanceDao();
+  final MemberDao _memberDao = MemberDao();
 
   Future<GroupReport> generateGroupReport({
     required String groupId,
@@ -15,6 +17,7 @@ class ReportService {
     final transactions = await _transactionDao.getByGroupId(groupId);
     final meetings = await _meetingDao.getByGroupId(groupId);
     final balances = await _balanceDao.getByGroupId(groupId);
+    final names = {for (final m in await _memberDao.getByGroupId(groupId)) m.peerId: m.name};
 
     final periodTransactions = transactions.where((t) =>
         t.timestamp.isAfter(period.start) &&
@@ -57,7 +60,7 @@ class ReportService {
     for (final balance in balances) {
       memberStatements.add(MemberStatement(
         peerId: balance.peerId,
-        memberName: balance.peerId,
+        memberName: names[balance.peerId] ?? 'Former member',
         totalContributed: balance.totalContributed,
         totalLoaned: balance.totalLoaned,
         totalRepaid: balance.totalRepaid,

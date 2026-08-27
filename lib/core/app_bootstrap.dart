@@ -8,6 +8,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart' show SimpleKeyPair;
 import 'package:flutter/widgets.dart';
@@ -18,7 +19,30 @@ import '../providers/ipfs_provider.dart';
 import '../providers/notification_provider.dart';
 import 'app_platform.dart';
 import 'deeplink/deeplink_handler.dart';
-import 'ipfs/sync_manager.dart' show SyncChange;
+import 'ipfs/sync_manager.dart' show SyncChange, SyncChangeType;
+import 'notifications/notification_service.dart';
+
+/// What a tapped notification points at.
+class NotificationTarget {
+  final SyncChangeType type;
+  final String groupId;
+  final String? recordId;
+  const NotificationTarget({required this.type, required this.groupId, this.recordId});
+
+  String encode() => jsonEncode({'type': type.name, 'groupId': groupId, 'recordId': recordId});
+
+  static NotificationTarget? decode(String payload) {
+    try {
+      final m = jsonDecode(payload) as Map<String, dynamic>;
+      final type = SyncChangeType.values.where((t) => t.name == m['type']).firstOrNull;
+      final groupId = m['groupId'] as String?;
+      if (type == null || groupId == null) return null;
+      return NotificationTarget(type: type, groupId: groupId, recordId: m['recordId'] as String?);
+    } catch (_) {
+      return null; // older payloads were a bare group id
+    }
+  }
+}
 
 class AppBootstrap extends ConsumerStatefulWidget {
   final Widget child;
@@ -27,7 +51,11 @@ class AppBootstrap extends ConsumerStatefulWidget {
   /// Desktop shells that have nowhere to route a link can leave this null.
   final void Function(DeepLinkResult link)? onDeepLink;
 
-  const AppBootstrap({super.key, required this.child, this.onDeepLink});
+  /// Called when the user taps one of our notifications (including the tap
+  /// that cold-started the app).
+  final void Function(NotificationTarget target)? onNotificationTap;
+
+  const AppBootstrap({super.key, required this.child, this.onDeepLink, this.onNotificationTap});
 
   @override
   ConsumerState<AppBootstrap> createState() => _AppBootstrapState();
@@ -37,6 +65,7 @@ class _AppBootstrapState extends ConsumerState<AppBootstrap> with WidgetsBinding
   final _deepLinkHandler = DeepLinkHandler();
   StreamSubscription<DeepLinkResult>? _deepLinkSub;
   StreamSubscription<SyncChange>? _syncChangesSub;
+  StreamSubscription<String>? _notificationTapSub;
 
   @override
   void initState() {
@@ -49,6 +78,7 @@ class _AppBootstrapState extends ConsumerState<AppBootstrap> with WidgetsBinding
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _syncChangesSub?.cancel();
+    _notificationTapSub?.cancel();
     _deepLinkSub?.cancel();
     _deepLinkHandler.dispose();
     super.dispose();
@@ -71,8 +101,16 @@ class _AppBootstrapState extends ConsumerState<AppBootstrap> with WidgetsBinding
               title: title,
               body: change.body ?? '',
               groupId: change.groupId,
+              payload: NotificationTarget(type: change.type, groupId: change.groupId, recordId: change.recordId).encode(),
             );
       });
+      final onTap = widget.onNotificationTap;
+      if (onTap != null) {
+        _notificationTapSub = NotificationService.taps.listen((payload) {
+          final target = NotificationTarget.decode(payload);
+          if (target != null) onTap(target);
+        });
+      }
     }
 
     final onDeepLink = widget.onDeepLink;

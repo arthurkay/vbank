@@ -4,12 +4,15 @@ Source of truth is the SVG in `assets/brand/`:
 
 | file | purpose |
 | --- | --- |
-| `icon.svg` | full app icon (dark rounded square + ticket mark) |
-| `icon_foreground.svg` | Android adaptive-icon foreground (ticket only, inside the safe zone) |
-| `notification.svg` | Android status-bar glyph (white silhouette, V cut out) |
+| `icon.svg` | full app icon (dark rounded square + the landmark glyph) |
+| `icon_foreground.svg` | Android adaptive-icon foreground (glyph only, inside the safe zone) |
+| `notification.svg` | Android status-bar glyph (white landmark silhouette) |
 
-The mark is a member's passbook/ticket — the perforated card of a village bank
-meeting — in the monochrome, rounded-card style of the app.
+The mark replicates the welcome page (Get started / Restore from backup): a
+dark rounded square (radius ¼ of the side) with Lucide's `landmark` glyph at
+half the side, in the app's monochrome style. The website favicon,
+`docs/icon-192.png` and `docs/store/play-icon-512.png` are resized copies of
+`icon_1024.png`.
 
 ## Regenerate
 

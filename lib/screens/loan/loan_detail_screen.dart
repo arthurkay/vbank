@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../ui/ui.dart';
+import '../../widgets/loan_tile.dart';
 
 /// DESIGN_PLAN §15 / §27 loan_detail + approve_loan + repayment screens.
 class LoanDetailScreen extends ConsumerStatefulWidget {
@@ -49,18 +50,12 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
     return v;
   }
 
-  static StatusTone _tone(LoanStatus s) => switch (s) {
-        LoanStatus.pending => StatusTone.neutral,
-        LoanStatus.approved || LoanStatus.disbursed || LoanStatus.repaying => StatusTone.primary,
-        LoanStatus.completed => StatusTone.secondary,
-        LoanStatus.rejected || LoanStatus.defaulted => StatusTone.destructive,
-      };
-
   @override
   Widget build(BuildContext context) {
     final group = ref.watch(selectedGroupProvider);
     final loanAsync = ref.watch(loanProvider(widget.loanId));
     final scheduleAsync = ref.watch(loanScheduleProvider(widget.loanId));
+    final progress = ref.watch(loanProgressProvider(widget.loanId)).value;
     final canWrite = ref.watch(canWriteProvider);
     final me = ref.watch(authProvider).identity?.peerId;
     final scheme = Theme.of(context).colorScheme;
@@ -79,33 +74,44 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
           final notifier = ref.read(loanListProvider(group.id).notifier);
           final isBorrower = me == loan.borrowerPeerId;
 
+          final borrowerName = borrower?.name ?? 'Unknown member';
+          final settled = loan.status == LoanStatus.completed;
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              Panel(
-                child: Column(
+              // The loan as a ticket: who and how much on top, repayment
+              // progress below the perforation.
+              HeroCard(
+                body: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(fmtMoney(currency, loan.requestedAmount)).x2Large.bold),
-                        StatusBadge(loan.status.name, tone: _tone(loan.status)),
-                      ],
+                    Expanded(
+                      child: Metric(
+                        label: '${loan.approvedAmount > 0 ? 'Loan to' : 'Requested by'} $borrowerName',
+                        value: fmtMoney(currency, progress?.borrowed ?? loan.requestedAmount),
+                        large: true,
+                      ),
                     ),
                     const Gap(12),
-                    InfoRow('Borrower', borrower?.name ?? loan.borrowerPeerId),
-                    InfoRow('Term', '${loan.termWeeks} weeks'),
-                    InfoRow('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
-                    if (loan.approvedAmount > 0) InfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
-                    if (loan.approvedAmount > 0) InfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
-                    if (loan.reason != null && loan.reason!.isNotEmpty) InfoRow('Reason', loan.reason!),
-                    InfoRow('Requested', fmtDateTime(loan.requestedAt)),
-                    if (loan.disbursedAt != null) InfoRow('Disbursed', fmtDateTime(loan.disbursedAt!)),
-                    if (loan.completedAt != null) InfoRow('Completed', fmtDateTime(loan.completedAt!)),
+                    Opacity(opacity: 0.85, child: OutlineBadge(child: Text(loanStatusLabel(loan.status)))),
                   ],
                 ),
+                footer: progress == null || progress.totalDue <= 0
+                    ? Row(
+                        children: [
+                          Expanded(child: Metric(label: 'Term', value: '${loan.termWeeks} weeks')),
+                          Expanded(
+                            child: Metric(
+                              label: 'Interest',
+                              value: '${(loan.interestRate * 100).toStringAsFixed(0)}%',
+                              align: CrossAxisAlignment.end,
+                            ),
+                          ),
+                        ],
+                      )
+                    : LoanProgressView(progress: progress, currency: currency),
               ),
-              const Gap(12),
+              const Gap(16),
               if (canWrite) ...[
                 if (loan.status == LoanStatus.pending && !isBorrower) ...[
                   Button.primary(
@@ -164,6 +170,28 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                   ),
                 const Gap(12),
               ],
+              if (progress != null && (progress.repayments.isNotEmpty || loan.isActive || settled)) ...[
+                SectionTitle('Repayments', trailing: Text('${progress.repayments.length}').xSmall.muted),
+                RepaymentList(repayments: progress.repayments, group: group, currency: currency),
+              ],
+              const SectionTitle('Details'),
+              Panel(
+                child: Column(
+                  children: [
+                    InfoRow('Borrower', borrowerName),
+                    InfoRow('Requested', fmtMoney(currency, loan.requestedAmount)),
+                    if (loan.approvedAmount > 0) InfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
+                    InfoRow('Term', '${loan.termWeeks} weeks'),
+                    InfoRow('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
+                    if (loan.approvedAmount > 0) InfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
+                    if (loan.reason != null && loan.reason!.isNotEmpty) InfoRow('Reason', loan.reason!),
+                    InfoRow('Requested on', fmtDateTime(loan.requestedAt)),
+                    if (loan.approvedByPeerId != null) InfoRow('Approved by', memberName(group, loan.approvedByPeerId!)),
+                    if (loan.disbursedAt != null) InfoRow('Paid out', fmtDateTime(loan.disbursedAt!)),
+                    if (loan.completedAt != null) InfoRow('Settled', fmtDateTime(loan.completedAt!)),
+                  ],
+                ),
+              ),
               if (loan.isActive || loan.status == LoanStatus.completed || loan.status == LoanStatus.defaulted) ...[
                 const SectionTitle('Repayment schedule'),
                 scheduleAsync.when(
@@ -185,13 +213,13 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                                     ? scheme.destructive
                                     : scheme.mutedForeground,
                           ),
-                          title: Text('Installment ${s.installmentNumber} — ${fmtMoney(currency, s.expectedAmount)}'),
+                          title: Text('Instalment ${s.installmentNumber} · ${fmtMoney(currency, s.expectedAmount)}'),
                           subtitle: Text(
                             'Due ${fmtDate(s.dueDate)}'
-                            '${s.paidAmount > 0 ? ' · paid ${s.paidAmount.toStringAsFixed(2)}' : ''}'
-                            '${s.penalty > 0 ? ' · penalty ${s.penalty.toStringAsFixed(2)}' : ''}',
+                            '${s.paidAmount > 0 ? ' · paid ${fmtMoney(currency, s.paidAmount)}' : ''}'
+                            '${s.penalty > 0 ? ' · penalty ${fmtMoney(currency, s.penalty)}' : ''}',
                           ).small.muted,
-                          trailing: Text(s.status.name).small,
+                          trailing: Text(s.status.label).small,
                         ),
                     ],
                   ),

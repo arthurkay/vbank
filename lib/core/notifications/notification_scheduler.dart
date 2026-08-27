@@ -134,13 +134,14 @@ class NotificationScheduler {
     required String title,
     required String body,
     String? groupId,
+    String? payload,
   }) async {
     if (!await _enabled(SettingKeys.notifyActivity)) return;
     await _service.showNotification(
       id: NotificationService.idFor(key),
       title: title,
       body: body,
-      payload: groupId,
+      payload: payload ?? groupId,
     );
   }
 

@@ -1,0 +1,113 @@
+name: Release desktop builds
+
+# Tag a commit `vX.Y.Z` and push the tag: this builds the Linux, Windows and
+# macOS apps and attaches them to a GitHub release of the same name.
+# Mobile builds are not published here.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.41.6'
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install GTK and build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev libayatana-appindicator3-dev
+      - run: flutter config --enable-linux-desktop
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - name: Package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          STAGE=vbank-$VERSION-linux-x64
+          mkdir -p "$STAGE"
+          cp -r build/linux/x64/release/bundle/. "$STAGE/"
+          cp linux/vbank.desktop tool/brand/install-linux.sh "$STAGE/"
+          cp assets/brand/icon_1024.png "$STAGE/vbank.png"
+          tar -czf "$STAGE.tar.gz" "$STAGE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: vbank-*-linux-x64.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $stage = "vbank-$version-windows-x64"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item -Recurse build/windows/x64/runner/Release/* $stage/
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: vbank-*-windows-x64.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - name: Package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          APP=$(ls -d build/macos/Build/Products/Release/*.app | head -1)
+          STAGE=vbank-$VERSION-macos
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          hdiutil create -volname "vBank" -srcfolder "$STAGE" -ov -format UDZO "$STAGE.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: vbank-*-macos.dmg
+
+  release:
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: vBank ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.dmg

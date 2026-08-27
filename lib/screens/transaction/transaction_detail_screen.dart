@@ -3,8 +3,11 @@ import '../../models/transaction.dart';
 import '../../models/transaction_reversal.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
+import '../../providers/loan_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../ui/ui.dart';
+import '../../widgets/loan_tile.dart';
+import '../loan/loan_detail_screen.dart';
 
 /// DESIGN_PLAN §27 transaction_detail + reversal_request screens.
 class TransactionDetailScreen extends ConsumerStatefulWidget {
@@ -74,7 +77,11 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
   @override
   Widget build(BuildContext context) {
     final tx = widget.transaction;
-    final group = ref.watch(selectedGroupProvider);
+    final selected = ref.watch(selectedGroupProvider);
+    final group = selected?.id == tx.groupId
+        ? selected
+        : ref.watch(groupListProvider).value?.where((g) => g.id == tx.groupId).firstOrNull ?? selected;
+    final progress = tx.loanId == null ? null : ref.watch(loanProgressProvider(tx.loanId!)).value;
     final me = ref.watch(authProvider).identity?.peerId;
     final canWrite = ref.watch(canWriteProvider);
     final reversals = (ref.watch(reversalsProvider(tx.groupId)).value ?? const <TransactionReversal>[])
@@ -118,17 +125,45 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                   ],
                 ),
                 const Gap(12),
-                InfoRow('Type', tx.type.name),
+                InfoRow('Type', titleCase(tx.type.name)),
+                InfoRow('Group', group?.name ?? 'Unknown group'),
                 InfoRow('From', nameOf(tx.fromPeerId)),
                 InfoRow('To', nameOf(tx.toPeerId)),
                 InfoRow('Recorded by', nameOf(tx.authorPeerId)),
                 InfoRow('When', fmtDateTime(tx.timestamp)),
                 if (tx.note != null && tx.note!.isNotEmpty) InfoRow('Note', tx.note!),
-                InfoRow('Sequence', '#${tx.sequenceNumber}'),
-                InfoRow('ID', tx.id),
               ],
             ),
           ),
+          if (progress != null) ...[
+            SectionTitle(
+              tx.type == TransactionType.repayment ? 'Repayment towards' : 'Loan',
+              trailing: Text(loanStatusLabel(progress.loan.status)).xSmall.muted,
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => pushScreen(context, LoanDetailScreen(loanId: progress.loan.id)),
+              child: Panel(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${fmtMoney(currency, progress.borrowed)} to ${memberName(group, progress.loan.borrowerPeerId)}',
+                          ).semiBold,
+                        ),
+                        const Icon(LucideIcons.chevronRight, size: 16),
+                      ],
+                    ),
+                    const Gap(12),
+                    LoanProgressView(progress: progress, currency: currency),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const Gap(12),
           if (canRequest)
             Button.outline(

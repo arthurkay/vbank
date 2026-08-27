@@ -63,6 +63,14 @@ void main() {
     }
   }
 
+  /// Yaru toasts sit bottom-left, right where the loan page's action buttons
+  /// land, and a tap on a toast is swallowed. Wait for one to go away.
+  Future<void> waitGone(WidgetTester tester, Finder f, [double seconds = 8]) async {
+    for (var i = 0; i < seconds * 4 && f.evaluate().isNotEmpty; i++) {
+      await settle(tester, 0.25);
+    }
+  }
+
   /// Polls [probe] until it returns non-null or [timeout] passes, pumping the
   /// UI meanwhile so sync callbacks and rebuilds keep flowing.
   Future<T?> waitFor<T>(WidgetTester tester, Future<T?> Function() probe, Duration timeout, String what) async {
@@ -227,9 +235,11 @@ void main() {
     await tester.tap(filled('Approve'));
     await settle(tester, 2);
     await tester.tap(filled('Approve').last);
-    await settle(tester, 5);
+    await settle(tester, 3);
+    await waitGone(tester, find.textContaining('Loan approved'));
     await tester.tap(filled('Record disbursement'));
-    await settle(tester, 6);
+    await settle(tester, 4);
+    await waitGone(tester, find.textContaining('Loan disbursed'));
     await tester.tap(filled('Record repayment'));
     await settle(tester, 2);
     await tester.tap(filled('Record').last);

@@ -6,6 +6,7 @@ import '../../models/app_backup.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../services/backup_service.dart';
+import '../../core/deeplink/pending_invite.dart';
 import '../../ui/ui.dart';
 
 /// DESIGN_PLAN §22 restore flow: import a backup file (or pick one already on
@@ -91,6 +92,7 @@ class _RestoreBackupScreenState extends ConsumerState<RestoreBackupScreen> {
       if (mounted) {
         _msg('Restored ${restored.identity.displayName} and ${restored.groups.length} group(s)');
         Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+        continuePendingInvite(context);
       }
     } catch (e) {
       _msg('Error restoring backup: $e', error: true);

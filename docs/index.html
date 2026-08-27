@@ -8,6 +8,9 @@
 <meta property="og:title" content="vBank — village banking that works offline">
 <meta property="og:description" content="A savings-group ledger that lives on your members' phones. Signed records, encrypted sync, no server.">
 <meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -16,53 +19,86 @@
 
 <header class="site">
   <div class="wrap">
-    <a class="brand" href="index.html"><span class="mark">vB</span> vBank</a>
+    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="30" height="30"> vBank</a>
     <nav class="top">
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
-      <a href="guide.html">Guide</a>
       <a href="#faq">FAQ</a>
       <a href="privacy.html">Privacy</a>
-      <a href="terms.html">Terms</a>
+      <a class="cta" href="guide.html">Read the guide</a>
     </nav>
   </div>
 </header>
 
 <main>
 
-<div class="wrap hero">
-  <span class="pill">Offline-first · peer-to-peer · no server</span>
-  <h1>Village banking that works<br>where the network doesn't.</h1>
-  <p class="lead">
-    vBank keeps your savings group's books on the phones of its own members. Record contributions,
-    run loans, track meetings and print member statements — then sync straight to the other members'
-    phones when you meet or when you have signal. Every record is signed by the person who wrote it
-    and encrypted with a passphrase only your group knows.
-  </p>
-  <div class="cta">
-    <a class="btn primary" href="guide.html">Read the guide</a>
-    <a class="btn" href="#screenshots">See the app</a>
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill">Offline-first · peer-to-peer · no server</span>
+      <h1>Your savings group's books,<br>on <em>everyone's</em> phone.</h1>
+      <p class="lead">
+        vBank replaces the treasurer's paper ledger with a shared one: every contribution, loan, repayment
+        and meeting is recorded once, signed by the person who wrote it, and synced straight to the other
+        members' phones — when you meet, or whenever there is signal. No bank. No server. No data charges
+        between meetings.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href="guide.html">Get started</a>
+        <a class="btn" href="#screenshots">See the app</a>
+      </div>
+      <div class="trust">
+        <span>Works without internet</span>
+        <span>Every record signed</span>
+        <span>Encrypted with your passphrase</span>
+        <span>Free, no ads</span>
+      </div>
+    </div>
+
+    <aside class="ticket" aria-label="Example group card">
+      <div class="eyebrow">Ngombe Circle · group fund</div>
+      <div class="big">ZMW 4,860.00</div>
+      <div class="row">
+        <div><small>Available to lend</small><b>ZMW 3,110.00</b></div>
+        <div><small>Out on loan</small><b>ZMW 1,750.00</b></div>
+      </div>
+      <div class="perf"><i></i></div>
+      <div class="row">
+        <div><small>Grace's loan · ZMW 1,000</small><b>Repaid ZMW 275 of 1,100</b></div>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="members">
+        <span class="av"><span>GM</span><span>JB</span><span>TK</span><span>+9</span></span>
+        12 members · next meeting Sat 09:00
+      </div>
+    </aside>
   </div>
-  <p class="muted" style="margin-top:14px;font-size:14px">
-    Android — direct APK while the store listing is in review. Linux, macOS and Windows desktop
-    builds ship the same books with each platform's native look. iOS build in progress.
-  </p>
+</div>
+
+<div class="strip">
+  <div class="wrap">
+    <div><b>0</b><span>servers, accounts or fees</span></div>
+    <div><b>100%</b><span>of records signed and encrypted</span></div>
+    <div><b>4</b><span>platforms — Android, Linux, macOS, Windows</span></div>
+    <div><b>1</b><span>shared ledger, however many phones</span></div>
+  </div>
 </div>
 
 <section id="what">
   <div class="wrap">
-    <h2>What it is</h2>
-    <p>
+    <span class="eyebrow">What it is</span>
+    <h2>A ledger for the way village banking actually works</h2>
+    <p class="intro">
       Village banking (also called <em>chilimba</em>, merry-go-round, susu or ROSCA) is a group of people
       who meet regularly, each pay a fixed contribution into a common fund, and lend that fund to members
-      at an agreed interest rate. The books are usually kept in a paper ledger held by one person — which
-      is fine until the book is lost, disputed, or the treasurer misses a meeting.
+      at an agreed interest rate.
     </p>
     <p>
-      vBank is that ledger, on the phones of every member at once. There is no company holding your money
-      and no server holding your records: <strong>vBank moves no money</strong>. Cash is still handled in
-      the room, exactly as it is today — vBank records what happened, proves who recorded it, and makes
-      sure every member's copy agrees.
+      The books are usually kept in a paper ledger held by one person — which is fine until the book is
+      lost, disputed, or the treasurer misses a meeting. vBank is that ledger, on the phones of every
+      member at once. There is no company holding your money and no server holding your records:
+      <strong>vBank moves no money</strong>. Cash is still handled in the room, exactly as it is today —
+      vBank records what happened, proves who recorded it, and makes sure every member's copy agrees.
     </p>
     <div class="note">
       <strong>vBank is a record-keeping tool, not a bank.</strong>
@@ -72,103 +108,100 @@
   </div>
 </section>
 
+<section id="who">
+  <div class="wrap">
+    <span class="eyebrow">Who it is for</span>
+    <h2>Treasurers keep the books. Members keep an eye on them.</h2>
+    <div class="split">
+      <div class="card reveal">
+        <div class="n">T</div>
+        <h3>For the treasurer and admins</h3>
+        <ul>
+          <li>Record contributions, penalties and withdrawals against a member in two taps.</li>
+          <li>Approve, pay out and collect loans against a repayment schedule that does the arithmetic.</li>
+          <li>See at a glance how much the group can lend right now and how much is out with borrowers.</li>
+          <li>Run the meeting from the phone: attendance, who paid, what was collected.</li>
+        </ul>
+      </div>
+      <div class="card reveal">
+        <div class="n">M</div>
+        <h3>For every member</h3>
+        <ul>
+          <li>Your own copy of the group's books, updated as records arrive.</li>
+          <li>Your balance, your contributions and your loan — repaid so far and still owed.</li>
+          <li>Request a loan from your phone; eligibility is checked before you ask.</li>
+          <li>Reminders for meetings, contributions and repayments.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="features">
   <div class="wrap">
-    <h2>Features</h2>
+    <span class="eyebrow">Features</span>
+    <h2>Everything a group needs, nothing it doesn't</h2>
     <div class="grid">
-      <div class="card">
-        <h3>Groups on your terms</h3>
+      <div class="card reveal"><div class="n">1</div><h3>Groups on your terms</h3>
         <p>Contribution amount and frequency, interest rate, late penalty, maximum loan multiple, minimum
-        contributions before borrowing, and whether new members and loans need admin approval.</p>
-      </div>
-      <div class="card">
-        <h3>Contributions &amp; penalties</h3>
+        contributions before borrowing, and whether new members and loans need admin approval.</p></div>
+      <div class="card reveal"><div class="n">2</div><h3>Contributions &amp; penalties</h3>
         <p>Admins record contributions, penalties and withdrawals against a member. Every entry is signed
-        and numbered, so two admins recording at once can never collide or overwrite each other.</p>
-      </div>
-      <div class="card">
-        <h3>Loans end to end</h3>
-        <p>Request, approve or reject, disburse, then track a weekly repayment schedule with interest,
-        late penalties, and automatic completion. Eligibility rules are checked before a request is made.</p>
-      </div>
-      <div class="card">
-        <h3>Meetings &amp; attendance</h3>
+        and numbered, so two admins recording at once can never collide or overwrite each other.</p></div>
+      <div class="card reveal"><div class="n">3</div><h3>Loans end to end</h3>
+        <p>Request, approve or reject, pay out, then track a weekly repayment schedule with interest and
+        late penalties. Every loan shows what has been repaid and what is still owed.</p></div>
+      <div class="card reveal"><div class="n">4</div><h3>Money at a glance</h3>
+        <p>The group fund split into what is available to lend and what is out on loan, with the interest
+        still expected — so the group never lends money it doesn't have.</p></div>
+      <div class="card reveal"><div class="n">5</div><h3>Meetings &amp; attendance</h3>
         <p>Schedule meetings, mark who was present, excused or absent, tick off who paid, and close the
-        meeting with the total collected.</p>
-      </div>
-      <div class="card">
-        <h3>Reports &amp; statements</h3>
-        <p>Group fund balance, contributions, loans out and repaid, penalties, and a per-member statement
-        for any period — 1 month, 3 months, a year, or everything.</p>
-      </div>
-      <div class="card">
-        <h3>Corrections that leave a trail</h3>
-        <p>Mistakes are reversed, not deleted: a member requests a reversal with a reason, an admin
-        approves it, and both the original and the correction stay in the history.</p>
-      </div>
-      <div class="card">
-        <h3>Find anything</h3>
+        meeting with the total collected.</p></div>
+      <div class="card reveal"><div class="n">6</div><h3>Reports &amp; statements</h3>
+        <p>Group fund, contributions, loans out and repaid, penalties, and a per-member statement for any
+        period — 1 month, 3 months, a year, or everything.</p></div>
+      <div class="card reveal"><div class="n">7</div><h3>Corrections that leave a trail</h3>
+        <p>Mistakes are reversed, not deleted: a member requests a reversal with a reason, an admin approves
+        it, and both the original and the correction stay in the history.</p></div>
+      <div class="card reveal"><div class="n">8</div><h3>Find anything</h3>
         <p>Search and filter every long list — activity, transactions, members, loans and meetings — by
-        name, amount, date, type or status, with a live count of what matched.</p>
-      </div>
-      <div class="card">
-        <h3>Desktop, natively</h3>
-        <p>Linux, macOS and Windows builds that follow each platform's own design system — Yaru on
-        Ubuntu, macOS's sidebar and sheets, Fluent on Windows — over the same encrypted books.</p>
-      </div>
-      <div class="card">
-        <h3>Works offline</h3>
-        <p>Everything works with no signal. Records queue on the phone and go out when you next have a
-        connection or when members are together; the Sync screen shows exactly what is waiting.</p>
-      </div>
-      <div class="card">
-        <h3>Invites that expire</h3>
-        <p>Add members with a QR code or link that works once and expires. The invite is signed by the
-        admin who created it, so nobody can forge their way into your group.</p>
-      </div>
-      <div class="card">
-        <h3>Encrypted backups</h3>
-        <p>Export your identity, groups and group keys as one PIN-encrypted file. Restore it on a new
-        phone and carry on where you left off.</p>
-      </div>
-      <div class="card">
-        <h3>Reminders</h3>
-        <p>Meeting reminders the day before, contribution-due nudges on meeting mornings, repayment
-        reminders three days ahead, and overdue alerts. Each type can be switched off.</p>
-      </div>
-      <div class="card">
-        <h3>Roles that mean something</h3>
-        <p>Owner, admin and member. Only owners and admins write records; members read their group and
-        request loans or reversals. Rules are enforced again on every phone that receives a record.</p>
-      </div>
-      <div class="card">
-        <h3>Winding up cleanly</h3>
-        <p>Transfer ownership when the treasurer changes, or dissolve the group: every member is paid out
-        their net balance and the books become read-only.</p>
-      </div>
+        name, amount, date, type or status.</p></div>
+      <div class="card reveal"><div class="n">9</div><h3>Desktop, natively</h3>
+        <p>Linux, macOS and Windows builds that follow each platform's own design system — Yaru on Ubuntu,
+        macOS's sidebar and sheets, Fluent on Windows — over the same encrypted books.</p></div>
+      <div class="card reveal"><div class="n">10</div><h3>Works offline</h3>
+        <p>Everything works with no signal. Records queue on the phone and go out when members are together
+        or when you next have a connection; the Sync screen shows exactly what is waiting.</p></div>
+      <div class="card reveal"><div class="n">11</div><h3>Invites that expire</h3>
+        <p>Add members with a QR code or link that works once and expires. The invite is signed by the admin
+        who created it, so nobody can forge their way into your group.</p></div>
+      <div class="card reveal"><div class="n">12</div><h3>Encrypted backups</h3>
+        <p>Export your identity, groups and group keys as one PIN-encrypted file. Restore it on a new phone
+        and carry on where you left off.</p></div>
     </div>
   </div>
 </section>
 
 <section id="screenshots">
   <div class="wrap">
-    <h2>Screenshots</h2>
+    <span class="eyebrow">Screenshots</span>
+    <h2>Clean, calm, and readable in the sun</h2>
     <div class="shots">
-      <figure class="shot"><img src="screenshots/web/12-home.png" alt="vBank groups list" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/12-home.png" alt="vBank groups list" loading="lazy" width="540"></div>
         <figcaption>Your groups, with sync status at a glance.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/01-group-overview.png" alt="Group overview with fund balance" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/01-group-overview.png" alt="Group overview with fund balance" loading="lazy" width="540"></div>
         <figcaption>Group fund, your balance, and the group's rules.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/02-group-transactions.png" alt="Transaction history" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/02-group-transactions.png" alt="Transaction history" loading="lazy" width="540"></div>
         <figcaption>Contributions, penalties, loans and repayments.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/05-loan-detail.png" alt="Loan detail with repayment schedule" loading="lazy" width="540">
-        <figcaption>A loan with its weekly repayment schedule.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/07-meeting-detail.png" alt="Meeting attendance" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/05-loan-detail.png" alt="Loan detail with repayment schedule" loading="lazy" width="540"></div>
+        <figcaption>A loan with its repayments and schedule.</figcaption></figure>
+      <figure class="shot"><div class="phone"><img src="screenshots/web/07-meeting-detail.png" alt="Meeting attendance" loading="lazy" width="540"></div>
         <figcaption>Attendance and who has paid, per meeting.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/08-reports.png" alt="Group reports" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/08-reports.png" alt="Group reports" loading="lazy" width="540"></div>
         <figcaption>Reports and per-member statements.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/09-invite.png" alt="Invite QR code" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/09-invite.png" alt="Invite QR code" loading="lazy" width="540"></div>
         <figcaption>One-use, expiring invite as a QR code.</figcaption></figure>
-      <figure class="shot"><img src="screenshots/web/14-sync-status.png" alt="Sync status" loading="lazy" width="540">
+      <figure class="shot"><div class="phone"><img src="screenshots/web/14-sync-status.png" alt="Sync status" loading="lazy" width="540"></div>
         <figcaption>What synced, what's queued, what failed.</figcaption></figure>
     </div>
   </div>
@@ -176,53 +209,33 @@
 
 <section id="how">
   <div class="wrap">
-    <h2>How it works</h2>
-
-    <h3>No server, no account</h3>
-    <p>
-      There is no sign-up, no phone number and no email. When you first open vBank it generates a
-      cryptographic identity on your phone: a signing key and a peer ID. That identity is what other
-      members recognise you by, and it never leaves your device except inside a backup file you create
-      yourself.
-    </p>
-
-    <h3>Records are signed</h3>
-    <p>
-      Every transaction, loan decision, meeting and roster change is signed with the recorder's key
-      (Ed25519). When another member's phone receives it, the signature is checked and the sender's role
-      is checked before anything is written. A record from someone who isn't an active admin of that group
-      is discarded — being able to send a message is not the same as being allowed to write in the books.
-    </p>
-
-    <h3>Records are encrypted for your group</h3>
-    <p>
-      Group data is encrypted with XChaCha20-Poly1305 using a key derived from the group passphrase
-      (PBKDF2-HMAC-SHA256). The passphrase is set by the person who creates the group and shared with new
-      members in person — never inside the invite link. Anything vBank puts on the network is ciphertext;
-      without your group's passphrase it is meaningless.
-    </p>
-
-    <h3>Sync is peer-to-peer</h3>
-    <p>
-      Phones exchange those encrypted records directly over IPFS — publishing to a per-group topic and
-      finding each other through the network's distributed hash table. There is no vBank server in the
-      middle, which also means there is no vBank outage, no subscription, and nobody to subpoena for your
-      group's books.
-    </p>
-
-    <h3>The phone's copy is encrypted too</h3>
-    <p>
-      The local database is encrypted with SQLCipher, keyed from a secret held in the device's hardware-backed
-      keystore. If your phone is lost, the books are not readable by pulling the file off it.
-    </p>
-
-    <h3>Conflicts resolve predictably</h3>
-    <p>
-      Each admin's records carry their own sequence numbers, so offline admins never produce colliding
-      entries. Group settings and the member roster travel as signed snapshots ordered by version, so the
-      newest authorised change wins and everyone converges on the same books.
-    </p>
-
+    <span class="eyebrow">How it works</span>
+    <h2>Trust built into the records, not into a company</h2>
+    <div class="steps-grid">
+      <div class="step reveal"><h3>No server, no account</h3>
+        <p>There is no sign-up, phone number or email. On first open vBank generates a cryptographic identity
+        on your phone: a signing key and a peer address. That is how other members recognise you, and it
+        never leaves your device except inside a backup you create yourself.</p></div>
+      <div class="step reveal"><h3>Records are signed</h3>
+        <p>Every transaction, loan decision, meeting and roster change is signed with the recorder's key
+        (Ed25519). Receiving phones check the signature and the sender's role before writing anything —
+        being able to send a message is not the same as being allowed to write in the books.</p></div>
+      <div class="step reveal"><h3>Encrypted for your group</h3>
+        <p>Group data is encrypted with a key derived from the group passphrase (PBKDF2-HMAC-SHA256,
+        XChaCha20-Poly1305). The passphrase is shared in person — never inside the invite link. Anything
+        on the network is ciphertext.</p></div>
+      <div class="step reveal"><h3>Sync is peer-to-peer</h3>
+        <p>Members' phones talk to each other directly over libp2p: an invite carries the inviter's address,
+        every record carries its author's, and on each round a phone asks the members it knows what they
+        hold and fetches whatever it missed. No vBank server in the middle — so no outage and no bill.</p></div>
+      <div class="step reveal"><h3>The phone's copy is encrypted too</h3>
+        <p>The local database is encrypted with SQLCipher, keyed from a secret held in the device's
+        hardware-backed keystore. A lost phone does not leak the books.</p></div>
+      <div class="step reveal"><h3>Conflicts resolve predictably</h3>
+        <p>Each admin's records carry their own sequence numbers, so offline admins never collide. Group
+        settings and the roster travel as signed snapshots ordered by version; the newest authorised change
+        wins and everyone converges on the same books.</p></div>
+    </div>
     <div class="note">
       <strong>What this means for you.</strong>
       Keep your group passphrase and your backup PIN safe. Nobody — not us, not your co-members — can
@@ -233,68 +246,67 @@
 
 <section id="guide-teaser">
   <div class="wrap">
-    <h2>Getting started</h2>
+    <span class="eyebrow">Getting started</span>
+    <h2>Five steps to your first meeting</h2>
     <ol class="steps">
       <li><strong>Create your identity</strong> Open vBank, enter the name your group knows you by. No number, no email.</li>
       <li><strong>Create a group or join one</strong> The treasurer creates the group and sets the rules and passphrase; everyone else scans an invite QR and types the passphrase they were told in person.</li>
       <li><strong>Record the meeting</strong> As contributions come in, record them against each member. Schedule the next meeting before you leave.</li>
-      <li><strong>Lend and collect</strong> Members request loans; admins approve, disburse, and record repayments against the schedule.</li>
+      <li><strong>Lend and collect</strong> Members request loans; admins approve, pay out, and record repayments against the schedule.</li>
       <li><strong>Back up</strong> Create a PIN-encrypted backup and keep it somewhere safe. It is the only way onto a new phone.</li>
     </ol>
-    <p><a class="btn" href="guide.html">Full step-by-step guide</a></p>
+    <p><a class="btn dark" href="guide.html">Full step-by-step guide</a></p>
   </div>
 </section>
 
 <section id="faq">
   <div class="wrap">
-    <h2>FAQ</h2>
-
-    <h4>Does vBank hold or move our money?</h4>
-    <p>No. Cash is handled by your group exactly as it is now. vBank records what was collected, lent and
-    repaid; it has no payment feature and no wallet.</p>
-
-    <h4>Do we need internet?</h4>
-    <p>Not to use it. You need connectivity only when you want members' phones to exchange records, and
-    even then it can wait — entries queue until a connection exists.</p>
-
-    <h4>What happens if I lose my phone?</h4>
-    <p>Restore your backup file with its PIN on the new phone and you are back, including your group keys.
-    Without a backup, your identity cannot be recreated — your group can still re-add you as a new member,
-    but records you signed stay attributed to your old identity.</p>
-
-    <h4>Can a member secretly change the books?</h4>
-    <p>No. Members cannot write records at all, and anything an admin writes is signed and sequenced. A
-    tampered or unsigned record is rejected by every other phone. Corrections happen through reversals,
-    which stay visible in the history.</p>
-
-    <h4>Who can see our records?</h4>
-    <p>Only people who have your group's passphrase. What travels over the network is encrypted; other
-    machines on the IPFS network may relay or cache those encrypted blocks without being able to read them.</p>
-
-    <h4>Is there a fee?</h4>
-    <p>No. There is no subscription, no transaction fee, no advertising, and no analytics.</p>
+    <span class="eyebrow">FAQ</span>
+    <h2>Questions groups ask us</h2>
+    <div class="faq">
+      <details><summary>Does vBank hold or move our money?</summary>
+        <p>No. Cash is handled by your group exactly as it is now. vBank records what was collected, lent and
+        repaid; it has no payment feature and no wallet.</p></details>
+      <details><summary>Do we need internet?</summary>
+        <p>Not to use it. You need connectivity only when you want members' phones to exchange records, and
+        even then it can wait — entries queue until a connection exists. A Wi-Fi hotspot at the meeting is enough.</p></details>
+      <details><summary>What happens if I lose my phone?</summary>
+        <p>Restore your backup file with its PIN on the new phone and you are back, including your group keys.
+        Without a backup, your identity cannot be recreated — your group can still re-add you as a new member,
+        but records you signed stay attributed to your old identity.</p></details>
+      <details><summary>Can a member secretly change the books?</summary>
+        <p>No. Members cannot write records at all, and anything an admin writes is signed and sequenced. A
+        tampered or unsigned record is rejected by every other phone. Corrections happen through reversals,
+        which stay visible in the history.</p></details>
+      <details><summary>Who can see our records?</summary>
+        <p>Only people who have your group's passphrase. What travels between phones is encrypted; without
+        the passphrase it is meaningless.</p></details>
+      <details><summary>Is there a fee?</summary>
+        <p>No. There is no subscription, no transaction fee, no advertising, and no analytics.</p></details>
+    </div>
   </div>
 </section>
 
 <section id="support">
   <div class="wrap">
-    <h2>Support</h2>
-    <p>
-      Questions, bug reports and feature requests: <a href="mailto:support@vbank.zm">support@vbank.zm</a>.
-      Please say which version of the app you are running (Settings → Backup &amp; Restore shows your identity;
-      the store listing shows the version) and what you expected to happen.
-    </p>
-    <h4 id="delete-data">Deleting your data</h4>
+    <div class="band reveal">
+      <div>
+        <h2>Bring your group's books into the open.</h2>
+        <p>Free on Android, Linux, macOS and Windows. Questions or bug reports: <a href="mailto:support@vbank.zm">support@vbank.zm</a>
+        — please say which version you run and what you expected to happen.</p>
+      </div>
+      <div class="cta">
+        <a class="btn primary" href="guide.html">Read the guide</a>
+        <a class="btn" href="https://github.com/arthurkay/vbank/releases">Desktop downloads</a>
+      </div>
+    </div>
+    <h4 id="delete-data" style="margin-top:40px">Deleting your data</h4>
     <p>
       vBank stores your records on your own device only — there is no account to close and no copy of your
       data held by us. To delete everything, open <strong>Settings → Log out</strong> (removes your identity and
       keys from the phone) or uninstall the app. Encrypted records your group already exchanged remain on your
       co-members' phones, because those are their copies of the group's books; ask your group's admins to
       remove you from the roster if you want to stop receiving updates.
-    </p>
-    <p class="muted" style="font-size:14px">
-      Note: encrypted blocks published to the IPFS network cannot be recalled once other nodes have cached
-      them. They stay unreadable without your group's passphrase.
     </p>
   </div>
 </section>
@@ -313,5 +325,16 @@
   </div>
 </footer>
 
+<script>
+  // Fade sections in as they scroll into view; no-op if IntersectionObserver is missing.
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  } else {
+    document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in'));
+  }
+</script>
 </body>
 </html>

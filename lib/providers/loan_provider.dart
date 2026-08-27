@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/ipfs/sync_manager.dart';
 import '../models/loan.dart';
+import '../models/loan_progress.dart';
 import '../models/repayment_schedule.dart';
 import '../services/loan_service.dart';
 import 'auth_provider.dart';
@@ -168,4 +169,32 @@ final loanProvider = FutureProvider.family<LoanRequest?, String>((ref, loanId) a
   ref.watch(syncTickProvider);
   ref.watch(dataVersionProvider); // local approve/disburse/repay
   return ref.watch(loanServiceProvider).getById(loanId);
+});
+
+/// Repayment progress for every loan in a group, keyed by loan id.
+final groupLoanProgressProvider = FutureProvider.family<Map<String, LoanProgress>, String>((ref, groupId) async {
+  ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider);
+  final loans = await ref.watch(loanServiceProvider).getByGroupId(groupId);
+  final txs = await ref.watch(transactionServiceProvider).getByGroupId(groupId);
+  return LoanProgress.forGroup(loans, txs);
+});
+
+/// Repayment progress for one loan (null when the loan is unknown).
+final loanProgressProvider = FutureProvider.family<LoanProgress?, String>((ref, loanId) async {
+  ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider);
+  final loan = await ref.watch(loanServiceProvider).getById(loanId);
+  if (loan == null) return null;
+  final progress = await ref.watch(groupLoanProgressProvider(loan.groupId).future);
+  return progress[loanId];
+});
+
+/// Cash available to lend vs principal out on loan, per group.
+final groupFundProvider = FutureProvider.family<GroupFund, String>((ref, groupId) async {
+  ref.watch(syncTickProvider);
+  ref.watch(dataVersionProvider);
+  final loans = await ref.watch(loanServiceProvider).getByGroupId(groupId);
+  final txs = await ref.watch(transactionServiceProvider).getByGroupId(groupId);
+  return GroupFund.compute(txs, loans);
 });

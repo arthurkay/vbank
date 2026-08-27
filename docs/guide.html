@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>vBank user guide</title>
 <meta name="description" content="A complete guide to running a savings group in vBank: creating a group, inviting members, recording contributions, running loans, meetings, reports, corrections, backups and sync.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -13,7 +16,7 @@
 
 <header class="site">
   <div class="wrap">
-    <a class="brand" href="index.html"><span class="mark">vB</span> vBank</a>
+    <a class="brand" href="index.html"><img src="icon-192.png" alt="" width="30" height="30"> vBank</a>
     <nav class="top">
       <a href="index.html#features">Features</a>
       <a href="index.html#how">How it works</a>
@@ -102,6 +105,11 @@
   <tr><td>Loans need admin approval</td><td>Off means an eligible request is approved automatically — useful for small, high-trust groups.</td></tr>
   <tr><td>New members need approval</td><td>Whether an invited person waits for an admin before they are in the roster.</td></tr>
 </table>
+<p>
+  The group's <strong>Overview</strong> card shows the fund three ways: the <em>group fund</em> (everything the
+  group owns), what is <em>available to lend</em> right now (cash in the box) and what is <em>out on loan</em>
+  (principal still with borrowers). Below the perforation you see your own balance and contributions.
+</p>
 
 <h2 id="invite">3. Adding members</h2>
 <ol class="steps">
@@ -156,6 +164,7 @@
   <li><strong>Payments apply to the oldest unpaid installment first.</strong> Partial payments are fine — the installment shows what is still outstanding.</li>
   <li><strong>The loan closes itself</strong> when the total due is covered, and its status becomes <em>completed</em>.</li>
   <li><strong>Late installments</strong> attract the group's late penalty, and a loan left unpaid 30 days past its last due date is flagged as <em>defaulted</em>.</li>
+  <li><strong>Every loan shows its repayments.</strong> In the Loans tab each loan carries a bar with what has been repaid of the total due; the loan page lists every repayment (date, amount, who recorded it) above the schedule, and the Members tab shows each borrower's loan with what they have paid back.</li>
 </ol>
 
 <h2 id="meetings">7. Meetings and attendance</h2>
@@ -169,6 +178,7 @@
 
 <h2 id="reports">8. Reports and member statements</h2>
 <p>Group → 📊 icon. Choose 1 month, 3 months, 1 year or all time, and you get:</p>
+<p><strong>Export.</strong> The download button on the reports page saves the current report as a <strong>PDF</strong> (summary and member statements, watermarked with the vBank name on every page) or as an <strong>Excel</strong> workbook with a Summary sheet and a Members sheet. On a phone the share sheet opens so you can send it on WhatsApp or email; on a computer the file lands in Downloads.</p>
 <ul>
   <li>the group fund balance,</li>
   <li>total contributions, loans disbursed, loans repaid and penalties,</li>

@@ -16,6 +16,7 @@ import '../../core/ipfs/sync_manager.dart';
 import '../../core/presentation/list_filters.dart';
 import '../../core/storage/settings_dao.dart';
 import '../../core/storage/transaction_dao.dart' as q;
+import '../../models/repayment_schedule.dart';
 import '../../models/app_backup.dart';
 import '../../models/group.dart';
 import '../../models/loan.dart';
@@ -365,6 +366,7 @@ class YaruLoanDetailPage extends ConsumerWidget {
     final group = ref.watch(groupListProvider).value?.where((g) => g.id == groupId).firstOrNull;
     final loanAsync = ref.watch(loanProvider(loanId));
     final scheduleAsync = ref.watch(loanScheduleProvider(loanId));
+    final progress = ref.watch(loanProgressProvider(loanId)).value;
     final canWrite = ref.watch(canWriteProvider);
     final me = ref.watch(authProvider).identity?.peerId;
     final theme = Theme.of(context);
@@ -393,23 +395,8 @@ class YaruLoanDetailPage extends ConsumerWidget {
                   YaruStatusChip(loan.status.name, color: _loanColor(theme, loan.status)),
                 ],
               ),
-              const SizedBox(height: 16),
-              YaruSection(
-                headline: const Text('Loan'),
-                child: Column(
-                  children: [
-                    YaruInfoRow('Borrower', borrower?.name ?? loan.borrowerPeerId),
-                    YaruInfoRow('Term', '${loan.termWeeks} weeks'),
-                    YaruInfoRow('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
-                    if (loan.approvedAmount > 0) YaruInfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
-                    if (loan.approvedAmount > 0) YaruInfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
-                    if (loan.reason != null && loan.reason!.isNotEmpty) YaruInfoRow('Reason', loan.reason!),
-                    YaruInfoRow('Requested', fmtDateTime(loan.requestedAt)),
-                    if (loan.disbursedAt != null) YaruInfoRow('Disbursed', fmtDateTime(loan.disbursedAt!)),
-                    if (loan.completedAt != null) YaruInfoRow('Completed', fmtDateTime(loan.completedAt!)),
-                  ],
-                ),
-              ),
+              // Actions come first: the facts panel below grew (repaid, still owed,
+              // approver…) and pushed the buttons below the fold on small windows.
               if (canWrite) ...[
                 const SizedBox(height: 16),
                 Wrap(
@@ -446,6 +433,49 @@ class YaruLoanDetailPage extends ConsumerWidget {
                   ],
                 ),
               ],
+              const SizedBox(height: 16),
+              YaruSection(
+                headline: const Text('Loan'),
+                child: Column(
+                  children: [
+                    YaruInfoRow('Borrower', borrower?.name ?? 'Unknown member'),
+                    YaruInfoRow('Term', '${loan.termWeeks} weeks'),
+                    YaruInfoRow('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
+                    if (loan.approvedAmount > 0) YaruInfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
+                    if (loan.approvedAmount > 0) YaruInfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
+                    if (progress != null && progress.totalDue > 0) ...[
+                      YaruInfoRow('Repaid so far', fmtMoney(currency, progress.repaid)),
+                      YaruInfoRow('Still owed', fmtMoney(currency, progress.remaining)),
+                    ],
+                    if (loan.approvedByPeerId != null)
+                      YaruInfoRow('Approved by',
+                          group.members.where((m) => m.peerId == loan.approvedByPeerId).firstOrNull?.name ?? 'Unknown member'),
+                    if (loan.reason != null && loan.reason!.isNotEmpty) YaruInfoRow('Reason', loan.reason!),
+                    YaruInfoRow('Requested', fmtDateTime(loan.requestedAt)),
+                    if (loan.disbursedAt != null) YaruInfoRow('Disbursed', fmtDateTime(loan.disbursedAt!)),
+                    if (loan.completedAt != null) YaruInfoRow('Completed', fmtDateTime(loan.completedAt!)),
+                  ],
+                ),
+              ),
+              if (progress != null && progress.repayments.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                YaruSection(
+                  headline: Text('Repayments (${progress.repayments.length})'),
+                  child: Column(
+                    children: [
+                      for (final t in progress.repayments.reversed)
+                        YaruListTile(
+                          leading: const Icon(YaruIcons.refresh),
+                          title: Text(fmtMoney(currency, t.amount)),
+                          subtitle: Text(
+                            '${fmtDate(t.timestamp)} · recorded by '
+                            '${group.members.where((m) => m.peerId == t.authorPeerId).firstOrNull?.name ?? 'Unknown member'}',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
               if (schedule.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 YaruSection(
@@ -472,7 +502,7 @@ class YaruLoanDetailPage extends ConsumerWidget {
                             '${s.paidAmount > 0 ? ' · paid ${s.paidAmount.toStringAsFixed(2)}' : ''}'
                             '${s.penalty > 0 ? ' · penalty ${s.penalty.toStringAsFixed(2)}' : ''}',
                           ),
-                          trailing: YaruStatusChip(s.status.name),
+                          trailing: YaruStatusChip(s.status.label),
                         ),
                     ],
                   ),
@@ -746,11 +776,9 @@ class YaruSyncPage extends ConsumerWidget {
                       for (final e in log.take(100))
                         YaruListTile(
                           leading: Icon(
-                            e.type == SyncEventType.error ? YaruIcons.warning : YaruIcons.ok,
+                            switch (e.type) { SyncEventType.error => YaruIcons.error, SyncEventType.warning => YaruIcons.warning, _ => YaruIcons.ok },
                             size: 16,
-                            color: e.type == SyncEventType.error
-                                ? theme.colorScheme.error
-                                : theme.colorScheme.primary,
+                            color: switch (e.type) { SyncEventType.error => theme.colorScheme.error, SyncEventType.warning => Colors.amber.shade700, _ => theme.colorScheme.primary },
                           ),
                           title: Text(e.message),
                           subtitle: Text(fmtDateTime(e.timestamp)),

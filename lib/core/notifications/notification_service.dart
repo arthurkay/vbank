@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -36,13 +37,30 @@ class NotificationService {
         macOS: iosSettings,
         linux: linuxSettings,
       ),
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) _taps.add(payload);
+      },
     );
+    // A tap that cold-started the app arrives here instead of the callback.
+    try {
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      final payload = launch?.notificationResponse?.payload;
+      if ((launch?.didNotificationLaunchApp ?? false) && payload != null && payload.isNotEmpty) _taps.add(payload);
+    } catch (_) {
+      // Not supported on this platform.
+    }
     // Android 13+ runtime permission.
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
     _initialized = true;
   }
+
+  /// Payloads of notifications the user tapped, in order. Listened to by
+  /// `AppBootstrap`, which routes them to the matching detail screen.
+  static final _taps = StreamController<String>.broadcast();
+  static Stream<String> get taps => _taps.stream;
 
   /// Stable notification id from a string key (FNV-1a, 31-bit) so the same
   /// logical notification can be cancelled or replaced later.

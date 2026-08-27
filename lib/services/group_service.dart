@@ -277,6 +277,18 @@ class GroupService {
 
   /// Owner promotes member→admin or demotes admin→member. The owner role is
   /// only changed via [transferOwnership].
+  /// Changes the name a member is known by in every group they belong to.
+  /// The change rides along with the next group snapshot like any other
+  /// membership edit.
+  Future<void> renameMember({required String peerId, required String name}) async {
+    for (final g in await getAllGroups()) {
+      final m = await _memberDao.get(peerId, g.id);
+      if (m == null || m.name == name) continue;
+      await _memberDao.updateName(peerId, g.id, name);
+      await _touch(g.id);
+    }
+  }
+
   Future<void> updateMemberRole({
     required String groupId,
     required String actingPeerId,

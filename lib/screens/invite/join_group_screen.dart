@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
 import '../../services/group_key_service.dart';
+import '../../core/deeplink/pending_invite.dart';
 import '../../ui/ui.dart';
 
 class JoinGroupScreen extends ConsumerStatefulWidget {
@@ -63,7 +64,14 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       return showMessage(context, result.error ?? 'Invalid invite link', error: true);
     }
     final identity = ref.read(authProvider).identity;
-    if (identity == null) return showMessage(context, 'Please create an account first', error: true);
+    if (identity == null) {
+      // First contact with the app is often an invite link: park it, take the
+      // person through account creation and resume the join afterwards.
+      PendingInvite.link = result;
+      showMessage(context, 'Create your account first — you will join the group right after');
+      Navigator.pushReplacementNamed(context, '/create-account');
+      return;
+    }
 
     final existing = await ref.read(groupServiceProvider).getGroup(groupId);
     if (!mounted) return;

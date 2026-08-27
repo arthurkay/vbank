@@ -349,8 +349,7 @@ class _OverviewTab extends ConsumerWidget {
     final cfg = group.config;
     final me = ref.watch(authProvider).identity?.peerId;
     final mine = me == null ? null : ref.watch(balanceProvider((peerId: me, groupId: group.id))).value;
-    final balances = ref.watch(groupBalancesProvider(group.id)).value;
-    final fund = balances?.fold<double>(0, (sum, b) => sum + b.netBalance) ?? 0;
+    final fund = ref.watch(groupFundProvider(group.id)).value;
     final canWrite = ref.watch(canWriteProvider);
     final dissolved = group.status == GroupStatus.dissolved;
 
@@ -366,16 +365,35 @@ class _OverviewTab extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
         ],
+        // Where the money is: owned, available to lend, out with borrowers.
         Row(
           children: [
             Expanded(
               child: YaruStatTile(
                 label: 'Group fund',
-                value: fmtMoney(cfg.currency, fund),
+                value: fmtMoney(cfg.currency, fund?.total ?? 0),
                 emphasise: true,
               ),
             ),
             const SizedBox(width: 12),
+            Expanded(
+              child: YaruStatTile(
+                label: 'Available to lend',
+                value: fmtMoney(cfg.currency, fund?.available ?? 0),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: YaruStatTile(
+                label: 'Out on loan',
+                value: fmtMoney(cfg.currency, fund?.lentOut ?? 0),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
             Expanded(
               child: YaruStatTile(
                 label: 'My net balance',
@@ -387,6 +405,13 @@ class _OverviewTab extends ConsumerWidget {
               child: YaruStatTile(
                 label: 'My contributions',
                 value: fmtMoney(cfg.currency, mine?.totalContributed ?? 0),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: YaruStatTile(
+                label: 'Interest still expected',
+                value: fmtMoney(cfg.currency, fund?.interestExpected ?? 0),
               ),
             ),
           ],
@@ -603,10 +628,16 @@ class _LoansTab extends ConsumerWidget {
             itemCount: visible.length,
             itemBuilder: (context, i) {
               final loan = visible[i];
+              final p = ref.watch(groupLoanProgressProvider(group.id)).value?[loan.id];
+              final c = group.config.currency;
               return YaruListTile(
                 leading: const Icon(YaruIcons.book),
-                title: Text('${fmtMoney(group.config.currency, loan.requestedAmount)} · ${borrowerOf(loan)}'),
-                subtitle: Text('${titleCase(loan.status.name)} · ${loan.termWeeks} weeks'),
+                title: Text('${fmtMoney(c, p?.borrowed ?? loan.requestedAmount)} · ${borrowerOf(loan)}'),
+                subtitle: Text(
+                  p != null && p.totalDue > 0
+                      ? 'Repaid ${fmtMoney(c, p.repaid)} of ${fmtMoney(c, p.totalDue)} · ${loan.termWeeks} weeks'
+                      : '${titleCase(loan.status.name)} · ${loan.termWeeks} weeks',
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

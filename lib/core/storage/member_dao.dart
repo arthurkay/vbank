@@ -59,6 +59,11 @@ class MemberDao {
   }
 
   /// Partial update: changes only the role, leaving status etc. untouched.
+  Future<void> updateName(String peerId, String groupId, String name) async {
+    final db = await AppDatabase.getInstance();
+    await db.update('members', {'name': name}, where: 'peer_id = ? AND group_id = ?', whereArgs: [peerId, groupId]);
+  }
+
   Future<void> updateRole(String peerId, String groupId, String role) async {
     final db = await AppDatabase.getInstance();
     await db.update(

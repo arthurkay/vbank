@@ -90,7 +90,8 @@ class VBankTheme {
 }
 
 const kPagePadding = EdgeInsets.all(20);
-const kPanelRadius = 12.0;
+const kPanelRadius = 16.0;
+const kHeroRadius = 20.0;
 
 // -----------------------------------------------------------------------------
 // Page scaffold
@@ -330,7 +331,7 @@ class Panel extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool selected;
   final Color? color;
-  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(14), this.selected = false, this.color});
+  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.selected = false, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -373,29 +374,36 @@ class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key, this.trailing});
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 20, bottom: 10),
+        padding: const EdgeInsets.only(top: 24, bottom: 10),
         child: Row(
           children: [
-            Expanded(child: Text(text).small.semiBold.muted),
+            Expanded(
+              child: Text(text.toUpperCase(), style: const TextStyle(letterSpacing: 1.2)).xSmall.semiBold.muted,
+            ),
             ?trailing,
           ],
         ),
       );
 }
 
+/// A receipt line: muted label on the left, the value right-aligned.
 class InfoRow extends StatelessWidget {
   final String label;
   final String value;
-  final double labelWidth;
-  const InfoRow(this.label, this.value, {super.key, this.labelWidth = 110});
+  final bool emphasise;
+  const InfoRow(this.label, this.value, {super.key, this.emphasise = false});
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: labelWidth, child: Text(label).small.muted),
-            Expanded(child: Text(value).small),
+            Expanded(flex: 2, child: Text(label).small.muted),
+            const Gap(12),
+            Expanded(
+              flex: 3,
+              child: Text(value, textAlign: TextAlign.right).small.medium,
+            ),
           ],
         ),
       );
@@ -447,12 +455,16 @@ class ListRow extends StatelessWidget {
         ],
       ],
     );
-    final panel = Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Panel(selected: selected, child: body),
+    final row = Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: selected ? scheme.muted : null,
+        border: Border(bottom: BorderSide(color: scheme.border)),
+      ),
+      child: body,
     );
-    if (onTap == null) return panel;
-    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: panel);
+    if (onTap == null) return row;
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: row);
   }
 }
 
@@ -488,6 +500,146 @@ class StatCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// The inverted "ticket" card: the page's one strong surface, used for the
+/// group fund and for a loan. Light theme: near-black on white; dark theme:
+/// white on black. [footer] sits below a perforation line.
+class HeroCard extends StatelessWidget {
+  final Widget body;
+  final Widget? footer;
+  const HeroCard({super.key, required this.body, this.footer});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Light theme: an inverted (near-black) ticket. Dark theme: a lifted dark
+    // surface with a hairline — a white slab is too loud on a black page.
+    final dark = theme.brightness == Brightness.dark;
+    final bg = dark ? scheme.card : scheme.primary;
+    final fg = dark ? scheme.foreground : scheme.primaryForeground;
+    final content = DefaultTextStyle.merge(
+      style: TextStyle(color: fg),
+      child: IconTheme.merge(data: IconThemeData(color: fg), child: body),
+    );
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(kHeroRadius),
+        border: dark ? Border.all(color: scheme.border) : null,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(padding: const EdgeInsets.fromLTRB(20, 20, 20, 18), child: content),
+          if (footer != null) ...[
+            _Perforation(color: scheme.background, lineColor: fg.withValues(alpha: 0.35)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+              child: DefaultTextStyle.merge(
+                style: TextStyle(color: fg),
+                child: IconTheme.merge(data: IconThemeData(color: fg), child: footer!),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A dashed line with a notch on each side — the tear-off edge of a ticket.
+class _Perforation extends StatelessWidget {
+  final Color color;
+  final Color lineColor;
+  const _Perforation({required this.color, required this.lineColor});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 20,
+        child: Stack(
+          children: [
+            Positioned(left: 20, right: 20, top: 9.5, child: DashedDivider(color: lineColor)),
+            Positioned(left: -10, top: 0, child: _Notch(color)),
+            Positioned(right: -10, top: 0, child: _Notch(color)),
+          ],
+        ),
+      );
+}
+
+class _Notch extends StatelessWidget {
+  final Color color;
+  const _Notch(this.color);
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 20, height: 20, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+}
+
+class DashedDivider extends StatelessWidget {
+  final Color color;
+  const DashedDivider({super.key, required this.color});
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, c) {
+          const dash = 6.0, gap = 5.0;
+          final n = (c.maxWidth / (dash + gap)).floor();
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(n, (_) => SizedBox(width: dash, height: 1, child: ColoredBox(color: color))),
+          );
+        },
+      );
+}
+
+/// Label over a large value; inherits its colours so it works inside [HeroCard].
+class Metric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool large;
+  final CrossAxisAlignment align;
+  const Metric({super.key, required this.label, required this.value, this.large = false, this.align = CrossAxisAlignment.start});
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: align,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Opacity(opacity: 0.7, child: Text(label).xSmall),
+          const Gap(4),
+          large ? Text(value).x3Large.bold : Text(value).large.semiBold,
+        ],
+      );
+}
+
+/// Thin progress bar; [value] 0..1. Inherits the surrounding text colour for
+/// its fill so it reads correctly on a [HeroCard] too.
+class ProgressBar extends StatelessWidget {
+  final double value;
+  final double height;
+  const ProgressBar({super.key, required this.value, this.height = 6});
+  @override
+  Widget build(BuildContext context) {
+    final fg = DefaultTextStyle.of(context).style.color ?? Theme.of(context).colorScheme.foreground;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(height),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          children: [
+            Positioned.fill(child: ColoredBox(color: fg.withValues(alpha: 0.18))),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: value.clamp(0, 1).toDouble(),
+                heightFactor: 1,
+                child: ColoredBox(color: fg),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class EmptyState extends StatelessWidget {
@@ -549,6 +701,34 @@ class StatusBadge extends StatelessWidget {
 enum StatusTone { primary, secondary, destructive, neutral }
 
 /// Spark filter chips as a single-choice control.
+/// Page-level tabs: shadcn's underline [TabList], horizontally scrollable so
+/// five labels fit on a phone, with one full-width hairline underneath.
+class PageTabs extends StatelessWidget {
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+  const PageTabs({super.key, required this.labels, required this.index, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: scheme.border))),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ComponentTheme<TabListTheme>(
+          data: const TabListTheme(borderWidth: 0),
+          child: TabList(
+            index: index,
+            onChanged: onChanged,
+            children: [for (final l in labels) TabItem(child: Text(l))],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class Segmented<T> extends StatelessWidget {
   final List<T> values;
   final T selected;
@@ -567,21 +747,28 @@ class Segmented<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chips = [
-      for (final v in values) FilterChip(label: label(v), selected: v == selected, onTap: () => onChanged(v)),
-    ];
-    if (scrollable) {
-      return SizedBox(
-        height: 34,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: chips.length,
-          separatorBuilder: (_, _) => const Gap(8),
-          itemBuilder: (_, i) => chips[i],
-        ),
+    // shadcn's boxed segmented control: page tabs are underlined (PageTabs),
+    // filters and form choices sit in this muted box — two clearly different
+    // things.
+    final i = values.indexOf(selected);
+    final tabs = Tabs(
+      index: i < 0 ? 0 : i,
+      onChanged: (i) => onChanged(values[i]),
+      children: [for (final v in values) TabItem(child: Text(label(v)))],
+    );
+    if (scrollable || values.length > 4) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        child: tabs,
       );
     }
-    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+    return Row(children: [Expanded(child: Tabs(
+      index: i < 0 ? 0 : i,
+      onChanged: (i) => onChanged(values[i]),
+      expand: true,
+      children: [for (final v in values) TabItem(child: Text(label(v)))],
+    ))]);
   }
 }
 

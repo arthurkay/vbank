@@ -4,6 +4,7 @@ import '../../models/group.dart';
 import '../../models/meeting.dart';
 import '../../models/transaction.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/data_version.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/ipfs_provider.dart';
 import '../../providers/meeting_provider.dart';
@@ -282,6 +283,30 @@ class _MeetingsTab extends ConsumerWidget {
 class _SettingsTab extends ConsumerWidget {
   const _SettingsTab();
 
+  Future<void> _editName(BuildContext context, WidgetRef ref) async {
+    final identity = ref.read(authProvider).identity;
+    if (identity == null) return;
+    final name = await promptSheet(
+      context,
+      title: 'Your name',
+      message: 'This is how members of your groups see you. The change reaches them with the next sync.',
+      label: 'Display name',
+      initial: identity.displayName,
+      confirmLabel: 'Save',
+    );
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty || trimmed == identity.displayName || !context.mounted) return;
+    try {
+      await ref.read(authProvider.notifier).updateDisplayName(trimmed);
+      await ref.read(groupServiceProvider).renameMember(peerId: identity.peerId, name: trimmed);
+      await ref.read(groupListProvider.notifier).refresh();
+      ref.read(dataVersionProvider.notifier).state++;
+      if (context.mounted) showMessage(context, 'Name updated');
+    } catch (e) {
+      if (context.mounted) showMessage(context, '$e', error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final identity = ref.watch(authProvider).identity;
@@ -289,12 +314,17 @@ class _SettingsTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Panel(
-          child: Basic(
-            leading: InitialsAvatar(identity?.displayName ?? '?', size: 44),
-            title: Text(identity?.displayName ?? 'User'),
-            subtitle: Text(identity?.peerId ?? '').xSmall.muted,
-            leadingAlignment: Alignment.center,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _editName(context, ref),
+          child: Panel(
+            child: Basic(
+              leading: InitialsAvatar(identity?.displayName ?? '?', size: 44),
+              title: Text(identity?.displayName ?? 'User'),
+              subtitle: const Text('Tap to change the name your groups see').xSmall.muted,
+              trailing: const Icon(LucideIcons.pencil, size: 16),
+              leadingAlignment: Alignment.center,
+            ),
           ),
         ),
         const Gap(12),

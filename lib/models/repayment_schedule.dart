@@ -1,5 +1,16 @@
 enum RepaymentStatus { pending, paid, overdue, waived }
 
+extension RepaymentStatusLabel on RepaymentStatus {
+  /// What the schedule row says. An unpaid instalment is simply *due* — "pending"
+  /// read as if something were waiting for approval.
+  String get label => switch (this) {
+        RepaymentStatus.pending => 'Due',
+        RepaymentStatus.paid => 'Paid',
+        RepaymentStatus.overdue => 'Overdue',
+        RepaymentStatus.waived => 'Waived',
+      };
+}
+
 class RepaymentSchedule {
   final String id;
   final String loanId;

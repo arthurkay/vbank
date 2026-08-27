@@ -16,7 +16,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final _amount = TextEditingController();
   final _passphrase = TextEditingController();
   final _confirm = TextEditingController();
-  ContributionFrequency _frequency = ContributionFrequency.weekly;
+  ContributionFrequency _frequency = ContributionFrequency.monthly;
   bool _requireApproval = false;
   bool _isLoading = false;
 

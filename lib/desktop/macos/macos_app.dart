@@ -15,6 +15,7 @@ import '../../core/ipfs/sync_manager.dart';
 import '../../core/presentation/list_filters.dart';
 import '../../core/storage/settings_dao.dart';
 import '../../core/storage/transaction_dao.dart' as q;
+import '../../models/repayment_schedule.dart';
 import '../../models/app_backup.dart';
 import '../../models/group.dart';
 import '../../models/loan.dart';
@@ -370,8 +371,7 @@ class _MacosOverview extends ConsumerWidget {
     final cfg = group.config;
     final me = ref.watch(authProvider).identity?.peerId;
     final mine = me == null ? null : ref.watch(balanceProvider((peerId: me, groupId: group.id))).value;
-    final balances = ref.watch(groupBalancesProvider(group.id)).value;
-    final fund = balances?.fold<double>(0, (sum, b) => sum + b.netBalance) ?? 0;
+    final fund = ref.watch(groupFundProvider(group.id)).value;
     final canWrite = ref.watch(canWriteProvider);
     final dissolved = group.status == GroupStatus.dissolved;
 
@@ -381,9 +381,20 @@ class _MacosOverview extends ConsumerWidget {
         Row(children: [
           Expanded(
             child: MacosStatTile(
-                label: 'Group fund', value: fmtMoney(cfg.currency, fund), emphasise: true),
+                label: 'Group fund', value: fmtMoney(cfg.currency, fund?.total ?? 0), emphasise: true),
           ),
           const SizedBox(width: 12),
+          Expanded(
+            child: MacosStatTile(
+                label: 'Available to lend', value: fmtMoney(cfg.currency, fund?.available ?? 0)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: MacosStatTile(label: 'Out on loan', value: fmtMoney(cfg.currency, fund?.lentOut ?? 0)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
           Expanded(
             child: MacosStatTile(
                 label: 'My net balance', value: fmtMoney(cfg.currency, mine?.netBalance ?? 0)),
@@ -392,6 +403,11 @@ class _MacosOverview extends ConsumerWidget {
           Expanded(
             child: MacosStatTile(
                 label: 'My contributions', value: fmtMoney(cfg.currency, mine?.totalContributed ?? 0)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: MacosStatTile(
+                label: 'Interest still expected', value: fmtMoney(cfg.currency, fund?.interestExpected ?? 0)),
           ),
         ]),
         const SizedBox(height: 16),
@@ -940,6 +956,7 @@ class MacosLoanDetailPage extends ConsumerWidget {
     final group = ref.watch(groupListProvider).value?.where((g) => g.id == groupId).firstOrNull;
     final loanAsync = ref.watch(loanProvider(loanId));
     final scheduleAsync = ref.watch(loanScheduleProvider(loanId));
+    final progress = ref.watch(loanProgressProvider(loanId)).value;
     final canWrite = ref.watch(canWriteProvider);
     final me = ref.watch(authProvider).identity?.peerId;
 
@@ -984,6 +1001,10 @@ class MacosLoanDetailPage extends ConsumerWidget {
                         MacosInfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
                       if (loan.approvedAmount > 0)
                         MacosInfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
+                      if (progress != null && progress.totalDue > 0) ...[
+                        MacosInfoRow('Repaid so far', fmtMoney(currency, progress.repaid)),
+                        MacosInfoRow('Still owed', fmtMoney(currency, progress.remaining)),
+                      ],
                       if (loan.reason != null && loan.reason!.isNotEmpty)
                         MacosInfoRow('Reason', loan.reason!),
                       MacosInfoRow('Requested', fmtDateTime(loan.requestedAt)),
@@ -1043,7 +1064,7 @@ class MacosLoanDetailPage extends ConsumerWidget {
                               '${s.paidAmount > 0 ? ' · paid ${s.paidAmount.toStringAsFixed(2)}' : ''}'
                               '${s.penalty > 0 ? ' · penalty ${s.penalty.toStringAsFixed(2)}' : ''}',
                             ),
-                            trailing: MacosStatusChip(s.status.name),
+                            trailing: MacosStatusChip(s.status.label),
                           ),
                       ],
                     ),
@@ -1305,9 +1326,18 @@ class MacosSyncPage extends ConsumerWidget {
                     : [
                         for (final e in log.take(100))
                           MacosListTile(
-                            leading: MacosIcon(e.type == SyncEventType.error
-                                ? CupertinoIcons.exclamationmark_circle
-                                : CupertinoIcons.checkmark_circle),
+                            leading: MacosIcon(
+                              switch (e.type) {
+                                SyncEventType.error => CupertinoIcons.exclamationmark_circle,
+                                SyncEventType.warning => CupertinoIcons.exclamationmark_triangle,
+                                _ => CupertinoIcons.checkmark_circle,
+                              },
+                              color: switch (e.type) {
+                                SyncEventType.error => MacosColors.systemRedColor,
+                                SyncEventType.warning => MacosColors.systemOrangeColor,
+                                _ => null,
+                              },
+                            ),
                             title: Text(e.message),
                             subtitle: Text(fmtDateTime(e.timestamp)),
                           ),

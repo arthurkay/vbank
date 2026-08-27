@@ -78,6 +78,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return data;
   }
 
+  /// Renames the local identity. Group membership records are renamed by
+  /// [GroupService.renameMember]; callers do both.
+  Future<UserIdentityData> updateDisplayName(String displayName) async {
+    final current = state.identity;
+    if (current == null) throw NotSignedInException();
+    final data = UserIdentityData(
+      peerId: current.peerId,
+      displayName: displayName,
+      publicKey: current.publicKey,
+      privateKey: current.privateKey,
+      createdAt: current.createdAt,
+    );
+    await _dao.update(data);
+    state = state.copyWith(identity: data);
+    return data;
+  }
+
   Future<void> restoreIdentity(UserIdentityData identity) async {
     await _dao.insert(identity);
     _keyPair = null;

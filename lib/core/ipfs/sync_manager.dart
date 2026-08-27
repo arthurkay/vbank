@@ -42,7 +42,11 @@ class SyncChange {
   final String groupId;
   final String? title;
   final String? body;
-  const SyncChange(this.type, this.groupId, {this.title, this.body});
+
+  /// Id of the record that changed (transaction, loan, meeting, reversal id;
+  /// the member's peer id for joins) so a tapped notification can open it.
+  final String? recordId;
+  const SyncChange(this.type, this.groupId, {this.title, this.body, this.recordId});
 }
 
 enum SyncChangeType { transaction, group, member, loan, meeting, reversal }
@@ -72,6 +76,36 @@ class SyncManager {
   /// Per-address dial backoff (see [_dialKnownPeers]).
   final _dialFailures = <String, int>{};
   final _dialBackoffUntil = <String, DateTime>{};
+
+  /// Peers that did not answer recently. A treasurer's device knows every
+  /// member of every group it has ever been in; members who changed phones or
+  /// are simply offline must not cost a dial timeout per group per round, or
+  /// pushes for the live groups queue behind them for minutes.
+  final _peerFailures = <String, int>{};
+  final _peerBackoffUntil = <String, DateTime>{};
+
+  /// A publish asked for while a round was busy; the round runs once more.
+  bool _rerunRequested = false;
+  Future<void> _publishChain = Future.value();
+
+  bool _peerInBackoff(String peerId) {
+    final until = _peerBackoffUntil[peerId];
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  void _peerFailed(String peerId) {
+    final failures = (_peerFailures[peerId] = (_peerFailures[peerId] ?? 0) + 1);
+    _peerBackoffUntil[peerId] = DateTime.now().add(Duration(seconds: (15 << (failures - 1)).clamp(15, 300)));
+  }
+
+  /// Anything heard from a peer proves it is reachable: forget the backoff so
+  /// the next push goes straight out.
+  void _peerReachable(String peerId) {
+    _peerFailures.remove(peerId);
+    _peerBackoffUntil.remove(peerId);
+    _dialBackoffUntil.removeWhere((addr, _) => addr.endsWith('/p2p/$peerId'));
+    _dialFailures.removeWhere((addr, _) => addr.endsWith('/p2p/$peerId'));
+  }
 
   /// CIDs already handled from notifications (insertion-ordered, capped).
   final _seenNotifications = <String>{};
@@ -174,7 +208,14 @@ class SyncManager {
   }
 
   Future<void> startManualSync({Duration? duration}) async {
-    if (_state == SyncState.syncing) return;
+    if (_state == SyncState.syncing) {
+      // A round is already walking the groups (possibly waiting on dead
+      // peers). Push local changes right now regardless, and run one more
+      // round when this one finishes so nothing is left behind.
+      _rerunRequested = true;
+      await publishLocalChanges();
+      return;
+    }
     final syncDuration = duration ?? const Duration(seconds: 60);
 
     _setState(SyncState.syncing);
@@ -201,9 +242,26 @@ class SyncManager {
     await _ensureNode();
     await _subscribeGroupTopics();
     await _refreshOverdueLoans();
-    await _publishMissingSnapshots();
-    await _syncPendingTransactions();
+    await publishLocalChanges();
     await _discoverPeers();
+    if (_rerunRequested) {
+      _rerunRequested = false;
+      await publishLocalChanges();
+      await _discoverPeers();
+    }
+  }
+
+  /// Publishes snapshots and transactions that are not on the network yet.
+  /// Serialised so two callers cannot publish the same record twice; safe to
+  /// call at any time, including while a round is in progress.
+  Future<void> publishLocalChanges() {
+    final next = _publishChain.then((_) async {
+      await _ensureNode();
+      await _publishMissingSnapshots();
+      await _syncPendingTransactions();
+    });
+    _publishChain = next.catchError((_) {});
+    return next;
   }
 
   /// Where other members can dial this node (empty until the node is up).
@@ -226,12 +284,12 @@ class SyncManager {
       final peerId = addr.split('/p2p/').last;
       if (peerId == _ipfsService.peerId) continue;
       if (connected.contains(peerId)) continue;
+      if (_peerInBackoff(peerId)) continue;
       final until = _dialBackoffUntil[addr];
       if (until != null && DateTime.now().isBefore(until)) continue;
       try {
         await _ipfsService.connectToPeer(addr).timeout(const Duration(seconds: 8));
-        _dialFailures.remove(addr);
-        _dialBackoffUntil.remove(addr);
+        _peerReachable(peerId);
         connected.add(peerId);
         _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected to $addr'));
       } catch (e) {
@@ -242,7 +300,7 @@ class SyncManager {
         final failures = (_dialFailures[addr] = (_dialFailures[addr] ?? 0) + 1);
         final backoff = Duration(seconds: (15 << (failures - 1)).clamp(15, 300));
         _dialBackoffUntil[addr] = DateTime.now().add(backoff);
-        _log(SyncEvent(type: SyncEventType.error, message: 'Dial failed $addr (retry in ${backoff.inSeconds}s): $e'));
+        _log(SyncEvent(type: SyncEventType.warning, message: 'Dial failed $addr (retry in ${backoff.inSeconds}s): $e'));
       }
     }
   }
@@ -258,6 +316,7 @@ class SyncManager {
   /// record is encrypted with the group key, so this reveals nothing to a
   /// stranger beyond "there is a group with this id".
   Future<Uint8List> _onSyncRequest(String from, Uint8List payload) async {
+    _peerReachable(from);
     _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Sync request from $from (${payload.length} bytes)'));
     Map<String, dynamic> req;
     try {
@@ -281,9 +340,19 @@ class SyncManager {
     final request = Uint8List.fromList(utf8.encode(jsonEncode({'op': 'inventory', 'groupId': groupId})));
     var applied = 0;
     for (final peer in peers) {
+      if (_peerInBackoff(peer)) continue;
       final reply = await _ipfsService.request(peer, request);
-      if (reply == null || reply.isEmpty) {
-        _log(SyncEvent(type: SyncEventType.error, message: 'No inventory from $peer for $groupId'));
+      if (reply == null) {
+        // Unreachable (dial failure or timeout): back off, do not ask again
+        // for every group this round.
+        _peerFailed(peer);
+        final wait = _peerBackoffUntil[peer]!.difference(DateTime.now()).inSeconds;
+        _log(SyncEvent(type: SyncEventType.warning, message: 'No inventory from $peer for $groupId (retry in ${wait}s)'));
+        continue;
+      }
+      _peerReachable(peer);
+      if (reply.isEmpty) {
+        // Reachable but not (or no longer) in this group.
         continue;
       }
       List<String> theirs;
@@ -367,28 +436,15 @@ class SyncManager {
     }
   }
 
-  /// DESIGN_PLAN §8: ask the DHT who else provides each group's snapshot CID
-  /// and dial them, so Bitswap/PubSub have direct connections.
+  /// Dials each group's known members and pulls what we lack from them.
+  ///
+  /// There is no DHT lookup here: vBank runs without bootstrap peers, so
+  /// `findProviders` could only ever time out (10 s per group per round —
+  /// with a dozen groups that alone blew the round budget).
   Future<void> _discoverPeers() async {
     for (final g in await _groupService.getAllGroups()) {
       await _dialKnownPeers(g.id);
       await _pullInventory(g.id);
-      final cid = g.cid;
-      if (cid == null) continue;
-      try {
-        final providers = await _ipfsService.findProviders(cid).timeout(const Duration(seconds: 10));
-        for (final p in providers.take(8)) {
-          try {
-            await _ipfsService.connectToPeer(p);
-          } catch (_) {/* best effort */}
-        }
-        if (providers.isNotEmpty) {
-          _log(SyncEvent(
-            type: SyncEventType.peersDiscovered,
-            message: '${providers.length} provider(s) for ${g.name}',
-          ));
-        }
-      } catch (_) {/* DHT lookups are best effort */}
     }
   }
 
@@ -581,7 +637,7 @@ class SyncManager {
       _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Fetched $cid directly in ${sw.elapsedMilliseconds} ms'));
       return direct;
     }
-    _log(SyncEvent(type: SyncEventType.error, message: 'Direct fetch of $cid from ${peers.length} peer(s) failed after ${sw.elapsedMilliseconds} ms; trying bitswap'));
+    _log(SyncEvent(type: SyncEventType.warning, message: 'Direct fetch of $cid from ${peers.length} peer(s) failed after ${sw.elapsedMilliseconds} ms; trying bitswap'));
     final viaBitswap = await _ipfsService.getData(cid);
     _log(SyncEvent(
       type: viaBitswap == null ? SyncEventType.error : SyncEventType.peersDiscovered,
@@ -676,6 +732,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.transaction,
       groupId,
+      recordId: tx.id,
       title: '${_titleCase(tx.type.name)} · ${group?.name ?? 'group'}',
       body: body,
     ));
@@ -756,6 +813,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.member,
       groupId,
+      recordId: member.peerId,
       title: group.requireApproval ? 'Join request · ${group.name}' : 'New member · ${group.name}',
       body: group.requireApproval
           ? '${member.name} is waiting for approval in ${group.name}'
@@ -787,6 +845,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.loan,
       groupId,
+      recordId: loan.id,
       title: 'Loan ${loan.status.name} · ${(await _groupService.getGroup(groupId))?.name ?? 'group'}',
       body: '${borrower.name} · ${loan.requestedAmount.toStringAsFixed(2)} over ${loan.termWeeks} weeks',
     ));
@@ -809,6 +868,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.meeting,
       groupId,
+      recordId: meeting.id,
       title: 'Meeting ${meeting.status.name} · ${(await _groupService.getGroup(groupId))?.name ?? 'group'}',
       body: _fmtWhen(meeting.scheduledAt.toLocal()),
     ));
@@ -836,6 +896,7 @@ class SyncManager {
     _emitChange(SyncChange(
       SyncChangeType.reversal,
       groupId,
+      recordId: r.originalTransactionId,
       title: 'Reversal ${r.status.name}',
       body: r.reason,
     ));
@@ -1054,6 +1115,9 @@ class SyncManager {
 
 enum SyncEventType {
   started, stopped, completed, error,
+  /// Transient: a peer unreachable right now, a dial that timed out. Shown in
+  /// amber; the next round usually clears it.
+  warning,
   nodeStarted, nodeStopped, syncStarted, transactionSynced, transactionReceived,
   snapshotPublished, memberJoined, peersDiscovered,
 }

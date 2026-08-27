@@ -5,7 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
-import 'ui/ui.dart' show VBankTheme, showMessage;
+import 'ui/ui.dart' show VBankTheme, pushScreen, showMessage;
+import 'core/ipfs/sync_manager.dart' show SyncChangeType;
+import 'providers/group_provider.dart' show selectedGroupProvider;
+import 'services/group_service.dart';
+import 'services/transaction_service.dart';
+import 'screens/loan/loan_detail_screen.dart';
+import 'screens/meeting/meeting_detail_screen.dart';
+import 'screens/transaction/transaction_detail_screen.dart';
 import 'core/app_bootstrap.dart';
 import 'core/app_platform.dart';
 import 'core/deeplink/deeplink_handler.dart';
@@ -81,6 +88,40 @@ class _VBankAppState extends ConsumerState<VBankApp> {
   /// deep-link navigation must go through this key instead.
   final _navigatorKey = GlobalKey<NavigatorState>();
 
+  /// Opens the record a notification is about: the group first (screens read
+  /// `selectedGroupProvider`), then the transaction, loan or meeting.
+  Future<void> _onNotificationTap(NotificationTarget target) async {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap(target));
+      return;
+    }
+    final group = await GroupService().getGroup(target.groupId);
+    if (group == null || !mounted) return;
+    ref.read(selectedGroupProvider.notifier).state = group;
+    switch (target.type) {
+      case SyncChangeType.transaction:
+      case SyncChangeType.reversal:
+        final tx = target.recordId == null ? null : await TransactionService().getById(target.recordId!);
+        if (!mounted) return;
+        if (tx != null) {
+          navigator.pushNamed('/group-detail');
+          pushScreen(navigator.context, TransactionDetailScreen(transaction: tx));
+        } else {
+          navigator.pushNamed('/group-detail');
+        }
+      case SyncChangeType.loan:
+        navigator.pushNamed('/group-detail');
+        if (target.recordId != null) pushScreen(navigator.context, LoanDetailScreen(loanId: target.recordId!));
+      case SyncChangeType.meeting:
+        navigator.pushNamed('/group-detail');
+        if (target.recordId != null) pushScreen(navigator.context, MeetingDetailScreen(meetingId: target.recordId!));
+      case SyncChangeType.group:
+      case SyncChangeType.member:
+        navigator.pushNamed('/group-detail');
+    }
+  }
+
   void _onDeepLink(DeepLinkResult result) {
     if (!mounted) return;
     final navigator = _navigatorKey.currentState;
@@ -108,6 +149,7 @@ class _VBankAppState extends ConsumerState<VBankApp> {
   Widget build(BuildContext context) {
     return AppBootstrap(
       onDeepLink: _onDeepLink,
+      onNotificationTap: _onNotificationTap,
       child: VBankTheme.componentThemes(
       child: ShadcnApp(
       navigatorKey: _navigatorKey,

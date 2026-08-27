@@ -35,9 +35,9 @@ case "${1:-}" in
              adb shell input keyevent KEYCODE_BACK; sleep 1
              adb shell input tap 540 569; sleep 2 ;;
   # From the group's Overview: scroll the tab row, open Loans, request a 50 loan over the default term.
-  loan)      adb shell input swipe 950 385 250 385 300; sleep 1
-             adb shell input tap 598 385; sleep 2
-             adb shell input tap 540 1493; sleep 2
+  loan)      adb shell input swipe 900 370 200 370 300; sleep 1
+             adb shell input tap 596 370; sleep 2
+             adb shell input tap 540 1520; sleep 2
              adb shell input text "${2:-50}"; sleep 0.5
              adb shell input keyevent KEYCODE_BACK; sleep 1.5
              adb shell input tap 540 1697; sleep 3 ;;

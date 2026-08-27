@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=vBank
+GenericName=Village banking
+Comment=Offline-first, peer-to-peer village banking
+Exec=vbank
+Icon=vbank
+Terminal=false
+Categories=Office;Finance;
+Keywords=savings;loans;group;chilimba;
+StartupWMClass=vbank

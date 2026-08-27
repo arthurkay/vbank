@@ -91,9 +91,9 @@ class SyncStatusScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Basic(
                 leading: Icon(
-                  e.type == SyncEventType.error ? LucideIcons.circleAlert : LucideIcons.circleCheck,
+                  switch (e.type) { SyncEventType.error => LucideIcons.circleAlert, SyncEventType.warning => LucideIcons.triangleAlert, _ => LucideIcons.circleCheck },
                   size: 18,
-                  color: e.type == SyncEventType.error ? scheme.destructive : scheme.primary,
+                  color: switch (e.type) { SyncEventType.error => scheme.destructive, SyncEventType.warning => VBankTheme.warning(context), _ => scheme.primary },
                 ),
                 title: Text(e.message).small,
                 subtitle: Text(fmtDateTime(e.timestamp)).xSmall.muted,

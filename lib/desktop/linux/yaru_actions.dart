@@ -39,7 +39,7 @@ Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
   final amount = TextEditingController(text: '20.00');
   final passphrase = TextEditingController();
   final confirm = TextEditingController();
-  var frequency = ContributionFrequency.weekly;
+  var frequency = ContributionFrequency.monthly;
   var requireApproval = false;
   String? error;
 
@@ -130,6 +130,7 @@ Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
     ref.read(selectedGroupProvider.notifier).state = group;
     if (context.mounted) yaruToast(context, 'Created “${group.name}”');
   } catch (e) {
+    debugPrint('[yaru] action failed: $e');
     if (context.mounted) yaruToast(context, '$e', error: true);
   }
 }
@@ -930,6 +931,7 @@ Future<void> _run(BuildContext context, Future<void> Function() action, String? 
     await action();
     if (context.mounted && success != null) yaruToast(context, success);
   } catch (e) {
+    debugPrint('[yaru] action failed: $e');
     if (context.mounted) yaruToast(context, '$e', error: true);
   }
 }

@@ -89,7 +89,7 @@ class GroupConfig {
   const GroupConfig({
     required this.groupId,
     required this.contributionAmount,
-    this.frequency = ContributionFrequency.weekly,
+    this.frequency = ContributionFrequency.monthly,
     this.meetingDayOfWeek = 0,
     this.meetingTime = '09:00',
     this.maxLoanMultiplier = 3.0,

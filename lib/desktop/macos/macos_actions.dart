@@ -37,7 +37,7 @@ Future<void> macosCreateGroup(BuildContext context, WidgetRef ref) async {
   final amount = TextEditingController(text: '20.00');
   final passphrase = TextEditingController();
   final confirm = TextEditingController();
-  var frequency = ContributionFrequency.weekly;
+  var frequency = ContributionFrequency.monthly;
   var requireApproval = false;
 
   final ok = await macosSheet<bool>(

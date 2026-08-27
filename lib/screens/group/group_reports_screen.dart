@@ -1,7 +1,12 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/report.dart';
+import '../../models/group.dart';
 import '../../providers/group_provider.dart';
+import '../../providers/loan_provider.dart' show groupFundProvider;
 import '../../providers/transaction_provider.dart' show syncTickProvider;
+import '../../models/loan_progress.dart';
+import '../../services/report_export_service.dart';
 import '../../services/report_service.dart';
 import '../../ui/ui.dart';
 
@@ -26,6 +31,42 @@ class _GroupReportsScreenState extends ConsumerState<GroupReportsScreen> {
   static const _ranges = [1, 3, 12, 0];
   static String _rangeLabel(int m) => switch (m) { 1 => '1 mo', 3 => '3 mo', 12 => '1 yr', _ => 'All' };
 
+  bool _exporting = false;
+
+  Future<void> _export(BuildContext context, Group group, GroupReport report, GroupFund? fund) async {
+    final format = await showAppSheet<ReportFormat>(
+      context,
+      title: 'Export report',
+      builder: (context, close) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListRow(
+            leading: const Icon(LucideIcons.fileText),
+            title: const Text('PDF'),
+            subtitle: const Text('Summary and member statements, watermarked'),
+            onTap: () => close(ReportFormat.pdf),
+          ),
+          ListRow(
+            leading: const Icon(LucideIcons.sheet),
+            title: const Text('Excel'),
+            subtitle: const Text('Two sheets you can keep working with'),
+            onTap: () => close(ReportFormat.excel),
+          ),
+        ],
+      ),
+    );
+    if (format == null || !context.mounted || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final path = await ReportExportService().export(group: group, report: report, fund: fund, format: format);
+      if (context.mounted && !(Platform.isAndroid || Platform.isIOS)) showMessage(context, 'Saved to $path');
+    } catch (e) {
+      if (context.mounted) showMessage(context, 'Export failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final group = ref.watch(selectedGroupProvider);
@@ -40,11 +81,18 @@ class _GroupReportsScreenState extends ConsumerState<GroupReportsScreen> {
     final start = _months == 0 ? DateTime(2000) : DateTime(today.year, today.month - _months, today.day);
     final end = today.add(const Duration(days: 1));
     final report = ref.watch(_reportProvider((groupId: group.id, start: start, end: end)));
+    final fund = ref.watch(groupFundProvider(group.id)).value;
     final c = group.config.currency;
     final scheme = Theme.of(context).colorScheme;
 
     return AppPage(
       title: '${group.name} · reports',
+      trailing: [
+        IconButton.ghost(
+          icon: const Icon(LucideIcons.download),
+          onPressed: report.value == null ? null : () => _export(context, group, report.value!, fund),
+        ),
+      ],
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -61,15 +109,33 @@ class _GroupReportsScreenState extends ConsumerState<GroupReportsScreen> {
             data: (r) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                HeroCard(
+                  body: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Metric(label: 'Group fund', value: fmtMoney(c, fund?.total ?? r.groupFundBalance), large: true),
+                      const Gap(18),
+                      Row(
+                        children: [
+                          Expanded(child: Metric(label: 'Available to lend', value: fmtMoney(c, fund?.available ?? 0))),
+                          Expanded(
+                            child: Metric(label: 'Out on loan', value: fmtMoney(c, fund?.lentOut ?? 0), align: CrossAxisAlignment.end),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  footer: Row(
+                    children: [
+                      Expanded(child: Metric(label: 'Interest still expected', value: fmtMoney(c, fund?.interestExpected ?? 0))),
+                    ],
+                  ),
+                ),
+                const SectionTitle('This period'),
                 Panel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Group fund').small.muted,
-                      Text(fmtMoney(c, r.groupFundBalance)).x2Large.bold,
-                      const Gap(8),
-                      const Divider(),
-                      const Gap(8),
                       InfoRow('Contributions', fmtMoney(c, r.totalContributions)),
                       InfoRow('Loans disbursed', fmtMoney(c, r.totalLoansDisbursed)),
                       InfoRow('Loans repaid', fmtMoney(c, r.totalLoansRepaid)),

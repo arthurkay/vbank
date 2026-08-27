@@ -14,6 +14,7 @@ import '../../core/ipfs/sync_manager.dart';
 import '../../core/presentation/list_filters.dart';
 import '../../core/storage/settings_dao.dart';
 import '../../core/storage/transaction_dao.dart' as q;
+import '../../models/repayment_schedule.dart';
 import '../../models/app_backup.dart';
 import '../../models/group.dart';
 import '../../models/loan.dart';
@@ -370,8 +371,7 @@ class _FluentOverview extends ConsumerWidget {
     final cfg = group.config;
     final me = ref.watch(authProvider).identity?.peerId;
     final mine = me == null ? null : ref.watch(balanceProvider((peerId: me, groupId: group.id))).value;
-    final balances = ref.watch(groupBalancesProvider(group.id)).value;
-    final fund = balances?.fold<double>(0, (sum, b) => sum + b.netBalance) ?? 0;
+    final fund = ref.watch(groupFundProvider(group.id)).value;
     final canWrite = ref.watch(canWriteProvider);
     final dissolved = group.status == GroupStatus.dissolved;
 
@@ -389,9 +389,20 @@ class _FluentOverview extends ConsumerWidget {
         Row(children: [
           Expanded(
             child: FluentStatTile(
-                label: 'Group fund', value: fmtMoney(cfg.currency, fund), emphasise: true),
+                label: 'Group fund', value: fmtMoney(cfg.currency, fund?.total ?? 0), emphasise: true),
           ),
           const SizedBox(width: 10),
+          Expanded(
+            child: FluentStatTile(
+                label: 'Available to lend', value: fmtMoney(cfg.currency, fund?.available ?? 0)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FluentStatTile(label: 'Out on loan', value: fmtMoney(cfg.currency, fund?.lentOut ?? 0)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
           Expanded(
             child: FluentStatTile(
                 label: 'My net balance', value: fmtMoney(cfg.currency, mine?.netBalance ?? 0)),
@@ -400,6 +411,11 @@ class _FluentOverview extends ConsumerWidget {
           Expanded(
             child: FluentStatTile(
                 label: 'My contributions', value: fmtMoney(cfg.currency, mine?.totalContributed ?? 0)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FluentStatTile(
+                label: 'Interest still expected', value: fmtMoney(cfg.currency, fund?.interestExpected ?? 0)),
           ),
         ]),
         const SizedBox(height: 14),
@@ -937,6 +953,7 @@ class FluentLoanDetailPage extends ConsumerWidget {
     final group = ref.watch(groupListProvider).value?.where((g) => g.id == groupId).firstOrNull;
     final loanAsync = ref.watch(loanProvider(loanId));
     final scheduleAsync = ref.watch(loanScheduleProvider(loanId));
+    final progress = ref.watch(loanProgressProvider(loanId)).value;
     final canWrite = ref.watch(canWriteProvider);
     final me = ref.watch(authProvider).identity?.peerId;
 
@@ -982,6 +999,10 @@ class FluentLoanDetailPage extends ConsumerWidget {
                     FluentInfoRow('Approved', fmtMoney(currency, loan.approvedAmount)),
                   if (loan.approvedAmount > 0)
                     FluentInfoRow('Total due', fmtMoney(currency, loan.totalWithInterest)),
+                  if (progress != null && progress.totalDue > 0) ...[
+                    FluentInfoRow('Repaid so far', fmtMoney(currency, progress.repaid)),
+                    FluentInfoRow('Still owed', fmtMoney(currency, progress.remaining)),
+                  ],
                   if (loan.reason != null && loan.reason!.isNotEmpty)
                     FluentInfoRow('Reason', loan.reason!),
                   FluentInfoRow('Requested', fmtDateTime(loan.requestedAt)),
@@ -1039,7 +1060,7 @@ class FluentLoanDetailPage extends ConsumerWidget {
                           '${s.paidAmount > 0 ? ' · paid ${s.paidAmount.toStringAsFixed(2)}' : ''}'
                           '${s.penalty > 0 ? ' · penalty ${s.penalty.toStringAsFixed(2)}' : ''}',
                         ),
-                        trailing: FluentStatusChip(s.status.name),
+                        trailing: FluentStatusChip(s.status.label),
                       ),
                   ],
                 ),
@@ -1297,8 +1318,17 @@ class FluentSyncPage extends ConsumerWidget {
                     for (final e in log.take(100))
                       ListTile(
                         leading: Icon(
-                          e.type == SyncEventType.error ? FluentIcons.error : FluentIcons.accept,
+                          switch (e.type) {
+                            SyncEventType.error => FluentIcons.error,
+                            SyncEventType.warning => FluentIcons.warning,
+                            _ => FluentIcons.accept,
+                          },
                           size: 14,
+                          color: switch (e.type) {
+                            SyncEventType.error => Colors.red,
+                            SyncEventType.warning => Colors.orange,
+                            _ => null,
+                          },
                         ),
                         title: Text(e.message),
                         subtitle: Text(fmtDateTime(e.timestamp)),

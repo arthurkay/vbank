@@ -34,9 +34,18 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> with SingleTicker
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     if (auth.isLoaded && auth.isLoggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) Navigator.pushReplacementNamed(context, '/home');
-      });
+      // Only redirect while this is the visible route. Welcome stays at the
+      // bottom of the stack during onboarding, and pushReplacement replaces the
+      // *top* route — it would swallow whatever Create Account just pushed
+      // (e.g. the join screen for a pending invite).
+      final isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+      if (isCurrent) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted && (ModalRoute.of(context)?.isCurrent ?? true)) {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        });
+      }
       return const Scaffold(child: LoadingView());
     }
     final scheme = Theme.of(context).colorScheme;

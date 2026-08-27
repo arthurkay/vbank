@@ -10,6 +10,8 @@ import '../../providers/loan_provider.dart';
 import '../../providers/meeting_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../ui/ui.dart';
+import '../../models/loan_progress.dart';
+import '../../widgets/loan_tile.dart';
 import '../../widgets/role_badge.dart';
 import '../../widgets/transaction_tile.dart';
 import '../home/home_screen.dart' show txFilters, txHaystack;
@@ -26,6 +28,43 @@ class GroupDetailScreen extends ConsumerStatefulWidget {
 
 class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   int _tab = 0;
+
+  /// Reports, settings and inviting live behind one trailing button so the
+  /// header stays quiet; the sheet lists them with a line of explanation each.
+  Future<void> _showGroupMenu(BuildContext context, {required bool canInvite}) {
+    void go(void Function([void result]) close, String route) {
+      close();
+      Navigator.pushNamed(context, route);
+    }
+    return showAppSheet<void>(
+      context,
+      title: 'Group',
+      builder: (context, close) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (canInvite)
+            ListRow(
+              leading: const Icon(LucideIcons.userPlus),
+              title: const Text('Invite members'),
+              subtitle: const Text('Share a link or QR code'),
+              onTap: () => go(close, '/invite'),
+            ),
+          ListRow(
+            leading: const Icon(LucideIcons.chartColumn),
+            title: const Text('Reports'),
+            subtitle: const Text('Fund, contributions and loans over a period'),
+            onTap: () => go(close, '/group-reports'),
+          ),
+          ListRow(
+            leading: const Icon(LucideIcons.settings),
+            title: const Text('Group settings'),
+            subtitle: const Text('Rules, members and governance'),
+            onTap: () => go(close, '/group-settings'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,10 +84,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
       title: group.name,
       subtitle: Text('${group.memberCount} members${dissolved ? ' · dissolved' : ''}'),
       trailing: [
-        if (canWrite && !dissolved)
-          IconButton.ghost(icon: const Icon(LucideIcons.userPlus), onPressed: () => Navigator.pushNamed(context, '/invite')),
-        IconButton.ghost(icon: const Icon(LucideIcons.chartColumn), onPressed: () => Navigator.pushNamed(context, '/group-reports')),
-        IconButton.ghost(icon: const Icon(LucideIcons.settings), onPressed: () => Navigator.pushNamed(context, '/group-settings')),
+        IconButton.ghost(
+          icon: const Icon(LucideIcons.ellipsisVertical),
+          onPressed: () => _showGroupMenu(context, canInvite: canWrite && !dissolved),
+        ),
       ],
       floating: canWrite && !dissolved && !pendingMe
           ? Button.primary(
@@ -66,12 +105,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           : Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                  child: Segmented<int>(
-                    scrollable: true,
-                    values: const [0, 1, 2, 3, 4],
-                    selected: _tab,
-                    label: (i) => const ['Overview', 'Transactions', 'Members', 'Loans', 'Meetings'][i],
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: PageTabs(
+                    labels: const ['Overview', 'Transactions', 'Members', 'Loans', 'Meetings'],
+                    index: _tab,
                     onChanged: (i) => setState(() => _tab = i),
                   ),
                 ),
@@ -102,9 +139,13 @@ class _OverviewTab extends ConsumerWidget {
     final c = group.config.currency;
     final me = ref.watch(authProvider).identity?.peerId;
     final myBalance = me == null ? null : ref.watch(balanceProvider((peerId: me, groupId: group.id))).value;
-    final fund = ref.watch(groupBalancesProvider(group.id)).value;
-    final fundTotal = fund?.fold<double>(0, (s, b) => s + b.netBalance) ?? 0;
+    final fund = ref.watch(groupFundProvider(group.id)).value;
     final cfg = group.config;
+    final per = switch (cfg.frequency) {
+      ContributionFrequency.weekly => 'week',
+      ContributionFrequency.biweekly => '2 weeks',
+      ContributionFrequency.monthly => 'month',
+    };
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
@@ -118,31 +159,49 @@ class _OverviewTab extends ConsumerWidget {
             ),
             const Gap(12),
           ],
-          Row(
-            children: [
-              Expanded(child: StatCard(label: 'Group fund', value: fmtMoney(c, fundTotal), primary: true)),
-              const Gap(12),
-              Expanded(child: StatCard(label: 'My net balance', value: fmtMoney(c, myBalance?.netBalance ?? 0))),
-            ],
+          // The group's money at a glance: what it owns, what it can lend now,
+          // and what is out with borrowers.
+          HeroCard(
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Metric(label: 'Group fund', value: fmtMoney(c, fund?.total ?? 0), large: true),
+                const Gap(18),
+                Row(
+                  children: [
+                    Expanded(child: Metric(label: 'Available to lend', value: fmtMoney(c, fund?.available ?? 0))),
+                    Expanded(
+                      child: Metric(label: 'Out on loan', value: fmtMoney(c, fund?.lentOut ?? 0), align: CrossAxisAlignment.end),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            footer: Row(
+              children: [
+                Expanded(child: Metric(label: 'My balance', value: fmtMoney(c, myBalance?.netBalance ?? 0))),
+                Expanded(
+                  child: Metric(
+                    label: 'My contributions',
+                    value: fmtMoney(c, myBalance?.totalContributed ?? 0),
+                    align: CrossAxisAlignment.end,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Gap(12),
-          ListRow(
-            leading: const Icon(LucideIcons.piggyBank),
-            title: Text('${fmtMoney(c, cfg.contributionAmount)} per ${cfg.frequency.name}'),
-            subtitle: Text('My contributions: ${fmtMoney(c, myBalance?.totalContributed ?? 0)}').small.muted,
-          ),
-          ListRow(
-            leading: const Icon(LucideIcons.dollarSign),
-            title: const Text('Loan terms'),
-            subtitle: Text(
-              'Up to ${cfg.maxLoanMultiplier}× contributions · ${(cfg.loanInterestRate * 100).toStringAsFixed(0)}% interest · '
-              'after ${cfg.minContributionsForLoan} contributions · ${cfg.requireLoanApproval ? 'admin approval' : 'auto-approved'}',
-            ).small.muted,
-          ),
-          ListRow(
-            leading: const Icon(LucideIcons.users),
-            title: const Text('Members'),
-            subtitle: Text('${group.memberCount} active').small.muted,
+          const SectionTitle('How this group works'),
+          Panel(
+            child: Column(
+              children: [
+                InfoRow('Contribution', '${fmtMoney(c, cfg.contributionAmount)} per $per'),
+                InfoRow('Loan limit', '${cfg.maxLoanMultiplier}× your contributions'),
+                InfoRow('Interest', '${(cfg.loanInterestRate * 100).toStringAsFixed(0)}% per loan'),
+                InfoRow('Eligible after', '${cfg.minContributionsForLoan} contributions'),
+                InfoRow('Loan approval', cfg.requireLoanApproval ? 'By an admin' : 'Automatic'),
+                InfoRow('Members', '${group.memberCount} active'),
+              ],
+            ),
           ),
         ],
       ),
@@ -210,25 +269,31 @@ class _MembersTab extends ConsumerWidget {
         FilterOption('Suspended', (m) => m.status == MemberStatus.suspended),
         FilterOption('With loans', (m) => m.hasOutstandingLoan),
       ],
-      builder: (context, visible) => ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-      itemCount: visible.length,
-      itemBuilder: (context, index) {
-        final member = visible[index];
-        final balance = ref.watch(balanceProvider((peerId: member.peerId, groupId: group.id))).value;
-        return ListRow(
-          leading: InitialsAvatar(member.name),
-          title: Text(member.name),
-          subtitle: Text(
-            member.status == MemberStatus.active
-                ? 'Contributed ${fmtMoney(group.config.currency, balance?.totalContributed ?? 0)}'
-                    '${member.hasOutstandingLoan ? ' · has loan' : ''}'
-                : member.status.name,
-          ).small.muted,
-          trailing: RoleBadge(role: member.role.name),
+      builder: (context, visible) {
+        final progress = ref.watch(groupLoanProgressProvider(group.id)).value ?? const <String, LoanProgress>{};
+        final c = group.config.currency;
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+          itemCount: visible.length,
+          itemBuilder: (context, index) {
+            final member = visible[index];
+            final balance = ref.watch(balanceProvider((peerId: member.peerId, groupId: group.id))).value;
+            final loan = progress.values.where((p) => p.loan.borrowerPeerId == member.peerId && p.loan.isActive).firstOrNull;
+            final line = member.status != MemberStatus.active
+                ? titleCase(member.status.name)
+                : loan == null
+                    ? 'Contributed ${fmtMoney(c, balance?.totalContributed ?? 0)}'
+                    : 'Contributed ${fmtMoney(c, balance?.totalContributed ?? 0)} · loan ${fmtMoney(c, loan.borrowed)}, '
+                        'repaid ${fmtMoney(c, loan.repaid)}';
+            return ListRow(
+              leading: InitialsAvatar(member.name),
+              title: Text(member.name),
+              subtitle: Text(line).small.muted,
+              trailing: RoleBadge(role: member.role.name),
+            );
+          },
         );
       },
-      ),
     );
   }
 }
@@ -240,9 +305,8 @@ class _LoansTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loansAsync = ref.watch(loanListProvider(group.id));
-    final c = group.config.currency;
+    final progress = ref.watch(groupLoanProgressProvider(group.id)).value ?? const <String, LoanProgress>{};
     final dissolved = group.status == GroupStatus.dissolved;
-    final scheme = Theme.of(context).colorScheme;
 
     return loansAsync.when(
       data: (loans) {
@@ -276,24 +340,10 @@ class _LoansTab extends ConsumerWidget {
             ?requestButton,
             const Gap(12),
             for (final loan in visible)
-              ListRow(
-                title: Text(
-                  '${fmtMoney(c, loan.requestedAmount)} · ${group.members.where((m) => m.peerId == loan.borrowerPeerId).firstOrNull?.name ?? 'member'}',
-                ),
-                subtitle: Text('${loan.status.name} · ${loan.termWeeks} weeks').small.muted,
-                trailing: Icon(
-                  switch (loan.status) {
-                    LoanStatus.pending => LucideIcons.clock,
-                    LoanStatus.rejected || LoanStatus.defaulted => LucideIcons.circleX,
-                    LoanStatus.completed => LucideIcons.circleCheck,
-                    _ => LucideIcons.landmark,
-                  },
-                  color: switch (loan.status) {
-                    LoanStatus.pending => VBankTheme.warning(context),
-                    LoanStatus.rejected || LoanStatus.defaulted => scheme.destructive,
-                    _ => scheme.primary,
-                  },
-                ),
+              LoanTile(
+                loan: loan,
+                group: group,
+                progress: progress[loan.id],
                 onTap: () => pushScreen(context, LoanDetailScreen(loanId: loan.id)),
               ),
           ],

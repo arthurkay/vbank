@@ -3,7 +3,9 @@ import '../../models/group.dart';
 import '../../models/loan.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/loan_provider.dart';
+import '../../models/loan_progress.dart';
 import '../../ui/ui.dart';
+import '../../widgets/loan_tile.dart';
 import 'loan_detail_screen.dart';
 
 /// Loans of the selected group.
@@ -17,7 +19,7 @@ class LoanListScreen extends ConsumerWidget {
       return const AppPage(title: 'Loans', child: EmptyState(icon: LucideIcons.landmark, title: 'No group selected'));
     }
     final loans = ref.watch(loanListProvider(group.id));
-    final c = group.config.currency;
+    final progress = ref.watch(groupLoanProgressProvider(group.id)).value ?? const <String, LoanProgress>{};
     return AppPage(
       title: '${group.name} · loans',
       floating: group.status == GroupStatus.dissolved
@@ -50,10 +52,10 @@ class LoanListScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             children: [
               for (final loan in visible)
-                ListRow(
-                  title: Text('${fmtMoney(c, loan.requestedAmount)} · ${group.members.where((m) => m.peerId == loan.borrowerPeerId).firstOrNull?.name ?? 'member'}'),
-                  subtitle: Text(loan.status.name).small.muted,
-                  trailing: Icon(loan.status == LoanStatus.pending ? LucideIcons.clock : LucideIcons.chevronRight),
+                LoanTile(
+                  loan: loan,
+                  group: group,
+                  progress: progress[loan.id],
                   onTap: () => pushScreen(context, LoanDetailScreen(loanId: loan.id)),
                 ),
             ],
