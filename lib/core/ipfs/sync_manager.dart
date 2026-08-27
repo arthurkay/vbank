@@ -289,7 +289,11 @@ class SyncManager {
       if (until != null && DateTime.now().isBefore(until)) continue;
       try {
         await _ipfsService.connectToPeer(addr).timeout(const Duration(seconds: 8));
-        _peerReachable(peerId);
+        // A "successful" connect is not proof of life — dart_ipfs reports
+        // success for addresses it merely re-registered — so only the address
+        // backoff is cleared here; the peer backoff waits for a real reply.
+        _dialFailures.remove(addr);
+        _dialBackoffUntil.remove(addr);
         connected.add(peerId);
         _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Connected to $addr'));
       } catch (e) {
