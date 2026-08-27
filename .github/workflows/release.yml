@@ -1,7 +1,8 @@
 name: Release desktop builds
 
-# Tag a commit `vX.Y.Z` and push the tag: this builds the Linux, Windows and
-# macOS apps and attaches them to a GitHub release of the same name.
+# Tag a commit `vX.Y.Z` and push the tag: this builds the Linux (tar.gz),
+# Windows (zip + Inno Setup installer) and macOS (dmg) apps and attaches them
+# to a GitHub release of the same name.
 # Mobile builds are not published here.
 on:
   push:
@@ -64,10 +65,19 @@ jobs:
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item -Recurse build/windows/x64/runner/Release/* $stage/
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          # Inno Setup 6 ships on the windows-latest runner image.
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVBankVersion=$version" windows\installer\vbank.iss
+          Get-ChildItem dist
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: vbank-*-windows-x64.zip
+          path: |
+            vbank-*-windows-x64.zip
+            dist/vbank-*-windows-x64-setup.exe
 
   macos:
     runs-on: macos-latest
@@ -110,4 +120,5 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.exe
             dist/*.dmg
