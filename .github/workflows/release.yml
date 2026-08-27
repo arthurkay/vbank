@@ -71,13 +71,15 @@ jobs:
           $version = $env:GITHUB_REF_NAME.TrimStart('v')
           # Inno Setup 6 ships on the windows-latest runner image.
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVBankVersion=$version" windows\installer\vbank.iss
-          Get-ChildItem dist
+          # Flatten: upload-artifact keeps the dist\ prefix, which the release glob would miss.
+          Move-Item dist\vbank-*-windows-x64-setup.exe .
+          Get-ChildItem vbank-*
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             vbank-*-windows-x64.zip
-            dist/vbank-*-windows-x64-setup.exe
+            vbank-*-windows-x64-setup.exe
 
   macos:
     runs-on: macos-latest
