@@ -13,12 +13,20 @@ id. It never holds a group key and cannot read amounts, names or anything else.
 
 ## Run it on a Linux VPS (Docker)
 
+The image is published to GitHub Container Registry as
+**`ghcr.io/arthurkay/vbank-relay`** (`latest` = main, plus one tag per release,
+e.g. `1.7.0`) by `.github/workflows/relay-image.yml`. No checkout needed:
+
 ```sh
-git clone https://github.com/arthurkay/vbank.git && cd vbank/deploy/relay
+mkdir -p vbank-relay && cd vbank-relay
+curl -fsSLO https://raw.githubusercontent.com/arthurkay/vbank/main/deploy/relay/docker-compose.yml
 echo 'VBANK_RELAY_PUBLIC_IP=203.0.113.7' > .env      # your VPS public IPv4
-docker compose up -d --build
+docker compose pull && docker compose up -d
 docker compose logs -f relay                         # look for "relay address:"
 ```
+
+To build the image yourself instead: `docker build -f deploy/relay/Dockerfile -t vbank-relay .`
+from the repository root and set `image: vbank-relay` in the compose file.
 
 Open TCP port **4001** in the VPS firewall / security group. The log prints the
 address to give to members, e.g.
@@ -60,5 +68,5 @@ A systemd unit only needs `ExecStart` pointing at that command and
   month. The ledger is `relay_ledger.json` in the data directory.
 * Logs: one line per stored block / forwarded notification; a heartbeat every
   10 minutes. `--verbose` (or `VBANK_RELAY_VERBOSE=1`) adds libp2p detail.
-* Upgrading: `docker compose pull`/`--build` and `up -d`; the data volume keeps
-  identity and blocks.
+* Upgrading: `docker compose pull && docker compose up -d`; the data volume keeps
+  identity and blocks. The container runs as an unprivileged user (uid 10001).

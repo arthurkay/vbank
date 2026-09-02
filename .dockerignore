@@ -1,0 +1,23 @@
+# Docker context for deploy/relay/Dockerfile: the relay needs lib/, bin/,
+# third_party/ and the pubspec only. Everything else is Flutter app baggage.
+build/
+.dart_tool/
+.git/
+.github/
+.claude/
+android/
+ios/
+macos/
+windows/
+linux/
+web/
+docs/
+assets/
+test/
+integration_test/
+tool/
+*.md
+!deploy/relay/README.md
+*.iml
+.idea/
+.vscode/
