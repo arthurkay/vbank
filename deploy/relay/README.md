@@ -73,7 +73,10 @@ with it you can rebuild the relay on any server and keep the same address.
 
 ### 4. DNS: publish the address for the app
 
-Take the `/p2p/…` part from the log and add the TXT record:
+The `/p2p/12D3KooW…` part of the logged address is the **relay's own peer id**
+— derived from the seed in `.env`, unrelated to any member's id. It is public by
+design (apps use it to verify they reached the genuine relay); only the seed is
+secret. Take it from the log and add the TXT record:
 
 ```
 _dnsaddr.vbank.localhost.co.zm.   IN TXT   "dnsaddr=/dns4/vbank.localhost.co.zm/tcp/4001/p2p/12D3KooW…"
