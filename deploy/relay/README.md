@@ -122,12 +122,21 @@ see each other's records within a sync round (~2 minutes).
   10 minutes. `VBANK_RELAY_VERBOSE=1` adds libp2p detail.
 * **Reboots:** `restart: unless-stopped` brings the container back.
 
+### Checking from a computer
+
+```sh
+dart run tool/relay/probe.dart            # resolves the TXT record, dials, asks for an inventory
+```
+
+prints `connected in … ms` and `inventory reply → {"v":1,"cids":[],"relay":true}`
+when everything is right.
+
 ### Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
 | App says "Looking up its address…" for more than an hour | `dig +short TXT _dnsaddr.vbank.localhost.co.zm` must return the `dnsaddr=` record; the value must contain `/p2p/`. |
-| App log: `Relay unreachable /dns4/vbank.localhost.co.zm/...` | Port 4001 closed, or the A record points elsewhere: `nc -vz vbank.localhost.co.zm 4001` from another network. |
+| App log: `Relay unreachable /dns4/vbank.localhost.co.zm/...` | Port 4001 closed, or the A record points elsewhere: `nc -vz vbank.localhost.co.zm 4001` from another network. If the A record was added *after* the phone first looked it up, its resolver may cache the miss for up to an hour — toggle Wi-Fi / mobile data to flush. |
 | Address in the log differs from the TXT record | `.env` seed changed or missing → the relay generated a new identity. Restore `.env` or update the record. |
 | `did not take <cid>` warnings on a device, once, right after connecting | Normal: the first request over a fresh connection can time out while the relay warms up; the next round reconciles. |
 
