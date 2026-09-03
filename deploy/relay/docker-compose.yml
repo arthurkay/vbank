@@ -9,11 +9,11 @@ services:
       # How members reach this relay. Preferred: a hostname (A/CNAME record
       # pointing at the VPS) → members get a /dns4/ address that survives an IP
       # change. Fall back to VBANK_RELAY_PUBLIC_IP for a bare /ip4/ address.
-      VBANK_RELAY_PUBLIC_HOST: "${VBANK_RELAY_PUBLIC_HOST:-}"
+      VBANK_RELAY_PUBLIC_HOST: "${VBANK_RELAY_PUBLIC_HOST:-vbank.localhost.co.zm}"
       VBANK_RELAY_PUBLIC_IP: "${VBANK_RELAY_PUBLIC_IP:-}"
       VBANK_RELAY_PORT: "4001"
-      # Optional: pin the peer id without relying on the volume
-      # (openssl rand -base64 32). Keep it secret.
+      # Pins the peer id (the /p2p/… in the DNS TXT record) independently of
+      # the volume: openssl rand -base64 32. Keep it secret.
       VBANK_RELAY_IDENTITY_SEED: "${VBANK_RELAY_IDENTITY_SEED:-}"
     volumes:
       - relay-data:/data
