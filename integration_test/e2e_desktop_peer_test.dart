@@ -36,7 +36,6 @@ import 'package:vbank/services/group_service.dart';
 import 'package:vbank/services/loan_service.dart';
 import 'package:vbank/services/meeting_service.dart';
 import 'package:vbank/services/transaction_service.dart';
-import 'package:yaru/yaru.dart';
 
 
 void main() {
