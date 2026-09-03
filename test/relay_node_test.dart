@@ -25,7 +25,7 @@ void main() {
   setUpAll(() async {
     Libp2pRouter.debugLog = true;
     tmp = await Directory.systemTemp.createTemp('vbank-relay-');
-    relay = RelayNode(dataDir: '${tmp.path}/relay', listenPort: 4621, publicIp: '127.0.0.1', log: (l) => debugPrint('[relay] $l'));
+    relay = RelayNode(dataDir: '${tmp.path}/relay', listenPort: 4621, publicHost: 'localhost', log: (l) => debugPrint('[relay] $l'));
     await relay.start();
     device = IpfsNodeHost(
       ipfsDir: '${tmp.path}/device',
@@ -51,8 +51,12 @@ void main() {
 
   Uint8List json(Map<String, dynamic> m) => Uint8List.fromList(utf8.encode(jsonEncode(m)));
 
-  test('relay address is public ip + port + peer id', () {
-    expect(relay.publicMultiaddr, '/ip4/127.0.0.1/tcp/4621/p2p/${relay.peerId}');
+  test('relay address is a dns4 multiaddr; devices resolve it before dialling', () async {
+    expect(relay.publicMultiaddr, '/dns4/localhost/tcp/4621/p2p/${relay.peerId}');
+    expect(await IpfsNodeHost.resolveMultiaddr(relay.publicMultiaddr!), '/ip4/127.0.0.1/tcp/4621/p2p/${relay.peerId}');
+    expect(await IpfsNodeHost.resolveMultiaddr('/ip4/10.0.0.1/tcp/4001/p2p/X'), '/ip4/10.0.0.1/tcp/4001/p2p/X');
+    expect(RelayNode(dataDir: '${tmp.path}/x', publicIp: '203.0.113.7', publicPort: 40001).publicMultiaddr, isNull,
+        reason: 'no peer id before start');
   });
 
   test('device puts a block; relay lists it in the inventory and serves it back', () async {
@@ -91,7 +95,7 @@ void main() {
   test('ledger survives a restart of the relay', () async {
     final before = relay.blocksStored;
     await relay.stop();
-    relay = RelayNode(dataDir: '${tmp.path}/relay', listenPort: 4621, publicIp: '127.0.0.1', log: (l) => debugPrint('[relay] $l'));
+    relay = RelayNode(dataDir: '${tmp.path}/relay', listenPort: 4621, publicHost: 'localhost', log: (l) => debugPrint('[relay] $l'));
     await relay.start();
     expect(relay.blocksStored, 0, reason: 'counter is per run');
     // The ledger file is what matters.

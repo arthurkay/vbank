@@ -33,13 +33,30 @@ class RelayNode {
     required this.dataDir,
     this.listenPort = 4001,
     this.publicIp,
+    this.publicHost,
+    this.publicPort,
+    this.identitySeed,
     this.debugLog = false,
     void Function(String line)? log,
   }) : _log = log ?? ((l) => stdout.writeln('[relay] $l'));
 
   final String dataDir;
   final int listenPort;
+
+  /// Public IPv4 for an `/ip4/…` address.
   final String? publicIp;
+
+  /// Preferred: a hostname for a `/dns4/…` address — survives IP changes and
+  /// can sit behind a CNAME. Devices resolve it right before dialling.
+  final String? publicHost;
+
+  /// Port members dial when the host maps a different external port to
+  /// [listenPort]. Defaults to [listenPort].
+  final int? publicPort;
+
+  /// Fixed identity (32 bytes) for hosts without persistent storage; see
+  /// [IpfsNodeHost.identitySeed].
+  final Uint8List? identitySeed;
   final bool debugLog;
   final void Function(String line) _log;
 
@@ -47,6 +64,7 @@ class RelayNode {
     ipfsDir: dataDir,
     listenPort: listenPort,
     debugLog: debugLog,
+    identitySeed: identitySeed,
     onState: (state, peerId) => _log('node $state${peerId == null ? '' : ' as $peerId'}'),
     onNotify: _onNotify,
     onAddresses: (_) {},
@@ -72,8 +90,11 @@ class RelayNode {
   String? get publicMultiaddr {
     final id = _host.peerId;
     if (id == null) return null;
+    final port = publicPort ?? listenPort;
+    final host = publicHost;
+    if (host != null && host.isNotEmpty) return '/dns4/$host/tcp/$port/p2p/$id';
     final ip = publicIp;
-    if (ip != null && ip.isNotEmpty) return '/ip4/$ip/tcp/$listenPort/p2p/$id';
+    if (ip != null && ip.isNotEmpty) return '/ip4/$ip/tcp/$port/p2p/$id';
     return _host.dialableAddresses.firstOrNull;
   }
 

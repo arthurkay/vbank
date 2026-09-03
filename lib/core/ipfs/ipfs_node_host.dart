@@ -27,7 +27,13 @@ class IpfsNodeHost {
     required this.onRequest,
     this.listenPort = 4001,
     this.debugLog = false,
+    this.identitySeed,
   });
+
+  /// 32-byte libp2p identity seed. When null the node keeps one in
+  /// `<ipfsDir>/identity_seed`. A relay on a host without persistent storage
+  /// passes it in (from an environment secret) so its peer id never changes.
+  final Uint8List? identitySeed;
 
   /// TCP port the node listens on (tests run two nodes in one process).
   final int listenPort;
@@ -169,6 +175,8 @@ class IpfsNodeHost {
   /// node keeps the same peer id across restarts. Without it every start mints a
   /// new identity and every address other members hold for us goes stale.
   Future<Uint8List> _identitySeed() async {
+    final injected = identitySeed;
+    if (injected != null && injected.length == 32) return injected;
     final file = File(p.join(ipfsDir, 'identity_seed'));
     if (await file.exists()) {
       final bytes = await file.readAsBytes();
@@ -272,8 +280,25 @@ class IpfsNodeHost {
   }
 
   Future<void> connectToPeer(String multiaddr) async {
-    await _require().connectToPeer(multiaddr);
+    await _require().connectToPeer(await resolveMultiaddr(multiaddr));
     if (multiaddr.contains('/p2p/')) _vbankPeers.add(multiaddr.split('/p2p/').last);
+  }
+
+  static final _dnsAddr = RegExp(r'^/dns4?/([^/]+)/(tcp/\d+.*)$');
+
+  /// `/dns4/relay.example.com/tcp/4001/p2p/Qm…` → `/ip4/203.0.113.7/tcp/4001/p2p/Qm…`.
+  ///
+  /// The libp2p stack dials IP addresses only; a relay is better named by a
+  /// hostname (it survives an IP change and can sit behind a CNAME), so the
+  /// lookup happens here, right before the dial. Non-DNS addresses pass through.
+  static Future<String> resolveMultiaddr(String multiaddr) async {
+    final m = _dnsAddr.firstMatch(multiaddr.trim());
+    if (m == null) return multiaddr;
+    final host = m.group(1)!;
+    final rest = m.group(2)!;
+    final v4 = await InternetAddress.lookup(host, type: InternetAddressType.IPv4);
+    if (v4.isEmpty) throw SocketException('No IPv4 address for $host');
+    return '/ip4/${v4.first.address}/$rest';
   }
 
   Future<List<String>> findProviders(String cid) => _require().findProviders(cid);

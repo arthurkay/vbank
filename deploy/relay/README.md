@@ -20,10 +20,20 @@ e.g. `1.7.0`) by `.github/workflows/relay-image.yml`. No checkout needed:
 ```sh
 mkdir -p vbank-relay && cd vbank-relay
 curl -fsSLO https://raw.githubusercontent.com/arthurkay/vbank/main/deploy/relay/docker-compose.yml
-echo 'VBANK_RELAY_PUBLIC_IP=203.0.113.7' > .env      # your VPS public IPv4
+echo 'VBANK_RELAY_PUBLIC_HOST=relay.example.com' > .env   # DNS A record → your VPS
 docker compose pull && docker compose up -d
-docker compose logs -f relay                         # look for "relay address:"
+docker compose logs -f relay                              # look for "relay address:"
 ```
+
+Use a **hostname** (`VBANK_RELAY_PUBLIC_HOST`) whenever you can: members then
+get a `/dns4/relay.example.com/tcp/4001/p2p/…` address that keeps working if
+the VPS's IP changes — devices resolve the name right before each dial. Without
+DNS, set `VBANK_RELAY_PUBLIC_IP=203.0.113.7` for a plain `/ip4/…` address.
+
+Optional `VBANK_RELAY_IDENTITY_SEED` (output of `openssl rand -base64 32`) pins
+the peer id — the `/p2p/…` part of the address — independently of the data
+volume, so you can wipe or move the volume and keep the same address. Treat it
+like a private key.
 
 To build the image yourself instead: `docker build -f deploy/relay/Dockerfile -t vbank-relay .`
 from the repository root and set `image: vbank-relay` in the compose file.
@@ -32,7 +42,7 @@ Open TCP port **4001** in the VPS firewall / security group. The log prints the
 address to give to members, e.g.
 
 ```
-[relay] relay address: /ip4/203.0.113.7/tcp/4001/p2p/12D3KooW…
+[relay] relay address: /dns4/relay.example.com/tcp/4001/p2p/12D3KooW…
 ```
 
 The node identity (and therefore the `/p2p/…` part) lives in the `relay-data`
@@ -54,7 +64,7 @@ Several relays can be added; devices use all of them.
 ```sh
 dart pub get
 dart build cli -t bin/vbank_relay.dart -o build/relay     # bundle/bin/vbank_relay + bundle/lib/*.so
-build/relay/bundle/bin/vbank_relay --data /var/lib/vbank-relay --port 4001 --public-ip 203.0.113.7
+build/relay/bundle/bin/vbank_relay --data /var/lib/vbank-relay --port 4001 --public-host relay.example.com
 ```
 
 (`dart compile exe` refuses because some dependencies use native build hooks.)
