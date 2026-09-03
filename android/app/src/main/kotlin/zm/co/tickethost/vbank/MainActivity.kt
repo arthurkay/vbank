@@ -1,4 +1,4 @@
-package com.vbank.vbank
+package zm.co.tickethost.vbank
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

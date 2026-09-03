@@ -86,7 +86,7 @@
 				<string>vbank</string>
 			</array>
 			<key>CFBundleURLName</key>
-			<string>com.vbank.vbank</string>
+			<string>zm.co.tickethost.vbank</string>
 		</dict>
 	</array>
 </dict>

@@ -22,7 +22,7 @@ val keystoreProperties = Properties().apply {
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 
 android {
-    namespace = "com.vbank.vbank"
+    namespace = "zm.co.tickethost.vbank"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -37,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.vbank.vbank"
+        applicationId = "zm.co.tickethost.vbank"
         // minSdk >= 21 has native multidex; no multiDexEnabled needed.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

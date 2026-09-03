@@ -20,8 +20,8 @@ PASS=${E2E_PASSPHRASE:-e2e-passphrase-2026}
 case "${1:-}" in
   stage)     cat "$E/stage" 2>/dev/null; echo ;;
   waitstage) until [ "$(cat "$E/stage" 2>/dev/null)" = "$2" ]; do sleep 3; done; echo "stage=$2" ;;
-  launch)    adb shell am start -W -n com.vbank.vbank/.MainActivity >/dev/null ;;
-  deeplink)  LINK=$(cat "$E/invite.txt"); adb shell "am start -W -a android.intent.action.VIEW -d '$LINK' com.vbank.vbank" | tail -1 ;;
+  launch)    adb shell am start -W -n zm.co.tickethost.vbank/.MainActivity >/dev/null ;;
+  deeplink)  LINK=$(cat "$E/invite.txt"); adb shell "am start -W -a android.intent.action.VIEW -d '$LINK' zm.co.tickethost.vbank" | tail -1 ;;
   # The Samsung keyboard drops long input bursts, so type in short chunks.
   passphrase) adb shell input tap 540 924; sleep 1
              for chunk in $(echo "$PASS" | sed 's/\(....\)/\1 /g'); do adb shell input text "$chunk"; sleep 0.6; done
@@ -29,7 +29,7 @@ case "${1:-}" in
              adb shell input tap 540 1084 ;;
   # Navigate to the run's group from anywhere: back to the list, search by name, open the first hit.
   opengroup) for i in 1 2; do adb shell input keyevent KEYCODE_BACK; sleep 0.7; done
-             adb shell am start -W -n com.vbank.vbank/.MainActivity >/dev/null; sleep 2
+             adb shell am start -W -n zm.co.tickethost.vbank/.MainActivity >/dev/null; sleep 2
              adb shell input tap 540 385; sleep 1
              adb shell input text "$(cat "$E/name.txt" | sed 's/ /%s/g')"; sleep 1.5
              adb shell input keyevent KEYCODE_BACK; sleep 1

@@ -331,7 +331,7 @@ class GoogleDriveBackupStore implements CloudBackupStore {
 /// iCloud Drive, in the app's own container (needs the iCloud capability with
 /// this container id in the Apple developer account; see ios/Runner/Runner.entitlements).
 class ICloudBackupStore implements CloudBackupStore {
-  static const containerId = 'iCloud.com.vbank.vbank';
+  static const containerId = 'iCloud.zm.co.tickethost.vbank';
   static const _folder = 'backups';
 
   @override

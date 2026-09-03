@@ -17,7 +17,7 @@ certificate. Without a matching OAuth client the sign-in dialog fails with
    support e-mail, scopes: add `.../auth/drive.appdata` (non-sensitive). Publish
    the consent screen (Testing mode limits sign-ins to 100 listed test users).
 4. **Credentials → Create credentials → OAuth client ID → Android**:
-   * Package name: `com.vbank.vbank`
+   * Package name: `zm.co.tickethost.vbank`
    * SHA-1: of every signing key you ship with —
      * debug: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android | grep SHA1`
      * release: `keytool -list -v -keystore <your-release.jks> -alias <alias> | grep SHA1`
@@ -32,8 +32,8 @@ certificate. Without a matching OAuth client the sign-in dialog fails with
 ## iOS → iCloud
 
 1. Apple Developer → Certificates, Identifiers & Profiles → **Identifiers → App IDs →
-   `com.vbank.vbank`** → enable **iCloud** with *CloudKit* / iCloud Documents,
-   and create the container **`iCloud.com.vbank.vbank`**.
+   `zm.co.tickethost.vbank`** → enable **iCloud** with *CloudKit* / iCloud Documents,
+   and create the container **`iCloud.zm.co.tickethost.vbank`**.
 2. Xcode → Runner target → Signing & Capabilities: the repo already carries
    `ios/Runner/Runner.entitlements` (referenced from the project) with that
    container; make sure automatic signing regenerates the provisioning profile

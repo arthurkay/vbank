@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
 	<!-- Automatic backups to the member's iCloud (CloudBackupService / ICloudBackupStore).
-	     The container must exist in the Apple developer account for com.vbank.vbank. -->
+	     The container must exist in the Apple developer account for zm.co.tickethost.vbank. -->
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
-		<string>iCloud.com.vbank.vbank</string>
+		<string>iCloud.zm.co.tickethost.vbank</string>
 	</array>
 	<key>com.apple.developer.icloud-services</key>
 	<array>
@@ -14,7 +14,7 @@
 	</array>
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
-		<string>iCloud.com.vbank.vbank</string>
+		<string>iCloud.zm.co.tickethost.vbank</string>
 	</array>
 </dict>
 </plist>

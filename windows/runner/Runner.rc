@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.vbank" "\0"
+            VALUE "CompanyName", "TicketHost" "\0"
             VALUE "FileDescription", "vbank" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "vbank" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.vbank. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 TicketHost. All rights reserved." "\0"
             VALUE "OriginalFilename", "vbank.exe" "\0"
             VALUE "ProductName", "vbank" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
