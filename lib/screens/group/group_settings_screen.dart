@@ -164,6 +164,19 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
               );
             }),
 
+          // --- removed members (banned until the owner allows them back) ----------
+          if (isOwner && !dissolved) _RemovedMembers(group: group, busy: _busy, onAllowBack: (peerId) async {
+            setState(() => _busy = true);
+            try {
+              await notifier.allowBack(group.id, peerId);
+              if (context.mounted) showMessage(context, 'They can be invited again');
+            } catch (e) {
+              if (context.mounted) showMessage(context, '$e', error: true);
+            } finally {
+              if (mounted) setState(() => _busy = false);
+            }
+          }),
+
           // --- danger zone -------------------------------------------------------
           if (isOwner && !dissolved) ...[
             const SectionTitle('Owner actions'),
@@ -377,5 +390,45 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
       destructive: true,
     );
     if (ok) await _run(() => notifier.dissolveGroup(group.id), 'Group dissolved');
+  }
+}
+
+
+/// People the owner removed. They cannot re-join (their invites are refused
+/// and the group key was rotated) until allowed back here.
+class _RemovedMembers extends ConsumerWidget {
+  final Group group;
+  final bool busy;
+  final Future<void> Function(String peerId) onAllowBack;
+  const _RemovedMembers({required this.group, required this.busy, required this.onAllowBack});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder(
+      future: ref.read(groupServiceProvider).bannedMembers(group.id),
+      builder: (context, snap) {
+        final banned = snap.data ?? const [];
+        if (banned.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SectionTitle('Removed members', trailing: Text('${banned.length}').xSmall.muted),
+            for (final r in banned)
+              ListRow(
+                leading: const Icon(LucideIcons.userX),
+                title: Text(group.members.where((m) => m.peerId == r.removedPeerId).firstOrNull?.name ?? 'Former member'),
+                subtitle: Text('Removed ${fmtDate(r.removedAt)} · ${r.reason}').small.muted,
+                trailing: Button.outline(
+                  onPressed: busy ? null : () => onAllowBack(r.removedPeerId),
+                  child: const Text('Allow back'),
+                ),
+              ),
+            const Text('Removed members cannot re-join, even with a new invite link, until you allow them back.')
+                .xSmall
+                .muted,
+          ],
+        );
+      },
+    );
   }
 }

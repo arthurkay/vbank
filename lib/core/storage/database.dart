@@ -29,7 +29,7 @@ class AppDatabase {
   static Database? _database;
 
   /// Bump when the schema changes and add a step to [_onUpgrade].
-  static const schemaVersion = 5;
+  static const schemaVersion = 6;
 
   static const _fileName = 'vbank.db';
 
@@ -234,6 +234,21 @@ class AppDatabase {
       // wrapped under it (InviteKeyWrap) for the snapshot header.
       await db.execute('ALTER TABLE invites ADD COLUMN wrapped_key BLOB');
     }
+    if (oldVersion < 6) {
+      // Key rotation: members publish an X25519 key, groups keep every key
+      // version, removals can be lifted by the owner.
+      await db.execute('ALTER TABLE members ADD COLUMN enc_key BLOB');
+      await db.execute('ALTER TABLE member_removals ADD COLUMN lifted INTEGER DEFAULT 0');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS group_key_history (
+          group_id TEXT NOT NULL,
+          version INTEGER NOT NULL,
+          key BLOB NOT NULL,
+          PRIMARY KEY (group_id, version)
+        )
+      ''');
+      await db.execute('INSERT OR IGNORE INTO group_key_history (group_id, version, key) SELECT group_id, 1, key FROM group_keys');
+    }
     await _createIndexes(db);
   }
 
@@ -246,6 +261,15 @@ class AppDatabase {
         group_id TEXT PRIMARY KEY,
         key BLOB NOT NULL,
         created_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS group_key_history (
+        group_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        key BLOB NOT NULL,
+        PRIMARY KEY (group_id, version)
       )
     ''');
   }
@@ -301,6 +325,7 @@ class AppDatabase {
         public_key BLOB NOT NULL,
         joined_at INTEGER NOT NULL,
         has_outstanding_loan INTEGER DEFAULT 0,
+        enc_key BLOB,
         PRIMARY KEY (peer_id, group_id)
       )
     ''');
@@ -449,7 +474,8 @@ class AppDatabase {
         outstanding_amount REAL DEFAULT 0,
         action TEXT NOT NULL,
         removed_at INTEGER NOT NULL,
-        admin_signature BLOB NOT NULL
+        admin_signature BLOB NOT NULL,
+        lifted INTEGER DEFAULT 0
       )
     ''');
 

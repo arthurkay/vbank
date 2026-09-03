@@ -13,6 +13,14 @@ class GovernanceDao {
 
   Future<void> insertRemoval(MemberRemoval r) async {
     final db = await AppDatabase.getInstance();
+    // A lift never reverts: keep it if we already know about it.
+    final existing = await db.query('member_removals', columns: ['lifted'], where: 'id = ?', whereArgs: [r.id]);
+    final lifted = r.lifted || (existing.isNotEmpty && (existing.first['lifted'] as int? ?? 0) == 1);
+    r = MemberRemoval(
+      id: r.id, groupId: r.groupId, removedPeerId: r.removedPeerId, removedByPeerId: r.removedByPeerId,
+      reason: r.reason, hasOutstandingLoan: r.hasOutstandingLoan, outstandingAmount: r.outstandingAmount,
+      action: r.action, removedAt: r.removedAt, adminSignature: r.adminSignature, lifted: lifted,
+    );
     await db.insert(
       'member_removals',
       {
@@ -26,6 +34,7 @@ class GovernanceDao {
         'action': r.action.name,
         'removed_at': r.removedAt.millisecondsSinceEpoch,
         'admin_signature': r.adminSignature,
+        'lifted': r.lifted ? 1 : 0,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -54,6 +63,7 @@ class GovernanceDao {
               ),
               removedAt: DateTime.fromMillisecondsSinceEpoch(m['removed_at'] as int, isUtc: true),
               adminSignature: Uint8List.fromList((m['admin_signature'] as List).cast<int>()),
+              lifted: (m['lifted'] as int? ?? 0) == 1,
             ))
         .toList();
   }
@@ -144,5 +154,10 @@ class GovernanceDao {
           ? DateTime.fromMillisecondsSinceEpoch(m['completed_at'] as int, isUtc: true)
           : null,
     );
+  }
+
+  Future<void> liftRemoval(String removalId) async {
+    final db = await AppDatabase.getInstance();
+    await db.update('member_removals', {'lifted': 1}, where: 'id = ?', whereArgs: [removalId]);
   }
 }

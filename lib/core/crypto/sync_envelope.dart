@@ -15,6 +15,10 @@ enum SyncPayloadType {
   loan,
   meeting,
   reversal,
+
+  /// A member publishing their X25519 public key (MemberKeys) so admins can
+  /// re-key them after a rotation.
+  memberKey,
 }
 
 /// Thrown when an envelope cannot be opened with the supplied group key.
@@ -46,16 +50,27 @@ class SyncEnvelope {
   /// a joiner holding an invite secret can unwrap and open the snapshot.
   final Map<String, Uint8List> wraps;
 
+  /// Which group key version encrypted [data]. Version 1 is the key a group
+  /// started with; rotations increment it.
+  final int keyVersion;
+
+  /// Group snapshots only: the current key ring sealed for each active member
+  /// (peer id → blob, see MemberKeys) so a rotation reaches everyone but the
+  /// removed member.
+  final Map<String, Uint8List> rekeys;
+
   const SyncEnvelope({
     this.version = currentVersion,
     required this.type,
     required this.groupId,
     required this.data,
     this.wraps = const {},
+    this.keyVersion = 1,
+    this.rekeys = const {},
   });
 
-  static List<int> _aad(int version, SyncPayloadType type, String groupId) =>
-      utf8.encode('vbank:$version:${type.name}:$groupId');
+  static List<int> _aad(int version, SyncPayloadType type, String groupId, [int keyVersion = 1]) =>
+      utf8.encode(keyVersion <= 1 ? 'vbank:$version:${type.name}:$groupId' : 'vbank:$version:${type.name}:$groupId:k$keyVersion');
 
   /// Encrypts [plaintextJson] for [groupId] and returns the envelope bytes to
   /// hand to `IpfsService.addData`.
@@ -65,14 +80,17 @@ class SyncEnvelope {
     required Map<String, dynamic> plaintextJson,
     required SecretKey groupKey,
     Map<String, Uint8List> wraps = const {},
+    int keyVersion = 1,
+    Map<String, Uint8List> rekeys = const {},
   }) async {
     final plaintext = WireCodec.encode(plaintextJson);
     final encrypted = await EncryptionService.encrypt(
       plaintext,
       groupKey,
-      aad: _aad(currentVersion, type, groupId),
+      aad: _aad(currentVersion, type, groupId, keyVersion),
     );
-    return SyncEnvelope(type: type, groupId: groupId, data: encrypted, wraps: wraps).encode();
+    return SyncEnvelope(type: type, groupId: groupId, data: encrypted, wraps: wraps, keyVersion: keyVersion, rekeys: rekeys)
+        .encode();
   }
 
   Uint8List encode() => WireCodec.encode({
@@ -83,6 +101,8 @@ class SyncEnvelope {
         'mac': Uint8List.fromList(data.mac),
         'ciphertext': Uint8List.fromList(data.ciphertext),
         if (wraps.isNotEmpty) 'wraps': {for (final e in wraps.entries) e.key: Uint8List.fromList(e.value)},
+        if (keyVersion > 1) 'kv': keyVersion,
+        if (rekeys.isNotEmpty) 'rekeys': {for (final e in rekeys.entries) e.key: Uint8List.fromList(e.value)},
       });
 
   /// Parses the cleartext header. Returns null if [bytes] is not an envelope
@@ -107,6 +127,11 @@ class SyncEnvelope {
           for (final e in ((json['wraps'] as Map?) ?? const {}).entries)
             e.key as String: Uint8List.fromList(_bytes(e.value)),
         },
+        keyVersion: json['kv'] as int? ?? 1,
+        rekeys: {
+          for (final e in ((json['rekeys'] as Map?) ?? const {}).entries)
+            e.key as String: Uint8List.fromList(_bytes(e.value)),
+        },
       );
     } catch (_) {
       return null;
@@ -126,7 +151,7 @@ class SyncEnvelope {
       final plaintext = await EncryptionService.decrypt(
         data,
         groupKey,
-        aad: _aad(version, type, groupId),
+        aad: _aad(version, type, groupId, keyVersion),
       );
       final decoded = WireCodec.tryDecodeMap(plaintext);
       if (decoded == null) throw const EnvelopeAuthException('Payload is not a vBank record');

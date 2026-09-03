@@ -59,6 +59,11 @@ class MemberDao {
   }
 
   /// Partial update: changes only the role, leaving status etc. untouched.
+  Future<void> updateEncKey(String peerId, String groupId, Uint8List encKey) async {
+    final db = await AppDatabase.getInstance();
+    await db.update('members', {'enc_key': encKey}, where: 'peer_id = ? AND group_id = ?', whereArgs: [peerId, groupId]);
+  }
+
   Future<void> updateName(String peerId, String groupId, String name) async {
     final db = await AppDatabase.getInstance();
     await db.update('members', {'name': name}, where: 'peer_id = ? AND group_id = ?', whereArgs: [peerId, groupId]);
@@ -106,6 +111,9 @@ class MemberData {
   final DateTime joinedAt;
   final bool hasOutstandingLoan;
 
+  /// X25519 public key for receiving rotated group keys (MemberKeys).
+  final Uint8List? encKey;
+
   const MemberData({
     required this.peerId,
     required this.groupId,
@@ -115,6 +123,7 @@ class MemberData {
     required this.publicKey,
     required this.joinedAt,
     this.hasOutstandingLoan = false,
+    this.encKey,
   });
 
   Map<String, dynamic> toMap() => {
@@ -126,6 +135,7 @@ class MemberData {
     'public_key': publicKey,
     'joined_at': joinedAt.millisecondsSinceEpoch,
     'has_outstanding_loan': hasOutstandingLoan ? 1 : 0,
+    'enc_key': encKey,
   };
 
   factory MemberData.fromMap(Map<String, dynamic> map) => MemberData(
@@ -137,5 +147,6 @@ class MemberData {
     publicKey: Uint8List.fromList(map['public_key'] as List<int>),
     joinedAt: DateTime.fromMillisecondsSinceEpoch(map['joined_at'] as int),
     hasOutstandingLoan: (map['has_outstanding_loan'] as int) == 1,
+    encKey: map['enc_key'] == null ? null : Uint8List.fromList(map['enc_key'] as List<int>),
   );
 }

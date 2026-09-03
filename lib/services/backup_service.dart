@@ -87,6 +87,9 @@ class RestoredBackup {
   /// could not decrypt any of its groups' IPFS data.
   final Map<String, Uint8List> groupKeys;
 
+  /// Every key version per group (rotation), v3+ backups; `{groupId: {version: key}}`.
+  final Map<String, Map<int, Uint8List>> groupKeyHistory;
+
   /// Records (payload v3+). Older backups have none; the device re-syncs them
   /// from members and the relay after the restore.
   final List<TransactionData> transactions;
@@ -102,6 +105,7 @@ class RestoredBackup {
     required this.groups,
     required this.members,
     this.groupKeys = const {},
+    this.groupKeyHistory = const {},
     this.transactions = const [],
     this.loans = const [],
     this.schedules = const [],
@@ -211,7 +215,7 @@ class BackupService {
     final members = <Map<String, dynamic>>[];
     for (final g in groups) {
       for (final m in await _memberDao.getByGroupId(g.id)) {
-        members.add(_bytesToBase64(m.toMap(), ['public_key']));
+        members.add(_bytesToBase64(m.toMap(), ['public_key', 'enc_key']));
       }
     }
     final groupKeys = await _groupKeyDao.getAll();
@@ -249,6 +253,10 @@ class BackupService {
       'groups': groups.map((g) => _bytesToBase64(g.toMap(), ['data', 'config_data'])).toList(),
       'members': members,
       'groupKeys': {for (final e in groupKeys.entries) e.key: base64Encode(e.value)},
+      'groupKeyHistory': {
+        for (final g in (await _groupKeyDao.allVersions()).entries)
+          g.key: {for (final v in g.value.entries) '${v.key}': base64Encode(v.value)},
+      },
       'transactions': transactions,
       'loans': loans,
       'schedules': schedules,
@@ -306,7 +314,7 @@ class BackupService {
           .map((g) => GroupData.fromMap(_base64ToBytes(g as Map<String, dynamic>, ['data', 'config_data'])))
           .toList();
       final members = ((json['members'] as List?) ?? const [])
-          .map((m) => MemberData.fromMap(_base64ToBytes(m as Map<String, dynamic>, ['public_key'])))
+          .map((m) => MemberData.fromMap(_base64ToBytes(m as Map<String, dynamic>, ['public_key', 'enc_key'])))
           .toList();
       final groupKeys = <String, Uint8List>{
         for (final e in ((json['groupKeys'] as Map?) ?? const {}).entries)
@@ -320,6 +328,12 @@ class BackupService {
         groups: groups,
         members: members,
         groupKeys: groupKeys,
+        groupKeyHistory: {
+          for (final g in ((json['groupKeyHistory'] as Map?) ?? const {}).entries)
+            g.key as String: {
+              for (final v in (g.value as Map).entries) int.parse(v.key as String): Uint8List.fromList(base64Decode(v.value as String)),
+            },
+        },
         transactions: maps('transactions').map((m) => TransactionData.fromMap(_base64ToBytes(m, ['sender_signature']))).toList(),
         loans: maps('loans').map((m) => LoanData.fromMap(_base64ToBytes(m, ['borrower_signature', 'approver_signature']))).toList(),
         schedules: maps('schedules').map(RepaymentSchedule.fromJson).toList(),
@@ -363,6 +377,11 @@ class BackupService {
     }
     for (final e in backup.groupKeys.entries) {
       await _groupKeyDao.upsert(e.key, e.value);
+    }
+    for (final g in backup.groupKeyHistory.entries) {
+      for (final v in g.value.entries) {
+        await _groupKeyDao.upsertVersion(g.key, v.key, v.value);
+      }
     }
     for (final t in backup.transactions) {
       await _transactionDao.upsert(t);

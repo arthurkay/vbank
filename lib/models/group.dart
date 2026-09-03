@@ -149,6 +149,10 @@ class Member {
   final MemberStatus status;
   final bool hasOutstandingLoan;
 
+  /// X25519 public key for receiving rotated group keys; null until the
+  /// member's device has published it.
+  final Uint8List? encKey;
+
   const Member({
     required this.peerId,
     required this.name,
@@ -157,6 +161,7 @@ class Member {
     required this.publicKey,
     this.status = MemberStatus.active,
     this.hasOutstandingLoan = false,
+    this.encKey,
   });
 
   Map<String, dynamic> toJson() => {
@@ -167,6 +172,7 @@ class Member {
     'publicKey': publicKey,
     'status': status.name,
     'hasOutstandingLoan': hasOutstandingLoan,
+    if (encKey != null) 'encKey': encKey,
   };
 
   factory Member.fromJson(Map<String, dynamic> json) => Member(
@@ -183,5 +189,6 @@ class Member {
       orElse: () => MemberStatus.active,
     ),
     hasOutstandingLoan: json['hasOutstandingLoan'] as bool? ?? false,
+    encKey: json['encKey'] == null ? null : Uint8List.fromList((json['encKey'] as List).cast<int>()),
   );
 }

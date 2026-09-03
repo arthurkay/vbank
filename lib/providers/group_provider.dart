@@ -140,6 +140,15 @@ class GroupListNotifier extends StateNotifier<AsyncValue<List<Group>>> {
       reason: reason,
       settleOutstandingLoan: writeOffLoan,
     );
+    // New group key: the removed member's copy of the old keys reads nothing
+    // published from here on. Publishes the snapshot (with the re-keys) itself.
+    await _ref.read(syncManagerProvider).rotateGroupKey(groupId);
+    await loadGroups();
+  }
+
+  /// Owner lets a removed member back in (their next invite will be accepted).
+  Future<void> allowBack(String groupId, String peerId) async {
+    await _service.liftRemoval(groupId: groupId, actingPeerId: _me, peerId: peerId);
     await _republish(groupId);
   }
 

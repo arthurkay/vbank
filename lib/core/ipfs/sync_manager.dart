@@ -26,6 +26,7 @@ import 'ipfs_service.dart';
 import 'peer_book.dart';
 import 'pending_join.dart';
 import '../crypto/invite_wrap.dart';
+import '../crypto/member_keys.dart';
 import '../relay/relay_directory.dart';
 import 'sync_ledger.dart';
 
@@ -194,6 +195,90 @@ class SyncManager {
   void setIdentity({String? peerId, SimpleKeyPair? keyPair}) {
     _ownPeerId = peerId;
     _ownKeyPair = keyPair;
+    _ownEncKeyPair = null;
+    _ownEncPub = null;
+    _announcedEncKey.clear();
+  }
+
+  /// X25519 key pair derived from the signing seed (MemberKeys): lets admins
+  /// hand this device rotated group keys.
+  SimpleKeyPair? _ownEncKeyPair;
+  Uint8List? _ownEncPub;
+  final _announcedEncKey = <String>{};
+
+  Future<SimpleKeyPair?> _encKeyPair() async {
+    if (_ownEncKeyPair != null) return _ownEncKeyPair;
+    final kp = _ownKeyPair;
+    if (kp == null) return null;
+    final seed = await SigningService.extractSeed(kp);
+    _ownEncKeyPair = await MemberKeys.fromIdentitySeed(seed);
+    _ownEncPub = await MemberKeys.publicKeyBytes(_ownEncKeyPair!);
+    return _ownEncKeyPair;
+  }
+
+  /// Publishes our X25519 public key to every group whose roster lacks it, so
+  /// rotations can reach us. Once per group per process.
+  Future<void> _announceMemberKey() async {
+    final me = _ownPeerId;
+    final kp = _ownKeyPair;
+    if (me == null || kp == null || await _encKeyPair() == null) return;
+    final pub = _ownEncPub!;
+    for (final g in await _groupService.getAllGroups()) {
+      if (_announcedEncKey.contains(g.id)) continue;
+      final mine = g.members.where((m) => m.peerId == me).firstOrNull;
+      if (mine == null || !await _groupKeyService.hasKey(g.id)) continue;
+      final current = mine.encKey;
+      if (current != null && _sameBytes(current, pub)) {
+        _announcedEncKey.add(g.id);
+        continue;
+      }
+      await _groupService.setMemberEncKey(g.id, me, pub);
+      final signature = await SigningService.sign(memberKeySigningPayload(g.id, me, pub), kp);
+      try {
+        await publishRecord(g.id, SyncPayloadType.memberKey, {
+          'v': 1,
+          'peerId': me,
+          'encKey': pub,
+          'signature': signature.bytes,
+        });
+        _announcedEncKey.add(g.id);
+      } catch (e) {
+        _log(SyncEvent(type: SyncEventType.warning, message: 'Could not publish encryption key for ${g.name}: $e'));
+      }
+    }
+  }
+
+  static List<int> memberKeySigningPayload(String groupId, String peerId, List<int> encKey) =>
+      utf8.encode('vbank:enckey:$groupId:$peerId:${base64Encode(encKey)}');
+
+  static bool _sameBytes(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Signed record from a member carrying their X25519 key.
+  Future<void> _applyMemberKey(String groupId, Map<String, dynamic> json) async {
+    final peerId = json['peerId'] as String;
+    final encKey = Uint8List.fromList((json['encKey'] as List).cast<int>());
+    final signature = (json['signature'] as List).cast<int>();
+    final member = await _groupService.getMember(groupId, peerId);
+    if (member == null) throw StateError('Encryption key from unknown member $peerId');
+    final ok = await SigningService.verifyWithBytes(memberKeySigningPayload(groupId, peerId, encKey), signature, member.publicKey);
+    if (!ok) throw StateError('Invalid encryption-key signature from $peerId');
+    await _groupService.setMemberEncKey(groupId, peerId, encKey);
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Encryption key received from ${member.name}'));
+  }
+
+  /// Owner removed a member: mint the next key version and publish a snapshot
+  /// that carries it to every remaining member (MemberKeys) and to live
+  /// invites. The removed member's device keeps the old versions only.
+  Future<void> rotateGroupKey(String groupId) async {
+    final ring = await _groupKeyService.rotate(groupId);
+    _log(SyncEvent(type: SyncEventType.snapshotPublished, message: 'Group key rotated to version ${ring.currentVersion}'));
+    await publishGroupSnapshot(groupId);
   }
 
   // ---------------------------------------------------------------------------
@@ -277,6 +362,7 @@ class SyncManager {
   Future<void> _runSync() async {
     await _ensureNode();
     await _subscribeGroupTopics();
+    await _announceMemberKey();
     await _refreshOverdueLoans();
     await _dialRelays();
     await publishLocalChanges();
@@ -716,7 +802,8 @@ class SyncManager {
     final kp = _ownKeyPair;
     if (me == null || kp == null) throw StateError('Not signed in');
     await _ensureNode();
-    final key = await _groupKeyService.requireKey(groupId);
+    final ring = await _groupKeyService.ring(groupId);
+    if (ring == null) throw MissingGroupKeyException(groupId);
     final snapshot = await _groupService.buildSnapshot(
       groupId,
       publisherPeerId: me,
@@ -724,19 +811,40 @@ class SyncManager {
       publisherAddrs: dialableAddresses,
     );
 
-    // One wrapped copy of the group key per live invite rides in the clear, so
-    // a joiner holding an invite secret can open the snapshot. Used or expired
-    // invites drop out here — their links stop working.
+    // One wrapped copy of the key ring per live invite rides in the clear, so
+    // a joiner holding an invite secret can open the snapshot (and history).
+    // Used or expired invites drop out here — their links stop working.
     final wraps = <String, Uint8List>{
       for (final i in await _inviteService.liveInvites(groupId))
         if (i.wrappedKey != null) i.id: i.wrappedKey!,
     };
+    // After a rotation every remaining member needs the new version: the ring
+    // sealed to each member's X25519 key. Members that have not published a
+    // key yet catch up when they do (their next round announces it and an
+    // admin republishes). The removed member is not on the roster any more.
+    final rekeys = <String, Uint8List>{};
+    final sender = await _encKeyPair();
+    final group = await _groupService.getGroup(groupId);
+    if (sender != null && group != null && ring.currentVersion > 1) {
+      for (final m in group.members) {
+        if (m.status != MemberStatus.active || m.encKey == null) continue;
+        rekeys[m.peerId] = await MemberKeys.seal(
+          plaintext: ring.encode(),
+          sender: sender,
+          recipientPublicKey: m.encKey!,
+          groupId: groupId,
+          recipientPeerId: m.peerId,
+        );
+      }
+    }
     final bytes = await SyncEnvelope.seal(
       type: SyncPayloadType.groupSnapshot,
       groupId: groupId,
       plaintextJson: snapshot,
-      groupKey: key,
+      groupKey: SecretKey(ring.current),
+      keyVersion: ring.currentVersion,
       wraps: wraps,
+      rekeys: rekeys,
     );
     final cid = await _ipfsService.addData(bytes);
     await _ipfsService.pin(cid);
@@ -750,8 +858,15 @@ class SyncManager {
   /// Generic: seal a signed record and publish it to the group's topic.
   Future<String> publishRecord(String groupId, SyncPayloadType type, Map<String, dynamic> json) async {
     await _ensureNode();
-    final key = await _groupKeyService.requireKey(groupId);
-    final bytes = await SyncEnvelope.seal(type: type, groupId: groupId, plaintextJson: json, groupKey: key);
+    final ring = await _groupKeyService.ring(groupId);
+    if (ring == null) throw MissingGroupKeyException(groupId);
+    final bytes = await SyncEnvelope.seal(
+      type: type,
+      groupId: groupId,
+      plaintextJson: json,
+      groupKey: SecretKey(ring.current),
+      keyVersion: ring.currentVersion,
+    );
     final String cid;
     try {
       cid = await _ipfsService.addData(bytes);
@@ -903,7 +1018,28 @@ class SyncManager {
     if (envelope == null) throw StateError('Not a vBank envelope');
     if (envelope.groupId != groupId) throw StateError('Envelope group mismatch');
 
-    final payload = await envelope.open(key);
+    // A snapshot may carry the key ring sealed for us (rotation): import it
+    // before choosing the key so a new version can be read right away.
+    final me = _ownPeerId;
+    final sealedForMe = me == null ? null : envelope.rekeys[me];
+    if (sealedForMe != null) {
+      final kp = await _encKeyPair();
+      if (kp != null) {
+        final ringBytes = await MemberKeys.open(sealed: sealedForMe, recipient: kp, groupId: groupId, recipientPeerId: me!);
+        final ring = ringBytes == null ? null : GroupKeyRing.decode(ringBytes);
+        if (ring != null) {
+          await _groupKeyService.importRing(groupId, ring);
+          if (ring.currentVersion > 1) {
+            _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'Group key version ${ring.currentVersion} received'));
+          }
+        }
+      }
+    }
+    final versionKey = await _groupKeyService.keyFor(groupId, envelope.keyVersion);
+    if (versionKey == null) {
+      throw StateError('Record uses group key version ${envelope.keyVersion}, which this device has not received');
+    }
+    final payload = await envelope.open(versionKey);
 
     switch (envelope.type) {
       case SyncPayloadType.transaction:
@@ -923,6 +1059,9 @@ class SyncManager {
         break;
       case SyncPayloadType.reversal:
         await _applyReversal(groupId, payload);
+        break;
+      case SyncPayloadType.memberKey:
+        await _applyMemberKey(groupId, payload);
         break;
     }
     await _ledger.record(groupId, cid);
@@ -1020,6 +1159,22 @@ class SyncManager {
     final iAmAdmin = me != null && me.status == MemberStatus.active && _groupService.canManageMembers(me.role);
     if (!iAmAdmin) return; // only admins act on joins; they'll republish the roster
 
+    if (await _groupService.isBanned(groupId, member.peerId)) {
+      // A removed member found a fresh link. The invite is spent, they stay
+      // out, and admins hear about it. The owner can allow them back.
+      await _inviteService.markUsed(inviteId, member.peerId);
+      _log(SyncEvent(type: SyncEventType.warning, message: 'Removed member ${member.name} tried to re-join ${group.name}'));
+      _emitChange(SyncChange(
+        SyncChangeType.member,
+        groupId,
+        recordId: member.peerId,
+        title: 'Blocked join · ${group.name}',
+        body: '${member.name} was removed earlier and tried to re-join. The owner can allow them back in group settings.',
+      ));
+      await publishGroupSnapshot(groupId);
+      return;
+    }
+
     final invite = await _inviteService.getById(inviteId);
     if (invite == null) throw StateError('Unknown invite $inviteId');
     final inviter = invite.inviterPeerId == null ? null : await _groupService.getMember(groupId, invite.inviterPeerId!);
@@ -1044,8 +1199,11 @@ class SyncManager {
           joinedAt: member.joinedAt,
           publicKey: member.publicKey,
           status: group.requireApproval ? MemberStatus.pending : MemberStatus.active,
+          encKey: member.encKey,
         ),
       );
+    } else if (member.encKey != null && existing.encKey == null) {
+      await _groupService.setMemberEncKey(groupId, member.peerId, member.encKey!);
     }
     await _inviteService.markUsed(inviteId, member.peerId);
     _log(SyncEvent(type: SyncEventType.memberJoined, message: '${member.name} joined ${group.name}'));
@@ -1282,22 +1440,25 @@ class SyncManager {
     if (envelope == null || envelope.type != SyncPayloadType.groupSnapshot || envelope.groupId != groupId) {
       throw const JoinGroupException('Invite does not point at a valid group');
     }
+    GroupKeyRing? joinedRing;
     if (key == null) {
-      // Invite-secret link: the snapshot header carries the group key wrapped
-      // under this invite's secret — only while the invite is live.
+      // Invite-secret link: the snapshot header carries the group key ring
+      // wrapped under this invite's secret — only while the invite is live.
       final wrapped = envelope.wraps[inviteId];
       if (wrapped == null) {
         throw const JoinGroupException(
           'This invite has been used or has expired. Ask a group admin for a new invite link.',
         );
       }
-      key = await InviteKeyWrap.unwrap(
+      final ringBytes = await InviteKeyWrap.unwrapBytes(
         wrapped: wrapped,
         secret: InviteKeyWrap.decodeSecret(inviteSecretB64!),
         groupId: groupId,
         inviteId: inviteId,
       );
-      if (key == null) throw const JoinGroupException('Invite link is damaged — ask for a new one');
+      joinedRing = ringBytes == null ? null : GroupKeyRing.decode(ringBytes);
+      if (joinedRing == null) throw const JoinGroupException('Invite link is damaged — ask for a new one');
+      key = SecretKey(joinedRing[envelope.keyVersion] ?? joinedRing.current);
     }
     Map<String, dynamic> snapshot;
     try {
@@ -1332,7 +1493,11 @@ class SyncManager {
     } catch (e) {
       throw JoinGroupException('Group data failed verification: $e');
     }
-    await _groupKeyService.setKey(groupId, key);
+    if (joinedRing != null) {
+      await _groupKeyService.importRing(groupId, joinedRing);
+    } else {
+      await _groupKeyService.setKey(groupId, key);
+    }
     await _ledger.record(groupId, groupCid);
 
     final me = Member(
@@ -1342,6 +1507,7 @@ class SyncManager {
       joinedAt: self.joinedAt,
       publicKey: self.publicKey,
       status: result.group.requireApproval ? MemberStatus.pending : MemberStatus.active,
+      encKey: await _encKeyPair() == null ? null : _ownEncPub,
     );
     await _groupService.addMember(groupId: groupId, member: me, bumpSequence: false);
 

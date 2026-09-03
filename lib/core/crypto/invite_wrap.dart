@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart';
 
 import '../codec/wire_codec.dart';
 import 'encryption.dart';
+import 'member_keys.dart';
 
 /// Per-invite wrapping of the group key.
 ///
@@ -52,9 +53,18 @@ class InviteKeyWrap {
     required List<int> secret,
     required String groupId,
     required String inviteId,
+  }) =>
+      wrapBytes(plaintext: groupKey.extractBytes(), secret: secret, groupId: groupId, inviteId: inviteId);
+
+  /// Arbitrary bytes (a GroupKeyRing) → wrapped blob.
+  static Future<Uint8List> wrapBytes({
+    required Future<List<int>> plaintext,
+    required List<int> secret,
+    required String groupId,
+    required String inviteId,
   }) async {
     final wk = await _wrapKey(secret, groupId, inviteId);
-    final enc = await EncryptionService.encrypt(await groupKey.extractBytes(), wk, aad: _aad(groupId, inviteId));
+    final enc = await EncryptionService.encrypt(await plaintext, wk, aad: _aad(groupId, inviteId));
     return WireCodec.encode({
       'n': Uint8List.fromList(enc.nonce),
       'm': Uint8List.fromList(enc.mac),
@@ -62,8 +72,9 @@ class InviteKeyWrap {
     });
   }
 
-  /// Null when the secret does not fit this wrapped entry.
-  static Future<SecretKey?> unwrap({
+  /// The raw wrapped bytes (a bare key or an encoded GroupKeyRing); null when
+  /// the secret does not fit this entry.
+  static Future<Uint8List?> unwrapBytes({
     required List<int> wrapped,
     required List<int> secret,
     required String groupId,
@@ -82,9 +93,24 @@ class InviteKeyWrap {
         wk,
         aad: _aad(groupId, inviteId),
       );
-      return bytes.length == 32 ? SecretKey(bytes) : null;
+      return Uint8List.fromList(bytes);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Null when the secret does not fit this wrapped entry. A wrapped ring
+  /// yields its current key.
+  static Future<SecretKey?> unwrap({
+    required List<int> wrapped,
+    required List<int> secret,
+    required String groupId,
+    required String inviteId,
+  }) async {
+    final bytes = await unwrapBytes(wrapped: wrapped, secret: secret, groupId: groupId, inviteId: inviteId);
+    if (bytes == null) return null;
+    if (bytes.length == 32) return SecretKey(bytes);
+    final ring = GroupKeyRing.decode(bytes);
+    return ring == null ? null : SecretKey(ring.current);
   }
 }

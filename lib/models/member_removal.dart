@@ -14,6 +14,10 @@ class MemberRemoval {
   final DateTime removedAt;
   final Uint8List adminSignature;
 
+  /// The owner allowed this person back; the ban no longer applies. Never
+  /// reverts once set (like an invite's `used`).
+  final bool lifted;
+
   const MemberRemoval({
     required this.id,
     required this.groupId,
@@ -25,6 +29,7 @@ class MemberRemoval {
     required this.action,
     required this.removedAt,
     required this.adminSignature,
+    this.lifted = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +43,7 @@ class MemberRemoval {
     'action': action.name,
     'removedAt': removedAt.toIso8601String(),
     'adminSignature': adminSignature,
+    'lifted': lifted,
   };
 
   factory MemberRemoval.fromJson(Map<String, dynamic> json) => MemberRemoval(
@@ -53,5 +59,6 @@ class MemberRemoval {
     ),
     removedAt: DateTime.parse(json['removedAt'] as String),
     adminSignature: Uint8List.fromList((json['adminSignature'] as List).cast<int>()),
+    lifted: json['lifted'] as bool? ?? false,
   );
 }

@@ -78,6 +78,7 @@ class GroupService {
         publicKey: m.publicKey,
         status: _enumByName(MemberStatus.values, m.status, MemberStatus.active),
         hasOutstandingLoan: m.hasOutstandingLoan,
+        encKey: m.encKey,
       );
 
   MemberData _memberToData(String groupId, Member m) => MemberData(
@@ -89,6 +90,7 @@ class GroupService {
         publicKey: m.publicKey,
         joinedAt: m.joinedAt,
         hasOutstandingLoan: m.hasOutstandingLoan,
+        encKey: m.encKey,
       );
 
   // --- permissions (DESIGN_PLAN §13) -----------------------------------------
@@ -265,6 +267,9 @@ class GroupService {
   }) async {
     await _requireActiveGroup(groupId);
     await requireRole(groupId, actingPeerId, canManageMembers, 'Only the owner or an admin can approve members');
+    if (await isBanned(groupId, peerId)) {
+      throw const PermissionException('This person was removed from the group. The owner must allow them back first.');
+    }
     final target = await _memberDao.get(peerId, groupId);
     if (target == null) throw StateError('Member not found');
     if (target.status != MemberStatus.pending.name) return;
@@ -405,6 +410,37 @@ class GroupService {
   }
 
   Future<List<MemberRemoval>> removals(String groupId) => _governanceDao.removalsForGroup(groupId);
+
+  /// A removed member stays out until the owner lifts the removal.
+  Future<bool> isBanned(String groupId, String peerId) async {
+    final rs = await _governanceDao.removalsForGroup(groupId);
+    return rs.any((r) => r.removedPeerId == peerId && !r.lifted);
+  }
+
+  /// Members currently kept out (latest removal per peer, not lifted).
+  Future<List<MemberRemoval>> bannedMembers(String groupId) async {
+    final seen = <String>{};
+    final out = <MemberRemoval>[];
+    for (final r in await _governanceDao.removalsForGroup(groupId)) {
+      if (!seen.add(r.removedPeerId)) continue;
+      if (!r.lifted) out.add(r);
+    }
+    return out;
+  }
+
+  /// Owner only: lets a removed member be invited again.
+  Future<void> liftRemoval({required String groupId, required String actingPeerId, required String peerId}) async {
+    await _requireActiveGroup(groupId);
+    await requireRole(groupId, actingPeerId, canRemove, 'Only the group owner can allow a removed member back');
+    for (final r in await _governanceDao.removalsForGroup(groupId)) {
+      if (r.removedPeerId == peerId && !r.lifted) await _governanceDao.liftRemoval(r.id);
+    }
+    await _touch(groupId);
+  }
+
+  /// Records a member's X25519 public key (from their memberKey record or join).
+  Future<void> setMemberEncKey(String groupId, String peerId, Uint8List encKey) =>
+      _memberDao.updateEncKey(peerId, groupId, encKey);
 
   // ---------------------------------------------------------------------------
   // Config
