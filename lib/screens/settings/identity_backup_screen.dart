@@ -164,7 +164,7 @@ class _IdentityBackupScreenState extends ConsumerState<IdentityBackupScreen> {
                 leading: InitialsAvatar(identity.displayName, size: 44),
                 leadingAlignment: Alignment.center,
                 title: Text(identity.displayName),
-                subtitle: Text(identity.peerId).xSmall.muted,
+                subtitle: const Text('This identity is what a backup brings back').xSmall.muted,
               ),
             ),
           const Gap(12),

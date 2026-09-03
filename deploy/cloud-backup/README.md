@@ -24,7 +24,21 @@ certificate. Without a matching OAuth client the sign-in dialog fails with
      * Play App Signing: Play Console → Setup → App signing → *App signing key certificate* SHA-1.
    Create one Android client per SHA-1. No file has to be added to the app for
    google_sign_in 7 on Android; the match is done by package + certificate.
-5. Test: Settings → Backup & Restore → Automatic backup → on. The account picker
+5. **Credentials → Create credentials → OAuth client ID → Web application**
+   (name it *vBank server*; no redirect URIs needed). Copy its **client ID**
+   (`1234…-abc.apps.googleusercontent.com`). google_sign_in 7 on Android
+   requires it as `serverClientId`; the app reads it at build time:
+
+   ```sh
+   flutter build apk --release --dart-define=GOOGLE_SERVER_CLIENT_ID=1234…-abc.apps.googleusercontent.com
+   ```
+
+   In CI set it once: Codemagic → variable `GOOGLE_SERVER_CLIENT_ID` in the
+   `android` group; GitHub → Settings → Secrets and variables → Actions →
+   **Variables** → `GOOGLE_SERVER_CLIENT_ID`. It is a public identifier, not a
+   secret. Without it the app shows "Google Drive backup is not configured in
+   this build" instead of signing in.
+6. Test: Settings → Backup & Restore → Automatic backup → on. The account picker
    appears, then the Drive `appdata` consent. Files are invisible in Drive's UI
    (hidden app folder); the user can see and clear them under
    Drive → Settings → Manage apps → vBank.

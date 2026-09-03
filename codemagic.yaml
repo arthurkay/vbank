@@ -32,7 +32,7 @@ workflows:
       android_signing:
         - vbank_keystore            # Teams → Codemagic.yaml settings → Android signing
       groups:
-        - android                   # PLAY_SERVICE_ACCOUNT_JSON
+        - android                   # PLAY_SERVICE_ACCOUNT_JSON, GOOGLE_SERVER_CLIENT_ID
       vars:
         PACKAGE_NAME: zm.co.tickethost.vbank
     triggering:
@@ -46,8 +46,9 @@ workflows:
         script: flutter pub get
       - name: Build app bundle (signed by the CM_KEYSTORE_* variables Codemagic injects)
         script: |
-          flutter build appbundle --release
-          flutter build apk --release
+          # GOOGLE_SERVER_CLIENT_ID (Web OAuth client id) enables Google Drive backup.
+          flutter build appbundle --release --dart-define=GOOGLE_SERVER_CLIENT_ID=${GOOGLE_SERVER_CLIENT_ID:-}
+          flutter build apk --release --dart-define=GOOGLE_SERVER_CLIENT_ID=${GOOGLE_SERVER_CLIENT_ID:-}
     artifacts:
       - build/app/outputs/bundle/release/*.aab
       - build/app/outputs/flutter-apk/app-release.apk

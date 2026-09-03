@@ -74,6 +74,7 @@ Developer Portal integration) — nothing to export by hand.
    | Variable | Value | Secure |
    | --- | --- | --- |
    | `PLAY_SERVICE_ACCOUNT_JSON` | contents of the service-account JSON | yes |
+   | `GOOGLE_SERVER_CLIENT_ID` | Web OAuth client id (enables Google Drive backup; see `deploy/cloud-backup/README.md`) | no |
 
 Workflows in `codemagic.yaml`:
 
@@ -99,6 +100,9 @@ members who side-load), add these repository secrets
 | `KEYSTORE_PASSWORD` | keystore password |
 | `KEY_ALIAS` | `vbank` |
 | `KEY_PASSWORD` | key password |
+
+and one repository **variable**: `GOOGLE_SERVER_CLIENT_ID` (Web OAuth client id
+for Google Drive backup; optional).
 
 The job decodes the keystore to a temp file and exports the same `CM_KEYSTORE_*`
 variables Codemagic would, so Gradle takes the same code path. Without the

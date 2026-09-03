@@ -233,9 +233,27 @@ abstract class CloudBackupStore {
   }
 }
 
-/// Google Drive, hidden per-app folder. Needs an OAuth client for the Android
-/// package + signing SHA-1 in the Google Cloud project (see docs/guide.html →
-/// Backups). The `drive.appdata` scope sees only files this app created.
+/// Web-type OAuth client id of the Google Cloud project — google_sign_in 7 on
+/// Android needs it as `serverClientId` besides the Android client (package +
+/// SHA-1). Not a secret. Baked in at build time:
+///   flutter build … --dart-define=GOOGLE_SERVER_CLIENT_ID=1234-abc.apps.googleusercontent.com
+/// (codemagic.yaml and release.yml pass it from the GOOGLE_SERVER_CLIENT_ID
+/// variable). Empty → Google Drive backup reports itself as not configured.
+const String kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+
+/// Thrown when the cloud account cannot be used; the message is meant for the
+/// screen, not the log.
+class CloudBackupException implements Exception {
+  final String message;
+  const CloudBackupException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// Google Drive, hidden per-app folder. Needs OAuth clients in the Google Cloud
+/// project (Android: package + signing SHA-1; Web: its id is
+/// [kGoogleServerClientId]) — see deploy/cloud-backup/README.md. The
+/// `drive.appdata` scope sees only files this app created.
 class GoogleDriveBackupStore implements CloudBackupStore {
   static const _scopes = [drive.DriveApi.driveAppdataScope];
   static bool _initialised = false;
@@ -247,32 +265,44 @@ class GoogleDriveBackupStore implements CloudBackupStore {
   @override
   Future<bool> signIn({required bool interactive}) async {
     if (_api != null) return true;
+    if (kGoogleServerClientId.isEmpty) {
+      throw const CloudBackupException(
+        'Google Drive backup is not configured in this build (no Google client id). '
+        'See deploy/cloud-backup/README.md.',
+      );
+    }
     final signIn = GoogleSignIn.instance;
-    if (!_initialised) {
-      await signIn.initialize();
-      _initialised = true;
-    }
-    GoogleSignInAccount? account = await signIn.attemptLightweightAuthentication();
-    if (account == null && interactive && signIn.supportsAuthenticate()) {
-      try {
+    try {
+      if (!_initialised) {
+        await signIn.initialize(serverClientId: kGoogleServerClientId);
+        _initialised = true;
+      }
+      GoogleSignInAccount? account = await signIn.attemptLightweightAuthentication();
+      if (account == null && interactive && signIn.supportsAuthenticate()) {
         account = await signIn.authenticate();
-      } on GoogleSignInException catch (e) {
-        debugPrint('[cloud-backup] Google sign-in: ${e.code}');
-        return false;
       }
-    }
-    if (account == null) return false;
-    var authorization = await account.authorizationClient.authorizationForScopes(_scopes);
-    if (authorization == null && interactive) {
-      try {
+      if (account == null) return false;
+      var authorization = await account.authorizationClient.authorizationForScopes(_scopes);
+      if (authorization == null && interactive) {
         authorization = await account.authorizationClient.authorizeScopes(_scopes);
-      } on GoogleSignInException {
-        return false;
+      }
+      if (authorization == null) return false;
+      _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
+      return true;
+    } on GoogleSignInException catch (e) {
+      debugPrint('[cloud-backup] Google sign-in: ${e.code} ${e.description}');
+      switch (e.code) {
+        case GoogleSignInExceptionCode.canceled:
+          return false;
+        case GoogleSignInExceptionCode.clientConfigurationError:
+          throw CloudBackupException(
+            'Google sign-in is not set up for this app build: ${e.description ?? e.code.name}. '
+            'The OAuth clients (package + SHA-1, and the Web client id) must exist in the Google Cloud project.',
+          );
+        default:
+          throw CloudBackupException('Google sign-in failed: ${e.description ?? e.code.name}');
       }
     }
-    if (authorization == null) return false;
-    _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
-    return true;
   }
 
   @override

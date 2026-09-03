@@ -140,7 +140,9 @@ jobs:
           CM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           CM_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          flutter build apk --release
+          # GOOGLE_SERVER_CLIENT_ID is a repository *variable* (not secret): the Web OAuth client id
+          # that enables Google Drive backup. Empty → the feature reports itself as not configured.
+          flutter build apk --release --dart-define=GOOGLE_SERVER_CLIENT_ID="${{ vars.GOOGLE_SERVER_CLIENT_ID }}"
           VERSION=${GITHUB_REF_NAME#v}
           mv build/app/outputs/flutter-apk/app-release.apk "vbank-$VERSION-android.apk"
       - name: Skipped (no keystore secrets)
