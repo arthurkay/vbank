@@ -87,8 +87,9 @@ curl -s 'https://cloudflare-dns.com/dns-query?name=_dnsaddr.vbank.localhost.co.z
 ```
 
 The second command is exactly what the app does. Once it returns the record,
-every install picks the relay up within an hour (immediately on next app start
-or when the user opens Settings → Sync status and taps refresh).
+every install picks the relay up on its next lookup: within five minutes while
+the record was missing, otherwise within the hour, and immediately on the next
+app start.
 
 ### 5. Check from the app
 
