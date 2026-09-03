@@ -740,7 +740,7 @@ Future<void> yaruShowInvite(BuildContext context, WidgetRef ref, Group group) as
       inviteId: invite.id,
       inviteNonceB64: base64Encode(invite.nonce!),
       inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
-      relayAddrs: await ref.read(syncManagerProvider).relayAddresses(),
+      relayAddrs: await ref.read(syncManagerProvider).userRelayAddresses(),
     );
   } catch (e) {
     error = e;

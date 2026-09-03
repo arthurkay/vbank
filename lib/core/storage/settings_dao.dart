@@ -43,4 +43,6 @@ class SettingKeys {
   static const syncWifiOnly = 'sync.wifi_only';
   static const pendingJoins = 'pendingJoins'; // joins waiting for a member to come online
   static const relayAddrs = 'relay.addrs'; // always-on relay nodes (multiaddrs), see RelayNode
+  static const builtInRelayEnabled = 'relay.builtin.enabled'; // use the vBank relay (kBuiltInRelayHosts)
+  static const builtInRelayCache = 'relay.builtin.cache'; // last resolved dnsaddr multiaddrs
 }

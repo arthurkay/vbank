@@ -49,7 +49,29 @@ The node identity (and therefore the `/p2p/…` part) lives in the `relay-data`
 volume; keep the volume and the address stays the same across restarts and
 upgrades. `restart: unless-stopped` brings it back after a reboot.
 
-## Point the apps at it
+## The built-in relay (vbank.localhost.co.zm)
+
+Every copy of vBank ships knowing one relay host, `vbank.localhost.co.zm`
+(`kBuiltInRelayHosts` in `lib/core/relay/relay_directory.dart`). Only the
+**hostname** is in the app; the relay's peer id is published as a DNS TXT
+record in the libp2p `dnsaddr` form, and the app looks it up over
+DNS-over-HTTPS (Cloudflare, then Google) at most hourly, keeping the last good
+answer for offline starts. Rotating the relay therefore never needs an app
+update. Members can switch the built-in relay off and add their own.
+
+To publish it, after `docker compose up` shows the address:
+
+```
+_dnsaddr.vbank.localhost.co.zm.  IN TXT  "dnsaddr=/dns4/vbank.localhost.co.zm/tcp/4001/p2p/12D3KooW…"
+vbank.localhost.co.zm.           IN A    203.0.113.7
+```
+
+Check it with `dig +short TXT _dnsaddr.vbank.localhost.co.zm`. Several
+`dnsaddr=` records are allowed (e.g. a second relay); the app uses them all.
+Because the TXT record carries the peer id, set `VBANK_RELAY_IDENTITY_SEED` so
+the id survives volume changes — otherwise update the record when it changes.
+
+## Point the apps at it (other relays)
 
 * **Settings → Sync status → Relay server → Add** on a phone or desktop, paste the
   address. Do this once on the group owner's device.

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/relay/relay_directory.dart';
 import '../../core/ipfs/sync_manager.dart';
 import '../../core/storage/transaction_dao.dart' as q;
 import '../../providers/ipfs_provider.dart';
@@ -115,6 +116,7 @@ class _RelayPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final relays = ref.watch(relayAddressesProvider).value ?? const <String>[];
+    final builtIn = ref.watch(builtInRelayProvider).value ?? (enabled: true, addrs: const <String>[]);
     final sm = ref.read(syncManagerProvider);
     Future<void> add() async {
       final addr = await promptSheet(
@@ -146,8 +148,40 @@ class _RelayPanel extends ConsumerWidget {
             ],
           ),
           const Gap(4),
+          Row(
+            children: [
+              const Icon(LucideIcons.server, size: 16),
+              const Gap(8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('vBank relay · ${kBuiltInRelayHosts.first}').small,
+                    Text(
+                      !builtIn.enabled
+                          ? 'Off'
+                          : builtIn.addrs.isEmpty
+                              ? 'Looking up its address…'
+                              : 'On · ${builtIn.addrs.first.split('/p2p/').last.substring(0, 12)}…',
+                    ).xSmall.muted,
+                  ],
+                ),
+              ),
+              Switch(
+                value: builtIn.enabled,
+                onChanged: (v) async {
+                  await sm.setBuiltInRelayEnabled(v);
+                  ref.invalidate(builtInRelayProvider);
+                  if (v) unawaited(sm.startManualSync());
+                },
+              ),
+            ],
+          ),
           if (relays.isEmpty)
-            const Text('None. Members only reach each other on the same Wi-Fi. Add a relay to sync over the internet.').small.muted
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('Add your own relay if your group runs one; the built-in one works for everyone.'),
+            ).small.muted
           else
             for (final r in relays)
               Padding(

@@ -65,5 +65,11 @@ final pendingJoinsProvider = FutureProvider<List<PendingJoin>>((ref) {
   return ref.watch(syncManagerProvider).pendingJoins();
 });
 
-/// Configured relay nodes (multiaddrs).
-final relayAddressesProvider = FutureProvider<List<String>>((ref) => ref.watch(syncManagerProvider).relayAddresses());
+/// Relays the user added (multiaddrs).
+final relayAddressesProvider = FutureProvider<List<String>>((ref) => ref.watch(syncManagerProvider).userRelayAddresses());
+
+/// The built-in vBank relay: whether it is on, and what it resolved to.
+final builtInRelayProvider = FutureProvider<({bool enabled, List<String> addrs})>((ref) async {
+  final sm = ref.watch(syncManagerProvider);
+  return (enabled: await sm.builtInRelayEnabled(), addrs: await sm.builtInRelayAddresses());
+});

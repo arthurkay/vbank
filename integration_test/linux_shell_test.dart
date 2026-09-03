@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:vbank/core/storage/database.dart';
+import 'package:vbank/core/storage/settings_dao.dart';
 import 'package:vbank/main.dart' as app;
 import 'package:yaru/yaru.dart';
 
@@ -87,5 +88,24 @@ void main() {
     final db = await AppDatabase.getInstance();
     final rows = await db.rawQuery('SELECT count(*) AS n FROM groups');
     expect(rows.first['n'], isNonZero, reason: 'group persisted to the encrypted DB');
+
+    // 7. Sync page: the built-in vBank relay is listed and can be switched off.
+    await tester.tap(find.text('Sync').first);
+    await settle(tester, 3);
+    expect(find.textContaining('vBank relay · vbank.localhost.co.zm'), findsOneWidget);
+    expect(find.text('Relay server'), findsWidgets);
+    final relaySwitch = find.ancestor(
+      of: find.textContaining('vBank relay · vbank.localhost.co.zm'),
+      matching: find.byType(YaruSwitchListTile),
+    );
+    expect(relaySwitch, findsOneWidget);
+    expect(tester.widget<YaruSwitchListTile>(relaySwitch).value, isTrue, reason: 'on by default');
+    await tester.tap(relaySwitch);
+    await settle(tester, 2);
+    expect(await SettingsDao().getBool(SettingKeys.builtInRelayEnabled, defaultValue: true), isFalse);
+    expect(find.text('Off'), findsWidgets);
+    await tester.tap(find.byType(YaruSwitchListTile).first);
+    await settle(tester, 2);
+    expect(await SettingsDao().getBool(SettingKeys.builtInRelayEnabled, defaultValue: true), isTrue);
   });
 }

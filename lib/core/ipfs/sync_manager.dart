@@ -25,6 +25,7 @@ import '../storage/settings_dao.dart';
 import 'ipfs_service.dart';
 import 'peer_book.dart';
 import 'pending_join.dart';
+import '../relay/relay_directory.dart';
 import 'sync_ledger.dart';
 
 enum SyncState { idle, syncing, error }
@@ -88,6 +89,14 @@ class SyncManager {
   /// lacks from them. The relays hold no group key. Loaded lazily.
   List<String>? _relayAddrs;
   static const _maxRelayPushPerRound = 40;
+
+  /// The relay vBank ships with (see kBuiltInRelayHosts): its peer id is
+  /// discovered from a `_dnsaddr` TXT record, cached, and the last good answer
+  /// persisted so an offline start still knows the address.
+  final RelayDirectory _relayDirectory = RelayDirectory();
+  bool? _builtInRelayEnabled;
+  List<String>? _builtInRelayAddrs;
+  DateTime? _builtInRelayNextLookup;
 
   /// Groups with a join in flight (interactive or retried), so the two paths
   /// cannot both import the snapshot and publish a join request.
@@ -305,7 +314,8 @@ class SyncManager {
   // Relays
   // ---------------------------------------------------------------------------
 
-  Future<List<String>> relayAddresses() async {
+  /// Relays the user added (also what invite links carry).
+  Future<List<String>> userRelayAddresses() async {
     if (_relayAddrs != null) return _relayAddrs!;
     final raw = await _settings.get<String>(SettingKeys.relayAddrs);
     List<String> list = const [];
@@ -317,12 +327,64 @@ class SyncManager {
     return _relayAddrs = list;
   }
 
+  Future<bool> builtInRelayEnabled() async =>
+      _builtInRelayEnabled ??= await _settings.getBool(SettingKeys.builtInRelayEnabled, defaultValue: true);
+
+  Future<void> setBuiltInRelayEnabled(bool enabled) async {
+    _builtInRelayEnabled = enabled;
+    if (enabled) _builtInRelayNextLookup = null;
+    await _settings.set(SettingKeys.builtInRelayEnabled, enabled);
+    _log(SyncEvent(type: SyncEventType.peersDiscovered, message: 'vBank relay ${enabled ? 'enabled' : 'disabled'}'));
+  }
+
+  /// Addresses of the built-in relay: resolved via DNS at most hourly, else the
+  /// last persisted answer. Empty when disabled or never resolved.
+  Future<List<String>> builtInRelayAddresses() async {
+    if (!await builtInRelayEnabled()) return const [];
+    // One DNS lookup per hour when it works, one per five minutes while it
+    // does not; in between, the last known answer (memory, then settings).
+    final next = _builtInRelayNextLookup;
+    if (next == null || !DateTime.now().isBefore(next)) {
+      final fresh = <String>[];
+      for (final host in kBuiltInRelayHosts) {
+        fresh.addAll(await _relayDirectory.resolve(host));
+      }
+      if (fresh.isNotEmpty) {
+        _builtInRelayAddrs = fresh;
+        _builtInRelayNextLookup = DateTime.now().add(const Duration(hours: 1));
+        await _settings.set(SettingKeys.builtInRelayCache, jsonEncode(fresh));
+        return fresh;
+      }
+      _builtInRelayNextLookup = DateTime.now().add(const Duration(minutes: 5));
+      _log(SyncEvent(
+        type: SyncEventType.warning,
+        message: 'vBank relay (${kBuiltInRelayHosts.join(', ')}) not resolvable right now — retrying in 5 min',
+      ));
+    }
+    final cached = _builtInRelayAddrs;
+    if (cached != null) return cached;
+    final raw = await _settings.get<String>(SettingKeys.builtInRelayCache);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        return _builtInRelayAddrs = (jsonDecode(raw) as List).cast<String>();
+      } catch (_) {}
+    }
+    return const [];
+  }
+
+  /// Every relay in use: the user's plus the built-in one.
+  Future<List<String>> relayAddresses() async {
+    final user = await userRelayAddresses();
+    final builtIn = await builtInRelayAddresses();
+    return {...user, ...builtIn}.toList();
+  }
+
   Future<Set<String>> _relayPeerIds() async =>
       (await relayAddresses()).map(PeerBook.peerIdOf).toSet()..remove(_ownPeerId);
 
   /// Adds relays (e.g. from an invite link); returns whether anything changed.
   Future<bool> addRelays(Iterable<String> addrs) async {
-    final current = await relayAddresses();
+    final current = await userRelayAddresses();
     final clean = addrs.map((a) => a.trim()).where((a) => a.contains('/p2p/') && !current.contains(a)).toList();
     if (clean.isEmpty) return false;
     await _saveRelays([...current, ...clean]);
@@ -331,7 +393,7 @@ class SyncManager {
   }
 
   Future<void> removeRelay(String addr) async {
-    final current = await relayAddresses();
+    final current = await userRelayAddresses();
     if (!current.contains(addr)) return;
     await _saveRelays(current.where((a) => a != addr).toList());
   }

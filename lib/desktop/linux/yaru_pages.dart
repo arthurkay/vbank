@@ -7,6 +7,8 @@ library;
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../../core/relay/relay_directory.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -757,14 +759,23 @@ class YaruSyncPage extends ConsumerWidget {
             ),
             child: Builder(builder: (context) {
               final relays = ref.watch(relayAddressesProvider).value ?? const <String>[];
-              if (relays.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('None. Members only reach each other on the same network. Add a relay to sync over the internet.'),
-                );
-              }
+              final builtIn = ref.watch(builtInRelayProvider).value ?? (enabled: true, addrs: const <String>[]);
               return Column(
                 children: [
+                  YaruSwitchListTile(
+                    title: Text('vBank relay · ${kBuiltInRelayHosts.first}'),
+                    subtitle: Text(!builtIn.enabled
+                        ? 'Off'
+                        : builtIn.addrs.isEmpty
+                            ? 'Looking up its address…'
+                            : builtIn.addrs.first),
+                    value: builtIn.enabled,
+                    onChanged: (v) async {
+                      await manager.setBuiltInRelayEnabled(v);
+                      ref.invalidate(builtInRelayProvider);
+                      if (v) unawaited(manager.startManualSync());
+                    },
+                  ),
                   for (final r in relays)
                     YaruListTile(
                       leading: const Icon(YaruIcons.network),
