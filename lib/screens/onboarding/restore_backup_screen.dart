@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../services/backup_service.dart';
 import '../../core/deeplink/pending_invite.dart';
+import '../../services/cloud_backup_service.dart';
 import '../../ui/ui.dart';
 
 /// DESIGN_PLAN §22 restore flow: import a backup file (or pick one already on
@@ -54,6 +55,49 @@ class _RestoreBackupScreenState extends ConsumerState<RestoreBackupScreen> {
 
   void _msg(String message, {bool error = false}) {
     if (mounted) showMessage(context, message, error: error);
+  }
+
+  /// Signs in to the member's cloud account, lists the backups and downloads
+  /// the chosen one; the passphrase step below is the same as for a file.
+  Future<void> _pickCloud() async {
+    final cloud = CloudBackupService();
+    setState(() => _isLoading = true);
+    try {
+      final files = await cloud.listRemote();
+      if (!mounted) return;
+      if (files.isEmpty) {
+        showMessage(context, 'No vBank backups in ${cloud.providerName} for this account');
+        return;
+      }
+      final picked = await showAppSheet<CloudBackupFile>(
+        context,
+        title: 'Backups in ${cloud.providerName}',
+        builder: (context, close) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final f in files.take(10))
+              ListRow(
+                leading: const Icon(LucideIcons.cloud),
+                title: Text(fmtDateTime(f.modified.toLocal())),
+                subtitle: Text('${(f.size / 1024).toStringAsFixed(1)} KB · encrypted').small.muted,
+                onTap: () => close(f),
+              ),
+          ],
+        ),
+      );
+      if (picked == null || !mounted) return;
+      final bytes = await cloud.download(picked);
+      if (!mounted) return;
+      setState(() {
+        _importedBytes = bytes;
+        _importedName = '${cloud.providerName} · ${fmtDateTime(picked.modified.toLocal())}';
+        _selectedId = null;
+      });
+    } catch (e) {
+      if (mounted) showMessage(context, '$e', error: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _pickFile() async {
@@ -120,6 +164,14 @@ class _RestoreBackupScreenState extends ConsumerState<RestoreBackupScreen> {
               textAlign: TextAlign.center,
             ).muted,
             const Gap(24),
+            if (CloudBackupService().isSupported) ...[
+              Button.primary(
+                onPressed: _isLoading ? null : _pickCloud,
+                leading: const Icon(LucideIcons.cloudDownload),
+                child: Text('Restore from ${CloudBackupService().providerName}'),
+              ),
+              const Gap(8),
+            ],
             Button.outline(
               onPressed: _isLoading ? null : _pickFile,
               leading: const Icon(LucideIcons.folderOpen),

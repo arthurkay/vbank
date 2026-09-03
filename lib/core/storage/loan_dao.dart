@@ -1,10 +1,17 @@
 import 'dart:typed_data';
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'database.dart';
 
 class LoanDao {
   Future<void> insert(LoanData loan) async {
     final db = await AppDatabase.getInstance();
     await db.insert('loans', loan.toMap());
+  }
+
+  /// Insert-or-replace by id (backup restore).
+  Future<void> upsert(LoanData loan) async {
+    final db = await AppDatabase.getInstance();
+    await db.insert('loans', loan.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<LoanData?> getById(String id) async {

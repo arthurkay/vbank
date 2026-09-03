@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/app_backup.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/backup_service.dart';
+import '../../services/cloud_backup_service.dart';
 import '../../ui/ui.dart';
 
 /// DESIGN_PLAN §22 / §27 identity_backup_screen: create PIN-encrypted
@@ -167,6 +168,9 @@ class _IdentityBackupScreenState extends ConsumerState<IdentityBackupScreen> {
               ),
             ),
           const Gap(12),
+          const _CloudBackupPanel(),
+          const Gap(12),
+          const SectionTitle('Manual backup file'),
           Button.primary(
             onPressed: _busy ? null : _create,
             leading: _busy ? const CircularProgressIndicator(size: 16) : const Icon(LucideIcons.cloudUpload),
@@ -192,6 +196,185 @@ class _IdentityBackupScreenState extends ConsumerState<IdentityBackupScreen> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Automatic, encrypted backups to the member's Google Drive / iCloud.
+class _CloudBackupPanel extends ConsumerStatefulWidget {
+  const _CloudBackupPanel();
+  @override
+  ConsumerState<_CloudBackupPanel> createState() => _CloudBackupPanelState();
+}
+
+class _CloudBackupPanelState extends ConsumerState<_CloudBackupPanel> {
+  final _cloud = CloudBackupService();
+  bool _enabled = false;
+  int _intervalDays = 1;
+  bool _wifiOnly = true;
+  DateTime? _lastAt;
+  int? _lastSize;
+  String? _lastError;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await _cloud.enabled();
+    final interval = await _cloud.intervalDays();
+    final wifi = await _cloud.wifiOnly();
+    final last = await _cloud.lastBackupAt();
+    final size = await _cloud.lastBackupSize();
+    final err = await _cloud.lastError();
+    if (!mounted) return;
+    setState(() {
+      _enabled = enabled;
+      _intervalDays = interval;
+      _wifiOnly = wifi;
+      _lastAt = last;
+      _lastSize = size;
+      _lastError = err;
+    });
+  }
+
+  Future<String?> _askPassphrase(String title) => promptSheet(
+        context,
+        title: title,
+        message: 'This passphrase encrypts every automatic backup. ${_cloud.providerName} only ever stores '
+            'ciphertext. If you forget it the backups cannot be opened — write it down.',
+        label: 'Backup passphrase',
+        obscure: true,
+        confirmLabel: 'Save',
+      );
+
+  Future<void> _run(Future<void> Function() action, {String? success}) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+      if (success != null && mounted) showMessage(context, success);
+    } catch (e) {
+      if (mounted) showMessage(context, '$e', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+      await _load();
+    }
+  }
+
+  Future<void> _toggle(bool on) async {
+    if (!on) {
+      final ok = await confirmSheet(
+        context,
+        title: 'Turn off automatic backups?',
+        message: 'Backups already in ${_cloud.providerName} stay there (unreadable without the passphrase). '
+            'You can still export a file by hand.',
+        confirmLabel: 'Turn off',
+        destructive: true,
+      );
+      if (!ok) return;
+      await _run(_cloud.disable);
+      return;
+    }
+    final pass = await _askPassphrase('Set a backup passphrase');
+    if (pass == null || pass.isEmpty || !mounted) return;
+    await _run(() async {
+      await _cloud.enable(passphrase: pass);
+      await _cloud.runIfDue(force: true);
+    }, success: 'Automatic backups on — first backup sent to ${_cloud.providerName}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_cloud.isSupported) {
+      return Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Automatic cloud backup').semiBold,
+            const Gap(4),
+            const Text('Available on Android (Google Drive) and iPhone (iCloud). On a computer, export a backup file '
+                    'into a folder your Drive or iCloud client syncs.')
+                .small
+                .muted,
+          ],
+        ),
+      );
+    }
+    final status = !_enabled
+        ? 'Off'
+        : _lastAt == null
+            ? 'On · no backup yet'
+            : 'Last backup ${fmtDateTime(_lastAt!)} · ${((_lastSize ?? 0) / 1024).toStringAsFixed(1)} KB';
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Automatic backup to ${_cloud.providerName}').semiBold,
+                    const Gap(2),
+                    Text(status).xSmall.muted,
+                    if (_lastError != null) Text(_lastError!, style: TextStyle(color: VBankTheme.danger)).xSmall,
+                  ],
+                ),
+              ),
+              Switch(value: _enabled, onChanged: _busy ? null : _toggle),
+            ],
+          ),
+          if (_enabled) ...[
+            const Gap(12),
+            Segmented<int>(
+              values: const [1, 7],
+              selected: _intervalDays,
+              label: (d) => d == 1 ? 'Daily' : 'Weekly',
+              onChanged: (d) => _run(() => _cloud.setIntervalDays(d)),
+            ),
+            const Gap(8),
+            Row(
+              children: [
+                const Expanded(child: Text('Only on Wi-Fi')),
+                Switch(value: _wifiOnly, onChanged: (v) => _run(() => _cloud.setWifiOnly(v))),
+              ],
+            ),
+            const Gap(8),
+            Row(
+              children: [
+                Button.outline(
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() => _cloud.backupNow(), success: 'Backed up to ${_cloud.providerName}'),
+                  leading: _busy ? const CircularProgressIndicator(size: 14) : const Icon(LucideIcons.cloudUpload),
+                  child: const Text('Back up now'),
+                ),
+                const Gap(8),
+                Button.ghost(
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          final pass = await _askPassphrase('New backup passphrase');
+                          if (pass == null || pass.isEmpty) return;
+                          await _run(() => _cloud.changePassphrase(pass), success: 'Passphrase changed — next backup uses it');
+                        },
+                  child: const Text('Change passphrase'),
+                ),
+              ],
+            ),
+          ],
+          const Gap(8),
+          const Text(
+            'Like WhatsApp: your data goes to your own account, encrypted so only your passphrase can open it. '
+            'Records also live with your group members and the relay; the backup is what brings back your identity.',
+          ).xSmall.muted,
         ],
       ),
     );

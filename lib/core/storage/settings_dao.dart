@@ -45,4 +45,11 @@ class SettingKeys {
   static const relayAddrs = 'relay.addrs'; // always-on relay nodes (multiaddrs), see RelayNode
   static const builtInRelayEnabled = 'relay.builtin.enabled'; // use the vBank relay (kBuiltInRelayHosts)
   static const builtInRelayCache = 'relay.builtin.cache'; // last resolved dnsaddr multiaddrs
+  // Automatic cloud backup (CloudBackupService); the passphrase lives in the keystore.
+  static const cloudBackupEnabled = 'backup.cloud.enabled';
+  static const cloudBackupIntervalDays = 'backup.cloud.interval_days';
+  static const cloudBackupWifiOnly = 'backup.cloud.wifi_only';
+  static const cloudBackupLastAt = 'backup.cloud.last_at';
+  static const cloudBackupLastSize = 'backup.cloud.last_size';
+  static const cloudBackupLastError = 'backup.cloud.last_error';
 }

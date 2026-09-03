@@ -11,7 +11,15 @@ import '../core/crypto/key_derivation.dart';
 import '../core/storage/backup_dao.dart';
 import '../core/storage/group_dao.dart';
 import '../core/storage/group_key_dao.dart';
+import '../core/storage/invite_dao.dart';
+import '../core/storage/loan_dao.dart';
+import '../core/storage/meeting_dao.dart';
 import '../core/storage/member_dao.dart';
+import '../core/storage/repayment_schedule_dao.dart';
+import '../core/storage/reversal_dao.dart';
+import '../core/storage/transaction_dao.dart';
+import '../models/repayment_schedule.dart';
+import '../models/transaction_reversal.dart';
 import '../core/storage/user_identity_dao.dart';
 import '../models/app_backup.dart';
 
@@ -78,6 +86,15 @@ class RestoredBackup {
   /// Group symmetric keys by group id. Without these the restored device
   /// could not decrypt any of its groups' IPFS data.
   final Map<String, Uint8List> groupKeys;
+
+  /// Records (payload v3+). Older backups have none; the device re-syncs them
+  /// from members and the relay after the restore.
+  final List<TransactionData> transactions;
+  final List<LoanData> loans;
+  final List<RepaymentSchedule> schedules;
+  final List<MeetingData> meetings;
+  final List<TransactionReversal> reversals;
+  final List<InviteData> invites;
   final DateTime? createdAt;
 
   const RestoredBackup({
@@ -85,8 +102,16 @@ class RestoredBackup {
     required this.groups,
     required this.members,
     this.groupKeys = const {},
+    this.transactions = const [],
+    this.loans = const [],
+    this.schedules = const [],
+    this.meetings = const [],
+    this.reversals = const [],
+    this.invites = const [],
     this.createdAt,
   });
+
+  int get recordCount => transactions.length + loans.length + meetings.length + reversals.length;
 }
 
 class BackupService {
@@ -95,9 +120,17 @@ class BackupService {
   final GroupDao _groupDao = GroupDao();
   final MemberDao _memberDao = MemberDao();
   final GroupKeyDao _groupKeyDao = GroupKeyDao();
+  final TransactionDao _transactionDao = TransactionDao();
+  final LoanDao _loanDao = LoanDao();
+  final RepaymentScheduleDao _scheduleDao = RepaymentScheduleDao();
+  final MeetingDao _meetingDao = MeetingDao();
+  final ReversalDao _reversalDao = ReversalDao();
+  final InviteDao _inviteDao = InviteDao();
   static const _uuid = Uuid();
 
-  static const _payloadVersion = 2;
+  /// v3 adds the group records (transactions, loans, schedules, meetings,
+  /// reversals, invites); v2 files are still read.
+  static const _payloadVersion = 3;
   static const minPinLength = 6;
   static const fileExtension = 'vbankbackup';
 
@@ -182,6 +215,32 @@ class BackupService {
       }
     }
     final groupKeys = await _groupKeyDao.getAll();
+    final transactions = <Map<String, dynamic>>[];
+    final loans = <Map<String, dynamic>>[];
+    final schedules = <Map<String, dynamic>>[];
+    final meetings = <Map<String, dynamic>>[];
+    final reversals = <Map<String, dynamic>>[];
+    final invites = <Map<String, dynamic>>[];
+    for (final g in groups) {
+      for (final t in await _transactionDao.getByGroupId(g.id)) {
+        transactions.add(_bytesToBase64(t.toMap(), ['sender_signature']));
+      }
+      for (final l in await _loanDao.getByGroupId(g.id)) {
+        loans.add(_bytesToBase64(l.toMap(), ['borrower_signature', 'approver_signature']));
+        for (final sch in await _scheduleDao.getByLoanId(l.id)) {
+          schedules.add(sch.toJson());
+        }
+      }
+      for (final m in await _meetingDao.getByGroupId(g.id)) {
+        meetings.add(m.toMap());
+      }
+      for (final r in await _reversalDao.getByGroupId(g.id)) {
+        reversals.add(r.toJson());
+      }
+      for (final i in await _inviteDao.getByGroupId(g.id)) {
+        invites.add(_bytesToBase64(i.toMap(), ['nonce', 'inviter_signature']));
+      }
+    }
 
     final payload = {
       'version': _payloadVersion,
@@ -190,6 +249,12 @@ class BackupService {
       'groups': groups.map((g) => _bytesToBase64(g.toMap(), ['data', 'config_data'])).toList(),
       'members': members,
       'groupKeys': {for (final e in groupKeys.entries) e.key: base64Encode(e.value)},
+      'transactions': transactions,
+      'loans': loans,
+      'schedules': schedules,
+      'meetings': meetings,
+      'reversals': reversals,
+      'invites': invites,
     };
     return _seal(WireCodec.encode(payload), passphrase);
   }
@@ -248,11 +313,19 @@ class BackupService {
           e.key as String: Uint8List.fromList(base64Decode(e.value as String)),
       };
 
+      List<Map<String, dynamic>> maps(String key) =>
+          ((json[key] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       return RestoredBackup(
         identity: identity,
         groups: groups,
         members: members,
         groupKeys: groupKeys,
+        transactions: maps('transactions').map((m) => TransactionData.fromMap(_base64ToBytes(m, ['sender_signature']))).toList(),
+        loans: maps('loans').map((m) => LoanData.fromMap(_base64ToBytes(m, ['borrower_signature', 'approver_signature']))).toList(),
+        schedules: maps('schedules').map(RepaymentSchedule.fromJson).toList(),
+        meetings: maps('meetings').map(MeetingData.fromMap).toList(),
+        reversals: maps('reversals').map(TransactionReversal.fromJson).toList(),
+        invites: maps('invites').map((m) => InviteData.fromMap(_base64ToBytes(m, ['nonce', 'inviter_signature']))).toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
       );
     } catch (_) {
@@ -290,6 +363,24 @@ class BackupService {
     }
     for (final e in backup.groupKeys.entries) {
       await _groupKeyDao.upsert(e.key, e.value);
+    }
+    for (final t in backup.transactions) {
+      await _transactionDao.upsert(t);
+    }
+    for (final l in backup.loans) {
+      await _loanDao.upsert(l);
+    }
+    for (final s in backup.schedules) {
+      await _scheduleDao.upsert(s);
+    }
+    for (final m in backup.meetings) {
+      await _meetingDao.upsert(m);
+    }
+    for (final r in backup.reversals) {
+      await _reversalDao.upsert(r);
+    }
+    for (final i in backup.invites) {
+      await _inviteDao.upsert(i);
     }
   }
 

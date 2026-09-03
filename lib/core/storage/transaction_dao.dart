@@ -20,6 +20,12 @@ class TransactionDao {
     await db.insert('transactions', transaction.toMap());
   }
 
+  /// Insert-or-replace by id (backup restore).
+  Future<void> upsert(TransactionData transaction) async {
+    final db = await AppDatabase.getInstance();
+    await db.insert('transactions', transaction.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<bool> exists(String id) async {
     final db = await AppDatabase.getInstance();
     final rows = await db.query(

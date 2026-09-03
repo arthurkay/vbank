@@ -19,6 +19,7 @@ import '../providers/ipfs_provider.dart';
 import '../providers/notification_provider.dart';
 import 'app_platform.dart';
 import 'deeplink/deeplink_handler.dart';
+import '../services/cloud_backup_service.dart';
 import 'ipfs/sync_manager.dart' show SyncChange, SyncChangeType;
 import 'notifications/notification_service.dart';
 
@@ -137,8 +138,23 @@ class _AppBootstrapState extends ConsumerState<AppBootstrap> with WidgetsBinding
     ref.read(syncManagerProvider).setIdentity(peerId: identity?.peerId, keyPair: keyPair);
   }
 
+  DateTime? _lastCloudBackupCheck;
+
   void _startNode() {
     unawaited(ref.read(syncManagerProvider).startBackground());
+    _maybeCloudBackup();
+  }
+
+  /// WhatsApp-style opportunistic backup: whenever the app comes to the
+  /// foreground, back up if enabled and the interval has passed (checked at
+  /// most once an hour; the service applies the Wi-Fi rule).
+  void _maybeCloudBackup() {
+    if (!AppPlatform.isMobile) return;
+    final now = DateTime.now();
+    final last = _lastCloudBackupCheck;
+    if (last != null && now.difference(last) < const Duration(hours: 1)) return;
+    _lastCloudBackupCheck = now;
+    unawaited(CloudBackupService().runIfDue());
   }
 
   @override
