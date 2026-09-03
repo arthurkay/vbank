@@ -41,11 +41,17 @@ class SyncEnvelope {
   final String groupId;
   final EncryptedData data;
 
+  /// Group snapshots only: the group key wrapped once per live invite
+  /// (invite id → blob, see InviteKeyWrap), readable without the group key so
+  /// a joiner holding an invite secret can unwrap and open the snapshot.
+  final Map<String, Uint8List> wraps;
+
   const SyncEnvelope({
     this.version = currentVersion,
     required this.type,
     required this.groupId,
     required this.data,
+    this.wraps = const {},
   });
 
   static List<int> _aad(int version, SyncPayloadType type, String groupId) =>
@@ -58,6 +64,7 @@ class SyncEnvelope {
     required String groupId,
     required Map<String, dynamic> plaintextJson,
     required SecretKey groupKey,
+    Map<String, Uint8List> wraps = const {},
   }) async {
     final plaintext = WireCodec.encode(plaintextJson);
     final encrypted = await EncryptionService.encrypt(
@@ -65,7 +72,7 @@ class SyncEnvelope {
       groupKey,
       aad: _aad(currentVersion, type, groupId),
     );
-    return SyncEnvelope(type: type, groupId: groupId, data: encrypted).encode();
+    return SyncEnvelope(type: type, groupId: groupId, data: encrypted, wraps: wraps).encode();
   }
 
   Uint8List encode() => WireCodec.encode({
@@ -75,6 +82,7 @@ class SyncEnvelope {
         'nonce': Uint8List.fromList(data.nonce),
         'mac': Uint8List.fromList(data.mac),
         'ciphertext': Uint8List.fromList(data.ciphertext),
+        if (wraps.isNotEmpty) 'wraps': {for (final e in wraps.entries) e.key: Uint8List.fromList(e.value)},
       });
 
   /// Parses the cleartext header. Returns null if [bytes] is not an envelope
@@ -95,6 +103,10 @@ class SyncEnvelope {
           mac: _bytes(json['mac']),
           ciphertext: _bytes(json['ciphertext']),
         ),
+        wraps: {
+          for (final e in ((json['wraps'] as Map?) ?? const {}).entries)
+            e.key as String: Uint8List.fromList(_bytes(e.value)),
+        },
       );
     } catch (_) {
       return null;

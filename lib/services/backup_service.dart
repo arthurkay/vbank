@@ -238,7 +238,7 @@ class BackupService {
         reversals.add(r.toJson());
       }
       for (final i in await _inviteDao.getByGroupId(g.id)) {
-        invites.add(_bytesToBase64(i.toMap(), ['nonce', 'inviter_signature']));
+        invites.add(_bytesToBase64(i.toMap(), ['nonce', 'inviter_signature', 'wrapped_key']));
       }
     }
 
@@ -325,7 +325,7 @@ class BackupService {
         schedules: maps('schedules').map(RepaymentSchedule.fromJson).toList(),
         meetings: maps('meetings').map(MeetingData.fromMap).toList(),
         reversals: maps('reversals').map(TransactionReversal.fromJson).toList(),
-        invites: maps('invites').map((m) => InviteData.fromMap(_base64ToBytes(m, ['nonce', 'inviter_signature']))).toList(),
+        invites: maps('invites').map((m) => InviteData.fromMap(_base64ToBytes(m, ['nonce', 'inviter_signature', 'wrapped_key']))).toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
       );
     } catch (_) {

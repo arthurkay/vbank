@@ -25,6 +25,7 @@ import '../storage/settings_dao.dart';
 import 'ipfs_service.dart';
 import 'peer_book.dart';
 import 'pending_join.dart';
+import '../crypto/invite_wrap.dart';
 import '../relay/relay_directory.dart';
 import 'sync_ledger.dart';
 
@@ -723,11 +724,19 @@ class SyncManager {
       publisherAddrs: dialableAddresses,
     );
 
+    // One wrapped copy of the group key per live invite rides in the clear, so
+    // a joiner holding an invite secret can open the snapshot. Used or expired
+    // invites drop out here — their links stop working.
+    final wraps = <String, Uint8List>{
+      for (final i in await _inviteService.liveInvites(groupId))
+        if (i.wrappedKey != null) i.id: i.wrappedKey!,
+    };
     final bytes = await SyncEnvelope.seal(
       type: SyncPayloadType.groupSnapshot,
       groupId: groupId,
       plaintextJson: snapshot,
       groupKey: key,
+      wraps: wraps,
     );
     final cid = await _ipfsService.addData(bytes);
     await _ipfsService.pin(cid);
@@ -1141,15 +1150,19 @@ class SyncManager {
     required String? groupCid,
     required String? inviteId,
     required String? inviteNonceB64,
-    required String passphrase,
     required Member self,
     required SimpleKeyPair keyPair,
+    String? passphrase,
+    String? inviteSecretB64,
     String? inviterPeerId,
     List<String> inviterAddrs = const [],
     bool parkIfUnreachable = true,
   }) async {
-    final passphraseError = GroupKeyService.validatePassphrase(passphrase);
-    if (passphraseError != null) throw JoinGroupException(passphraseError);
+    if (inviteSecretB64 == null) {
+      if (passphrase == null) throw const JoinGroupException('This invite link needs the group passphrase');
+      final passphraseError = GroupKeyService.validatePassphrase(passphrase);
+      if (passphraseError != null) throw JoinGroupException(passphraseError);
+    }
     if (groupCid == null || groupCid.isEmpty || inviteId == null || inviteNonceB64 == null) {
       throw const JoinGroupException(
         'This invite link is incomplete or from an older version. Ask the inviter '
@@ -1163,7 +1176,9 @@ class SyncManager {
     }
     if (!_joiningGroups.add(groupId)) throw const JoinGroupException('Already joining this group');
     try {
-      final key = await GroupKeyService.deriveKey(passphrase, groupId);
+      // Legacy links: the key is derived from the shared passphrase up front.
+      // Invite-secret links: the key is unwrapped from the snapshot once fetched.
+      final key = inviteSecretB64 == null ? await GroupKeyService.deriveKey(passphrase!, groupId) : null;
       // The invite link carries the addresses of the inviter and of other
       // members: dial them before asking, bitswap only talks to peers we are
       // already connected to.
@@ -1185,7 +1200,8 @@ class SyncManager {
           inviteNonceB64: inviteNonceB64,
           inviterPeerId: inviterPeerId,
           addrs: inviterAddrs,
-          keyB64: base64Encode(await key.extractBytes()),
+          keyB64: key == null ? null : base64Encode(await key.extractBytes()),
+          inviteSecretB64: inviteSecretB64,
           self: self,
           createdAt: DateTime.now().toUtc(),
         ));
@@ -1195,6 +1211,7 @@ class SyncManager {
       final group = await _completeJoin(
         bytes: bytes,
         key: key,
+        inviteSecretB64: inviteSecretB64,
         self: self,
         keyPair: keyPair,
         groupId: groupId,
@@ -1252,7 +1269,8 @@ class SyncManager {
   /// Every failure in here is permanent for this invite/passphrase pair.
   Future<Group> _completeJoin({
     required Uint8List bytes,
-    required SecretKey key,
+    SecretKey? key,
+    String? inviteSecretB64,
     required Member self,
     required SimpleKeyPair keyPair,
     required String groupId,
@@ -1263,6 +1281,23 @@ class SyncManager {
     final envelope = SyncEnvelope.tryDecode(bytes);
     if (envelope == null || envelope.type != SyncPayloadType.groupSnapshot || envelope.groupId != groupId) {
       throw const JoinGroupException('Invite does not point at a valid group');
+    }
+    if (key == null) {
+      // Invite-secret link: the snapshot header carries the group key wrapped
+      // under this invite's secret — only while the invite is live.
+      final wrapped = envelope.wraps[inviteId];
+      if (wrapped == null) {
+        throw const JoinGroupException(
+          'This invite has been used or has expired. Ask a group admin for a new invite link.',
+        );
+      }
+      key = await InviteKeyWrap.unwrap(
+        wrapped: wrapped,
+        secret: InviteKeyWrap.decodeSecret(inviteSecretB64!),
+        groupId: groupId,
+        inviteId: inviteId,
+      );
+      if (key == null) throw const JoinGroupException('Invite link is damaged — ask for a new one');
     }
     Map<String, dynamic> snapshot;
     try {
@@ -1421,7 +1456,8 @@ class SyncManager {
     try {
       final group = await _completeJoin(
         bytes: bytes,
-        key: SecretKey(j.keyBytes),
+        key: j.keyBytes == null ? null : SecretKey(j.keyBytes!),
+        inviteSecretB64: j.inviteSecretB64,
         self: j.self,
         keyPair: kp,
         groupId: j.groupId,
@@ -1449,19 +1485,22 @@ class SyncManager {
 
   /// Creates a signed invite and returns the deep-link parameters
   /// (`cid`, `invite`, `n`). Owner/admin only.
-  Future<InviteData> createInvite(String groupId) async {
+  Future<CreatedInvite> createInvite(String groupId) async {
     final me = _ownPeerId;
     final kp = _ownKeyPair;
     if (me == null || kp == null) throw StateError('Not signed in');
     await _groupService.requireWriter(groupId, me);
-    final invite = await _inviteService.createInvite(
+    final created = await _inviteService.createInvite(
       groupId: groupId,
       groupCid: '',
       inviterPeerId: me,
       inviterKeyPair: kp,
+      groupKey: await _groupKeyService.requireKey(groupId),
     );
-    // The snapshot must carry the invite so joiners can validate it.
+    // The snapshot must carry the invite (and its wrapped key) so joiners can
+    // open and validate it.
     final cid = await publishGroupSnapshot(groupId);
+    final invite = created.invite;
     final withCid = InviteData(
       id: invite.id,
       groupId: invite.groupId,
@@ -1471,9 +1510,10 @@ class SyncManager {
       nonce: invite.nonce,
       inviterPeerId: invite.inviterPeerId,
       inviterSignature: invite.inviterSignature,
+      wrappedKey: invite.wrappedKey,
     );
     await _inviteService.upsert(withCid);
-    return withCid;
+    return CreatedInvite(withCid, created.secret);
   }
 
   // ---------------------------------------------------------------------------

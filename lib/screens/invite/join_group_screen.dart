@@ -83,19 +83,22 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
       return;
     }
 
-    // The group's records are encrypted with a key derived from the group
-    // passphrase (DESIGN_PLAN §12); the inviter shares it out-of-band.
-    final passphrase = await promptSheet(
-      context,
-      title: 'Group passphrase',
-      message: 'Ask the person who invited you for the group passphrase. It unlocks the group\'s records on this phone.',
-      label: 'Passphrase',
-      obscure: true,
-      confirmLabel: 'Join',
-    );
-    if (passphrase == null || !mounted) return;
-    final error = GroupKeyService.validatePassphrase(passphrase);
-    if (error != null) return showMessage(context, error, error: true);
+    // New links carry a one-time secret that unwraps the group key. Older
+    // links (no `k`) still need the group passphrase shared out-of-band.
+    String? passphrase;
+    if (result.inviteSecretB64 == null) {
+      passphrase = await promptSheet(
+        context,
+        title: 'Group passphrase',
+        message: 'This is an older invite. Ask the person who invited you for the group passphrase.',
+        label: 'Passphrase',
+        obscure: true,
+        confirmLabel: 'Join',
+      );
+      if (passphrase == null || !mounted) return;
+      final error = GroupKeyService.validatePassphrase(passphrase);
+      if (error != null) return showMessage(context, error, error: true);
+    }
 
     setState(() {
       _isProcessing = true;
@@ -119,6 +122,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
             inviterPeerId: inviterPeerId,
             inviterAddrs: result.inviterAddrs,
             passphrase: passphrase,
+            inviteSecretB64: result.inviteSecretB64,
             self: self,
             keyPair: keyPair,
           );
@@ -216,7 +220,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
               const Text('Join a Village Banking Group', textAlign: TextAlign.center).h3,
               const Gap(8),
               const Text(
-                'Scan a QR code from a group member to join their savings circle. You will also need the group passphrase from them.',
+                'Scan the QR code or open the link a group admin sent you. It admits you once and expires in 12 hours.',
                 textAlign: TextAlign.center,
               ).muted,
               if (_progress != null) ...[

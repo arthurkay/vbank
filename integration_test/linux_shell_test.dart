@@ -59,15 +59,12 @@ void main() {
 
     // Scope to the dialog: with 6+ groups the list shows a YaruSearchField too.
     final fields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
-    expect(fields, findsAtLeast(4), reason: 'name, amount, passphrase, confirm');
+    expect(fields, findsAtLeast(2), reason: 'name, amount — no passphrase any more');
     await tester.enterText(fields.at(0), groupName);
     await tester.enterText(fields.at(1), '25.00');
-    await tester.enterText(fields.at(2), 'correct horse battery staple');
-    await tester.enterText(fields.at(3), 'correct horse battery staple');
     await settle(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Create group'));
-    // Deriving the group key is a deliberate ~1s PBKDF2 on a background isolate.
-    await settle(tester, 12);
+    await settle(tester, 6);
 
     // 5. The group is listed, and opening it shows its sections.
     expect(find.text(groupName), findsWidgets, reason: 'new group should appear in the list');

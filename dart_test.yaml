@@ -1,0 +1,7 @@
+# Two real libp2p nodes over loopback take a while to start and stop, and the
+# libp2p stack keeps one process-wide "self", so these tests are slow to tear
+# down when other suites run alongside them. Give them room; CI runs them
+# separately (codemagic.yaml excludes the tag from PR checks).
+tags:
+  network:
+    timeout: 3x

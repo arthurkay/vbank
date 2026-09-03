@@ -36,10 +36,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 Future<void> macosCreateGroup(BuildContext context, WidgetRef ref) async {
   final name = TextEditingController();
   final amount = TextEditingController(text: '20.00');
-  final passphrase = TextEditingController();
-  final confirm = TextEditingController();
   var frequency = ContributionFrequency.monthly;
-  var requireApproval = false;
+  var requireApproval = true; // invite links are one-time; approval is the admin's gate
 
   final ok = await macosSheet<bool>(
     context,
@@ -66,12 +64,6 @@ Future<void> macosCreateGroup(BuildContext context, WidgetRef ref) async {
             onChanged: (v) => setState(() => frequency = v ?? frequency),
           ),
           const SizedBox(height: 12),
-          _label(context, 'Group passphrase'),
-          MacosTextField(controller: passphrase, obscureText: true),
-          const SizedBox(height: 8),
-          _label(context, 'Confirm passphrase'),
-          MacosTextField(controller: confirm, obscureText: true),
-          const SizedBox(height: 12),
           Row(children: [
             MacosSwitch(value: requireApproval, onChanged: (v) => setState(() => requireApproval = v)),
             const SizedBox(width: 10),
@@ -96,9 +88,7 @@ Future<void> macosCreateGroup(BuildContext context, WidgetRef ref) async {
   );
   if (ok != true || !context.mounted) return;
 
-  final problem = GroupKeyService.validatePassphrase(passphrase.text) ??
-      (passphrase.text != confirm.text ? 'Passphrases do not match' : null) ??
-      (name.text.trim().isEmpty ? 'Give the group a name' : null) ??
+  final problem = (name.text.trim().isEmpty ? 'Give the group a name' : null) ??
       ((double.tryParse(amount.text) ?? 0) <= 0 ? 'Enter a contribution amount' : null);
   if (problem != null) {
     await macosToast(context, problem, error: true);
@@ -112,7 +102,6 @@ Future<void> macosCreateGroup(BuildContext context, WidgetRef ref) async {
             contributionAmount: double.parse(amount.text),
             frequency: frequency,
           ),
-          passphrase: passphrase.text,
           requireApproval: requireApproval,
         );
     ref.read(selectedGroupProvider.notifier).state = group;
@@ -724,7 +713,8 @@ Future<void> macosShowInvite(BuildContext context, WidgetRef ref, Group group) a
   String? link;
   Object? error;
   try {
-    final invite = await ref.read(syncManagerProvider).createInvite(group.id);
+    final created = await ref.read(syncManagerProvider).createInvite(group.id);
+    final invite = created.invite;
     link = DeepLinkHandler.buildJoinLink(
       groupId: group.id,
       inviterPeerId: identity.peerId,
@@ -733,6 +723,7 @@ Future<void> macosShowInvite(BuildContext context, WidgetRef ref, Group group) a
       inviteNonceB64: base64Encode(invite.nonce!),
       inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
       relayAddrs: await ref.read(syncManagerProvider).userRelayAddresses(),
+      inviteSecretB64: created.secretB64,
     );
   } catch (e) {
     error = e;
@@ -750,8 +741,8 @@ Future<void> macosShowInvite(BuildContext context, WidgetRef ref, Group group) a
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'This invite works once and expires. Tell the new member the group passphrase in '
-                'person — it is not in the link.',
+                'This link admits one person and expires in 12 hours. It carries everything they need — '
+                'send it privately (WhatsApp, SMS) or let them scan it.',
                 style: MacosTheme.of(context).typography.body,
               ),
               const SizedBox(height: 14),
@@ -798,18 +789,23 @@ Future<void> macosJoinGroup(BuildContext context, WidgetRef ref) async {
   final identity = ref.read(authProvider).identity;
   if (identity == null) return;
 
-  final passphrase = await macosPrompt(
-    context,
-    title: 'Group passphrase',
-    message: 'Ask the person who invited you.',
-    obscure: true,
-    confirmLabel: 'Join',
-  );
-  if (passphrase == null || !context.mounted) return;
-  final problem = GroupKeyService.validatePassphrase(passphrase);
-  if (problem != null) {
-    await macosToast(context, problem, error: true);
-    return;
+  // Older links (no `k`) still need the shared passphrase; new links carry a
+  // one-time secret and go straight through.
+  String? passphrase;
+  if (result.inviteSecretB64 == null) {
+    passphrase = await macosPrompt(
+      context,
+      title: 'Group passphrase',
+      message: 'Ask the person who invited you.',
+      obscure: true,
+      confirmLabel: 'Join',
+    );
+    if (passphrase == null || !context.mounted) return;
+    final problem = GroupKeyService.validatePassphrase(passphrase);
+    if (problem != null) {
+      await macosToast(context, problem, error: true);
+      return;
+    }
   }
 
   try {
@@ -830,6 +826,7 @@ Future<void> macosJoinGroup(BuildContext context, WidgetRef ref) async {
           inviterPeerId: result.inviterPeerId,
           inviterAddrs: result.inviterAddrs,
           passphrase: passphrase,
+          inviteSecretB64: result.inviteSecretB64,
           self: self,
           keyPair: keyPair,
         );

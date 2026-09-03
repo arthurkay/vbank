@@ -84,7 +84,7 @@ class GroupListNotifier extends StateNotifier<AsyncValue<List<Group>>> {
   Future<Group> createGroup({
     required String name,
     required GroupConfig config,
-    required String passphrase,
+    String? passphrase,
     bool requireApproval = false,
   }) async {
     final auth = _ref.read(authProvider.notifier);

@@ -39,7 +39,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _error = null;
     });
     try {
-      final invite = await ref.read(syncManagerProvider).createInvite(group.id);
+      final created = await ref.read(syncManagerProvider).createInvite(group.id);
+      final invite = created.invite;
       final link = DeepLinkHandler.buildJoinLink(
         groupId: group.id,
         inviterPeerId: identity.peerId,
@@ -48,6 +49,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         inviteNonceB64: base64Encode(invite.nonce!),
         inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
         relayAddrs: await ref.read(syncManagerProvider).userRelayAddresses(),
+        inviteSecretB64: created.secretB64,
       );
       if (!mounted) return;
       setState(() {
@@ -72,7 +74,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     if (group == null || identity == null) {
       return const AppPage(title: 'Invite', child: EmptyState(icon: LucideIcons.users, title: 'No group selected'));
     }
-    final days = _invite == null ? 7 : _invite!.expiresAt.difference(DateTime.now()).inDays + 1;
+    final hours = _invite == null ? 12 : (_invite!.expiresAt.difference(DateTime.now()).inMinutes / 60).ceil();
 
     return AppPage(
       title: 'Invite Members',
@@ -84,7 +86,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
             Text('Invite to ${group.name}', textAlign: TextAlign.center).h3,
             const Gap(8),
             Text(
-              'Each invite works once and expires in $days days. Tell the new member the group passphrase in person — it is not in the link.',
+              'This link admits one person and expires in $hours hour${hours == 1 ? '' : 's'}. It carries everything they need — send it privately or let them scan the code.',
               textAlign: TextAlign.center,
             ).muted,
             const Gap(24),

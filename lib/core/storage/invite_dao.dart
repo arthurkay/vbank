@@ -63,6 +63,10 @@ class InviteData {
   final Uint8List? inviterSignature;
   final String? usedByPeerId;
 
+  /// Group key wrapped under this invite's secret (InviteKeyWrap); null for
+  /// legacy passphrase invites.
+  final Uint8List? wrappedKey;
+
   const InviteData({
     required this.id,
     required this.groupId,
@@ -74,6 +78,7 @@ class InviteData {
     this.inviterPeerId,
     this.inviterSignature,
     this.usedByPeerId,
+    this.wrappedKey,
   });
 
   bool get isExpired => DateTime.now().toUtc().isAfter(expiresAt);
@@ -90,6 +95,7 @@ class InviteData {
     'inviter_peer_id': inviterPeerId,
     'inviter_signature': inviterSignature,
     'used_by_peer_id': usedByPeerId,
+    'wrapped_key': wrappedKey,
   };
 
   factory InviteData.fromMap(Map<String, dynamic> map) => InviteData(
@@ -105,5 +111,6 @@ class InviteData {
         ? Uint8List.fromList((map['inviter_signature'] as List).cast<int>())
         : null,
     usedByPeerId: map['used_by_peer_id'] as String?,
+    wrappedKey: map['wrapped_key'] as Uint8List?,
   );
 }

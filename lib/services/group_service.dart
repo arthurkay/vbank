@@ -149,7 +149,10 @@ class GroupService {
   Future<Group> createGroup({
     required String name,
     required GroupConfig config,
-    required String passphrase,
+    /// Legacy: derive the group key from a shared passphrase. Null (the
+    /// default for new groups) generates a random key that reaches members
+    /// through invite links.
+    String? passphrase,
     required String ownerPeerId,
     required String ownerName,
     required Uint8List ownerPublicKey,
@@ -159,8 +162,10 @@ class GroupService {
     if (ownerPeerId.isEmpty || ownerName.isEmpty || ownerPublicKey.isEmpty) {
       throw ArgumentError('Group owner identity is incomplete');
     }
-    final passphraseError = GroupKeyService.validatePassphrase(passphrase);
-    if (passphraseError != null) throw ArgumentError(passphraseError);
+    if (passphrase != null) {
+      final passphraseError = GroupKeyService.validatePassphrase(passphrase);
+      if (passphraseError != null) throw ArgumentError(passphraseError);
+    }
     if (config.contributionAmount <= 0) {
       throw ArgumentError('Contribution amount must be positive');
     }
@@ -194,7 +199,11 @@ class GroupService {
     ));
     await _memberDao.insert(_memberToData(groupId, owner));
     await _balanceDao.ensureExists(owner.peerId, groupId);
-    await _groupKeyService.setFromPassphrase(groupId, passphrase);
+    if (passphrase == null) {
+      await _groupKeyService.setRandom(groupId);
+    } else {
+      await _groupKeyService.setFromPassphrase(groupId, passphrase);
+    }
 
     return (await getGroup(groupId))!;
   }

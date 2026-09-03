@@ -38,10 +38,8 @@ import 'yaru_kit.dart';
 Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
   final name = TextEditingController();
   final amount = TextEditingController(text: '20.00');
-  final passphrase = TextEditingController();
-  final confirm = TextEditingController();
   var frequency = ContributionFrequency.monthly;
-  var requireApproval = false;
+  var requireApproval = true; // invite links are one-time; approval is the admin's gate
   String? error;
 
   final created = await yaruDialog<bool>(
@@ -72,22 +70,8 @@ Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
             isSelected: [for (final f in ContributionFrequency.values) f == frequency],
             onSelected: (i) => setState(() => frequency = ContributionFrequency.values[i]),
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: passphrase,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Group passphrase',
-              helperText: 'Encrypts the group’s records. Share it with members in person.',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: confirm,
-            obscureText: true,
-            decoration: InputDecoration(labelText: 'Confirm passphrase', errorText: error),
-          ),
           const SizedBox(height: 8),
+          if (error != null) Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           YaruSwitchListTile(
             title: const Text('New members need approval'),
             value: requireApproval,
@@ -100,9 +84,7 @@ Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
       OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
       FilledButton(
         onPressed: () {
-          final problem = GroupKeyService.validatePassphrase(passphrase.text) ??
-              (passphrase.text != confirm.text ? 'Passphrases do not match' : null) ??
-              (name.text.trim().isEmpty ? 'Give the group a name' : null) ??
+          final problem = (name.text.trim().isEmpty ? 'Give the group a name' : null) ??
               ((double.tryParse(amount.text) ?? 0) <= 0 ? 'Enter a contribution amount' : null);
           if (problem != null) {
             error = problem;
@@ -125,7 +107,6 @@ Future<void> yaruCreateGroup(BuildContext context, WidgetRef ref) async {
             contributionAmount: double.parse(amount.text),
             frequency: frequency,
           ),
-          passphrase: passphrase.text,
           requireApproval: requireApproval,
         );
     ref.read(selectedGroupProvider.notifier).state = group;
@@ -732,7 +713,8 @@ Future<void> yaruShowInvite(BuildContext context, WidgetRef ref, Group group) as
   String? link;
   Object? error;
   try {
-    final invite = await ref.read(syncManagerProvider).createInvite(group.id);
+    final created = await ref.read(syncManagerProvider).createInvite(group.id);
+    final invite = created.invite;
     link = DeepLinkHandler.buildJoinLink(
       groupId: group.id,
       inviterPeerId: identity.peerId,
@@ -741,6 +723,7 @@ Future<void> yaruShowInvite(BuildContext context, WidgetRef ref, Group group) as
       inviteNonceB64: base64Encode(invite.nonce!),
       inviterAddrs: await ref.read(syncManagerProvider).inviteAddresses(group.id),
       relayAddrs: await ref.read(syncManagerProvider).userRelayAddresses(),
+      inviteSecretB64: created.secretB64,
     );
   } catch (e) {
     error = e;
@@ -758,8 +741,8 @@ Future<void> yaruShowInvite(BuildContext context, WidgetRef ref, Group group) as
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'This invite works once and expires. Tell the new member the group passphrase in '
-                'person — it is not in the link.',
+                'This link admits one person and expires in 12 hours. It carries everything they need — '
+                'send it privately (WhatsApp, SMS) or let them scan it.',
               ),
               const SizedBox(height: 16),
               SelectableText(link!, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
@@ -804,19 +787,24 @@ Future<void> yaruJoinGroup(BuildContext context, WidgetRef ref) async {
   final identity = ref.read(authProvider).identity;
   if (identity == null) return;
 
-  final passphrase = await yaruPrompt(
-    context,
-    title: 'Group passphrase',
-    message: 'Ask the person who invited you. It unlocks the group’s records on this computer.',
-    label: 'Passphrase',
-    obscure: true,
-    confirmLabel: 'Join',
-  );
-  if (passphrase == null || !context.mounted) return;
-  final problem = GroupKeyService.validatePassphrase(passphrase);
-  if (problem != null) {
-    yaruToast(context, problem, error: true);
-    return;
+  // Older links (no `k`) still need the shared passphrase; new links carry a
+  // one-time secret and go straight through.
+  String? passphrase;
+  if (result.inviteSecretB64 == null) {
+    passphrase = await yaruPrompt(
+      context,
+      title: 'Group passphrase',
+      message: 'Ask the person who invited you. It unlocks the group’s records on this computer.',
+      label: 'Passphrase',
+      obscure: true,
+      confirmLabel: 'Join',
+    );
+    if (passphrase == null || !context.mounted) return;
+    final problem = GroupKeyService.validatePassphrase(passphrase);
+    if (problem != null) {
+      yaruToast(context, problem, error: true);
+      return;
+    }
   }
 
   try {
@@ -837,6 +825,7 @@ Future<void> yaruJoinGroup(BuildContext context, WidgetRef ref) async {
           inviterPeerId: result.inviterPeerId,
           inviterAddrs: result.inviterAddrs,
           passphrase: passphrase,
+          inviteSecretB64: result.inviteSecretB64,
           self: self,
           keyPair: keyPair,
         );

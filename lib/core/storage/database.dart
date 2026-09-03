@@ -29,7 +29,7 @@ class AppDatabase {
   static Database? _database;
 
   /// Bump when the schema changes and add a step to [_onUpgrade].
-  static const schemaVersion = 4;
+  static const schemaVersion = 5;
 
   static const _fileName = 'vbank.db';
 
@@ -228,6 +228,11 @@ class AppDatabase {
       // (`from_peer_id`). Existing rows were self-authored.
       await db.execute('ALTER TABLE transactions ADD COLUMN author_peer_id TEXT');
       await db.execute('UPDATE transactions SET author_peer_id = from_peer_id WHERE author_peer_id IS NULL');
+    }
+    if (oldVersion < 5) {
+      // Invite links carry a one-time secret; the invite keeps the group key
+      // wrapped under it (InviteKeyWrap) for the snapshot header.
+      await db.execute('ALTER TABLE invites ADD COLUMN wrapped_key BLOB');
     }
     await _createIndexes(db);
   }
@@ -428,7 +433,8 @@ class AppDatabase {
         nonce BLOB,
         inviter_peer_id TEXT,
         inviter_signature BLOB,
-        used_by_peer_id TEXT
+        used_by_peer_id TEXT,
+        wrapped_key BLOB
       )
     ''');
 

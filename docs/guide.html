@@ -89,9 +89,9 @@
   <li><strong>Groups → "New group".</strong></li>
   <li><strong>Name it</strong> the way members will recognise it, e.g. "Ngombe Circle".</li>
   <li><strong>Set the contribution</strong> amount and how often it is due — weekly, biweekly or monthly.</li>
-  <li><strong>Choose a group passphrase.</strong> This encrypts the group's records. Pick something your members can repeat but strangers can't guess, and plan how you will tell it to new members <em>in person</em>. It is never included in an invite link, and it cannot be recovered or reset.</li>
+  <li><strong>No passphrase to invent.</strong> vBank generates the group's encryption key for you. New members receive it through the invite link itself — each link admits one person and expires after 12 hours — so there is nothing to dictate at meetings or to forget later.</li>
   <li><strong>Decide whether new members need approval.</strong> On: joining puts someone in a pending list until an admin approves them. Off: a valid invite admits them immediately.</li>
-  <li><strong>Create the group.</strong> Deriving the encryption key takes a moment on older phones — that's the passphrase being stretched deliberately.</li>
+  <li><strong>Create the group.</strong> vBank makes the group's encryption key and publishes the first snapshot.</li>
 </ol>
 <p>You can adjust the rest of the rules any time in <strong>group → ⚙ Settings → Group configuration</strong>:</p>
 <table>
@@ -113,22 +113,21 @@
 <h2 id="invite">3. Adding members</h2>
 <ol class="steps">
   <li><strong>Open the group → tap the "add person" icon.</strong> vBank publishes a fresh snapshot of the group and shows a QR code.</li>
-  <li><strong>Have the new member scan it</strong> from their phone (Groups → "Join another group" → Scan QR code), or send them the link with "Share invite link".</li>
-  <li><strong>Tell them the group passphrase in person.</strong> Not over the same channel as the link — the link alone cannot decrypt anything.</li>
-  <li><strong>Each invite works once</strong> and expires after a few days. Generate a new one per member with "New invite".</li>
+  <li><strong>Have the new member scan it</strong> from their phone (Groups → "Join" → Scan QR code), or send them the link privately with "Share invite link". The link is the key: it works once, for 12 hours, and only for the person who uses it first — so send it directly to them, not to a group chat. If it lapses, just make another.</li>
+  <li><strong>One link per person.</strong> It works once and expires after 12 hours; generate a new one for the next member with "New invite".</li>
   <li><strong>If approval is on,</strong> approve them under ⚙ Settings → "Waiting for approval".</li>
 </ol>
 <div class="note">
-  <strong>Why two separate things?</strong> The QR gets the joiner to the right group and proves an admin
-  invited them. The passphrase decrypts the books. Splitting them means a forwarded screenshot of a QR code
-  is useless on its own.
+  <strong>Why the link is enough.</strong> Each invite carries a one-time secret that unlocks the group's key
+  only while that invite is live. Once it has been used or 12 hours have passed, the same link (or a screenshot
+  of the QR code) unlocks nothing — so leaks have a short shelf life, and admins control who gets in by handing
+  out links one at a time and, with approval on, confirming each join.
 </div>
 
 <h2 id="join">4. Joining a group</h2>
 <ol class="steps">
   <li><strong>Groups → "Join another group".</strong></li>
   <li><strong>Scan the QR</strong> the admin is showing you, or tap "Enter code manually" and paste the link.</li>
-  <li><strong>Type the group passphrase</strong> when prompted.</li>
   <li><strong>Wait for the fetch.</strong> vBank finds the group's snapshot on the network, verifies it and decrypts it. This needs a connection — do it while you have signal.</li>
   <li><strong>If the group requires approval,</strong> you'll see "Waiting for approval" until an admin lets you in. Pull down to refresh later.</li>
 </ol>
@@ -142,6 +141,7 @@
   <li><strong>Record it.</strong> The entry is signed, added to your books immediately, and queued to sync.</li>
 </ol>
 <p>The group's <strong>Transactions</strong> tab lists everything newest first; <strong>Activity</strong> on the home screen shows the same across all your groups. Tap any entry for full details: who recorded it, when, its sequence number and its ID.</p>
+<p><strong>Older invite links</strong> (made before this version) still ask for the group passphrase the admin shared with you; new links do not.</p>
 <p><strong>Nobody online?</strong> A group lives only on its members' phones, so joining needs one member with the group to be reachable. The invite link now points at several members, not just the person who made it — any of them can let you in. If none of them is online when you open the link, vBank keeps the invite and shows "Joining a group…" in your Groups list; it keeps trying every couple of minutes and notifies you as soon as you are in. You can retry, fix a mistyped passphrase or cancel from that row.</p>
 <p><strong>Members on different networks.</strong> Phones only find each other directly on the same Wi‑Fi; over the internet they meet through a <em>relay</em>, a small always-on vBank node that every phone connects to. vBank comes with one built in (<code>vbank.localhost.co.zm</code>), so this works out of the box. The relay stores only encrypted records and never has the group passphrase. Groups that prefer their own server can add another relay under Settings → Sync status → Relay server (and switch the built-in one off); invite links then carry it to new members. Running one takes a few minutes with Docker — see <code>deploy/relay/README.md</code> in the project.</p>
 
@@ -230,9 +230,10 @@
   <li><strong>On the new phone:</strong> "Restore from backup" on the welcome screen → import the file → enter the PIN. Your identity and groups come back, and you keep signing as the same person.</li>
 </ol>
 <div class="note">
-  <strong>There is no recovery.</strong> No one can reset a forgotten backup PIN or a forgotten group
-  passphrase, because no one else has a copy. This is the trade for having no server — write them down and
-  keep them somewhere safe.
+  <strong>There is no recovery.</strong> No one can reset a forgotten backup PIN, because no one else has
+  a copy. This is the trade for having no server — write it down and keep it somewhere safe. (Groups no
+  longer have a passphrase to forget: membership comes from invite links, and your group keys travel in
+  your backups.)
 </div>
 
 <h2 id="reminders">13. Reminders</h2>
@@ -264,7 +265,7 @@
   <tr><th>What you see</th><th>What to do</th></tr>
   <tr><td><em>Offline</em> that won't go away</td><td>Check the phone has data or Wi-Fi, then Settings → Sync now. The connection needs a few seconds to start; the Sync screen's log shows progress.</td></tr>
   <tr><td>"Joining a group…" stays in the Groups list</td><td>No member of the group has been reachable yet. Ask a member (ideally on the same Wi-Fi) to open the app; the join completes on the next sync. If the row says the passphrase is wrong or the invite has expired, tap it to fix the passphrase or ask for a new link.</td></tr>
-  <tr><td>"Invalid passphrase" when joining</td><td>Passphrases are case-sensitive and include spaces exactly as typed. Ask the admin to say it out slowly; there is no reset.</td></tr>
+  <tr><td>"This invite has been used or has expired" when joining</td><td>Invite links admit one person and last 12 hours. Ask an admin for a fresh link.</td></tr>
   <tr><td>Invite says used or expired</td><td>Invites work once. Ask for a new one from the invite screen.</td></tr>
   <tr><td>Records stuck in "queued"</td><td>Nobody else is reachable yet. They will go out when a co-member's phone is online; nothing is lost meanwhile.</td></tr>
   <tr><td>A record shows as failed</td><td>Sync screen → Retry next to it.</td></tr>
@@ -278,7 +279,7 @@
   <li><strong>Two admins, not one.</strong> If the only admin loses their phone and has no backup, nobody can write records for the group any more.</li>
   <li><strong>Record in the meeting, not after.</strong> Entries are timestamped and signed; recording live keeps the books and the cash in step.</li>
   <li><strong>Read the report out loud at the end of a cycle.</strong> Every member can check the same numbers on their own phone — that transparency is the point.</li>
-  <li><strong>Keep the passphrase spoken, never written in a group chat.</strong> Anyone who has it can read the group's records.</li>
+  <li><strong>Send invite links to one person at a time, privately.</strong> Whoever opens a link first within 12 hours gets in (subject to approval); don't post links in group chats.</li>
   <li><strong>Make a backup after joining a new group,</strong> so the new group key is in it.</li>
   <li><strong>Agree the rules before you set them:</strong> interest, penalties and the loan ceiling are your group's decisions, and changing them mid-cycle causes arguments the app can't settle.</li>
 </ul>
@@ -365,7 +366,7 @@
 <h4>Two differences from the phone</h4>
 <ul>
   <li><strong>Joining a group:</strong> Linux and Windows have no camera scanner, so paste the invite
-  link (Groups → Join a group) instead of scanning a QR code. You still need the group passphrase.</li>
+  link (Groups → Join a group) instead of scanning a QR code.</li>
   <li><strong>Reminders:</strong> desktop notifications work on Linux and macOS. On Windows this build
   has no notification backend, so meeting and repayment reminders appear in the app rather than as
   system toasts.</li>

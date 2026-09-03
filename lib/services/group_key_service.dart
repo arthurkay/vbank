@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
@@ -42,6 +43,15 @@ class GroupKeyService {
   }
 
   /// Derives the key from [passphrase] and stores it for [groupId].
+  /// A fresh random data key for a new group. Members receive it through
+  /// invite links (InviteKeyWrap), never through a shared passphrase.
+  Future<SecretKey> setRandom(String groupId) async {
+    final rng = Random.secure();
+    final key = SecretKey(List<int>.generate(32, (_) => rng.nextInt(256)));
+    await setKey(groupId, key);
+    return key;
+  }
+
   Future<SecretKey> setFromPassphrase(String groupId, String passphrase) async {
     final key = await deriveKey(passphrase, groupId);
     await setKey(groupId, key);

@@ -47,6 +47,7 @@ class DeepLinkHandler {
     String? inviteNonceB64,
     List<String> inviterAddrs = const [],
     List<String> relayAddrs = const [],
+    String? inviteSecretB64,
   }) {
     return Uri(
       scheme: scheme,
@@ -61,6 +62,8 @@ class DeepLinkHandler {
         // Relay nodes the group uses (see RelayNode): a joiner configures them
         // automatically, so members never have to type a server address.
         if (relayAddrs.isNotEmpty) 'relay': relayAddrs.join(','),
+        // One-time invite secret that unwraps the group key (InviteKeyWrap).
+        'k': ?inviteSecretB64,
       },
     ).toString();
   }
@@ -128,6 +131,7 @@ class DeepLinkHandler {
               .map((a) => a.trim())
               .where((a) => a.isNotEmpty)
               .toList(),
+          inviteSecretB64: nonEmpty('k'),
           relayAddrs: (nonEmpty('relay') ?? '')
               .split(',')
               .map((a) => a.trim())
@@ -169,6 +173,10 @@ class DeepLinkResult {
 
   /// Relay nodes named in the link (`relay=`), empty for older links.
   final List<String> relayAddrs;
+
+  /// One-time invite secret (`k=`), base64url. Null on legacy links, which
+  /// need the group passphrase instead.
+  final String? inviteSecretB64;
   final String? backupId;
   final String? rawLink;
   final String? error;
@@ -182,6 +190,7 @@ class DeepLinkResult {
     this.inviteNonceB64,
     this.inviterAddrs = const [],
     this.relayAddrs = const [],
+    this.inviteSecretB64,
     this.backupId,
     this.rawLink,
     this.error,

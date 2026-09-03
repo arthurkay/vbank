@@ -7,7 +7,7 @@
 #   stage                 print the desktop's current stage
 #   waitstage NAME        block until the desktop reaches NAME
 #   launch | deeplink     start the app / open $E2E_DIR/invite.txt as a vbank:// link
-#   passphrase [SHOT]     focus the passphrase field, type it in chunks, reveal, screenshot, tap Join
+#   passphrase [SHOT]     LEGACY links only: focus the passphrase field, type it in chunks, reveal, screenshot, tap Join
 #   opengroup             back to the list, search $E2E_DIR/name.txt, open the first hit
 #   loan [AMOUNT]         from a group's Overview: Loans tab → Request a loan → submit
 #   shot NAME [delay]     screenshot to $E2E_DIR/phone/NAME.png

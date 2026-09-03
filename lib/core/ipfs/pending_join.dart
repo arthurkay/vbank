@@ -20,7 +20,10 @@ class PendingJoin {
   final String inviteNonceB64;
   final String? inviterPeerId;
   final List<String> addrs;
-  final String keyB64;
+  /// Group key (legacy passphrase joins) — or null when [inviteSecretB64] is
+  /// set and the key comes from the snapshot's wrapped entry at join time.
+  final String? keyB64;
+  final String? inviteSecretB64;
   final Member self;
   final DateTime createdAt;
   final int attempts;
@@ -37,7 +40,8 @@ class PendingJoin {
     required this.inviteNonceB64,
     required this.inviterPeerId,
     required this.addrs,
-    required this.keyB64,
+    this.keyB64,
+    this.inviteSecretB64,
     required this.self,
     required this.createdAt,
     this.attempts = 0,
@@ -45,7 +49,7 @@ class PendingJoin {
     this.permanent = false,
   });
 
-  List<int> get keyBytes => base64Decode(keyB64);
+  List<int>? get keyBytes => keyB64 == null ? null : base64Decode(keyB64!);
 
   Set<String> get peerIds => addrs.map((a) => a.split('/p2p/').last).toSet();
 
@@ -71,6 +75,7 @@ class PendingJoin {
 
   PendingJoin copyWith({
     String? keyB64,
+    String? inviteSecretB64,
     int? attempts,
     String? lastError,
     bool clearError = false,
@@ -85,6 +90,7 @@ class PendingJoin {
         inviterPeerId: inviterPeerId,
         addrs: addrs ?? this.addrs,
         keyB64: keyB64 ?? this.keyB64,
+        inviteSecretB64: inviteSecretB64 ?? this.inviteSecretB64,
         self: self,
         createdAt: createdAt,
         attempts: attempts ?? this.attempts,
@@ -100,6 +106,7 @@ class PendingJoin {
         'inviterPeerId': inviterPeerId,
         'addrs': addrs,
         'key': keyB64,
+        'secret': inviteSecretB64,
         'self': self.toJson(),
         'createdAt': createdAt.toIso8601String(),
         'attempts': attempts,
@@ -114,7 +121,8 @@ class PendingJoin {
         inviteNonceB64: j['inviteNonceB64'] as String,
         inviterPeerId: j['inviterPeerId'] as String?,
         addrs: ((j['addrs'] as List?) ?? const []).cast<String>(),
-        keyB64: j['key'] as String,
+        keyB64: j['key'] as String?,
+        inviteSecretB64: j['secret'] as String?,
         self: Member.fromJson(j['self'] as Map<String, dynamic>),
         createdAt: DateTime.parse(j['createdAt'] as String),
         attempts: (j['attempts'] as int?) ?? 0,

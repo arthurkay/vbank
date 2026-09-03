@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:uuid/uuid.dart';
+import '../core/crypto/invite_wrap.dart';
 import '../core/crypto/signing.dart';
 import '../core/storage/invite_dao.dart';
 
@@ -19,7 +20,8 @@ class InviteException implements Exception {
 class InviteService {
   final InviteDao _dao;
   static const _uuid = Uuid();
-  static const defaultExpiryDays = 7;
+  /// Invites are short-lived by design: the link is the secret.
+  static const defaultExpiry = Duration(hours: 12);
 
   InviteService({InviteDao? dao}) : _dao = dao ?? InviteDao();
 
@@ -41,17 +43,27 @@ class InviteService {
 
   /// Creates and stores a signed invite. The caller has already checked the
   /// inviter is an owner/admin.
-  Future<InviteData> createInvite({
+  ///
+  /// With [groupKey] the invite also gets the group key wrapped under a fresh
+  /// one-time secret (InviteKeyWrap); the secret is returned once, for the
+  /// link, and never stored. Without it (legacy) the joiner needs the group
+  /// passphrase.
+  Future<CreatedInvite> createInvite({
     required String groupId,
     required String groupCid,
     required String inviterPeerId,
     required SimpleKeyPair inviterKeyPair,
-    int expiryDays = defaultExpiryDays,
+    SecretKey? groupKey,
+    Duration expiry = defaultExpiry,
   }) async {
     final id = _uuid.v4();
     final nonce = _randomNonce();
     final now = DateTime.now().toUtc();
-    final expiresAt = now.add(Duration(days: expiryDays));
+    final expiresAt = now.add(expiry);
+    final secret = groupKey == null ? null : InviteKeyWrap.randomSecret();
+    final wrappedKey = groupKey == null
+        ? null
+        : await InviteKeyWrap.wrap(groupKey: groupKey, secret: secret!, groupId: groupId, inviteId: id);
 
     final signature = await SigningService.sign(
       signingPayload(
@@ -73,9 +85,17 @@ class InviteService {
       nonce: nonce,
       inviterPeerId: inviterPeerId,
       inviterSignature: Uint8List.fromList(signature.bytes),
+      wrappedKey: wrappedKey,
     );
     await _dao.upsert(invite);
-    return invite;
+    return CreatedInvite(invite, secret);
+  }
+
+  /// Invites that can still be used: not used, not expired. Only these get a
+  /// wrapped-key entry in the snapshot header.
+  Future<List<InviteData>> liveInvites(String groupId, {DateTime? now}) async {
+    final at = now ?? DateTime.now().toUtc();
+    return (await _dao.getByGroupId(groupId)).where((i) => !i.used && at.isBefore(i.expiresAt)).toList();
   }
 
   /// Validates an invite against the roster's copy of the inviter's key.
@@ -143,6 +163,7 @@ class InviteService {
     'nonce': i.nonce == null ? null : base64Encode(i.nonce!),
     'inviter': i.inviterPeerId,
     'signature': i.inviterSignature == null ? null : base64Encode(i.inviterSignature!),
+    'wrappedKey': i.wrappedKey == null ? null : base64Encode(i.wrappedKey!),
   };
 
   static InviteData fromSnapshotJson(Map<String, dynamic> j) => InviteData(
@@ -158,6 +179,7 @@ class InviteService {
     inviterSignature: j['signature'] != null
         ? Uint8List.fromList(base64Decode(j['signature'] as String))
         : null,
+    wrappedKey: j['wrappedKey'] != null ? Uint8List.fromList(base64Decode(j['wrappedKey'] as String)) : null,
   );
 
   /// Merges invites from a peer's snapshot: a `used` flag never reverts.
@@ -171,4 +193,13 @@ class InviteService {
       }
     }
   }
+}
+
+/// A freshly created invite and, when the group key was wrapped, the one-time
+/// secret that goes into the link (`k=`).
+class CreatedInvite {
+  final InviteData invite;
+  final Uint8List? secret;
+  const CreatedInvite(this.invite, this.secret);
+  String? get secretB64 => secret == null ? null : InviteKeyWrap.encodeSecret(secret!);
 }

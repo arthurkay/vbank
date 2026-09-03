@@ -15,7 +15,7 @@
 ///
 /// Run with:
 ///   E2E_DIR=/path GDK_BACKEND=x11 flutter test integration_test/e2e_desktop_peer_test.dart -d linux
-/// and drive the phone with `tool/e2e/phone.sh` (deeplink → passphrase, then
+/// and drive the phone with `tool/e2e/phone.sh` (deeplink → join (no passphrase: the link carries a one-time secret), then
 /// once `stage` is `contributed`: opengroup → loan). The phone should run a
 /// profile build; the desktop test writes `name.txt` so the driver can find the
 /// group by name.
@@ -38,7 +38,6 @@ import 'package:vbank/services/meeting_service.dart';
 import 'package:vbank/services/transaction_service.dart';
 import 'package:yaru/yaru.dart';
 
-const passphrase = 'e2e-passphrase-2026';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -124,14 +123,11 @@ void main() {
     final fields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
     await tester.enterText(fields.at(0), groupName);
     await tester.enterText(fields.at(1), '20.00');
-    await tester.enterText(fields.at(2), passphrase);
-    await tester.enterText(fields.at(3), passphrase);
     await settle(tester);
-    // "New members need approval" switch is the only YaruSwitchListTile here.
-    await tester.tap(find.byType(YaruSwitchListTile).first);
-    await settle(tester);
+    // "New members need approval" is on by default now that invite links are
+    // one-time; leave the YaruSwitchListTile alone.
     await tester.tap(filled('Create group'));
-    await settle(tester, 12); // PBKDF2 on a background isolate
+    await settle(tester, 6);
 
     final groupService = GroupService();
     final groups = await groupService.getAllGroups();

@@ -233,8 +233,8 @@ void main() {
 
   group('Invites (§16)', () {
     test('one-use, expiry and nonce are enforced', () async {
-      final inv = await invites.createInvite(
-          groupId: circle.id, groupCid: 'cid', inviterPeerId: admin.peerId, inviterKeyPair: admin.kp);
+      final inv = (await invites.createInvite(
+          groupId: circle.id, groupCid: 'cid', inviterPeerId: admin.peerId, inviterKeyPair: admin.kp)).invite;
       await InviteService.verify(inv, groupId: circle.id, presentedNonce: inv.nonce!, inviterPublicKey: admin.pub);
 
       expect(
@@ -259,8 +259,8 @@ void main() {
     });
 
     test('used flag survives a snapshot merge but never reverts', () async {
-      final inv = await invites.createInvite(
-          groupId: circle.id, groupCid: 'cid', inviterPeerId: admin.peerId, inviterKeyPair: admin.kp);
+      final inv = (await invites.createInvite(
+          groupId: circle.id, groupCid: 'cid', inviterPeerId: admin.peerId, inviterKeyPair: admin.kp)).invite;
       await invites.markUsed(inv.id, outsider.peerId);
       final stale = InviteData(
         id: inv.id, groupId: inv.groupId, createdAt: inv.createdAt, expiresAt: inv.expiresAt, used: false,

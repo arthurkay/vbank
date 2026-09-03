@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/group.dart';
 import '../../providers/group_provider.dart';
-import '../../services/group_key_service.dart';
 import '../../ui/ui.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -14,15 +13,15 @@ class CreateGroupScreen extends ConsumerStatefulWidget {
 class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final _name = TextEditingController();
   final _amount = TextEditingController();
-  final _passphrase = TextEditingController();
-  final _confirm = TextEditingController();
   ContributionFrequency _frequency = ContributionFrequency.monthly;
-  bool _requireApproval = false;
+  // Members join through one-time invite links, so approval is the only gate
+  // an admin has once a link is out — on by default.
+  bool _requireApproval = true;
   bool _isLoading = false;
 
   @override
   void dispose() {
-    for (final c in [_name, _amount, _passphrase, _confirm]) {
+    for (final c in [_name, _amount]) {
       c.dispose();
     }
     super.dispose();
@@ -33,18 +32,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final amount = double.tryParse(_amount.text);
     if (name.isEmpty) return showMessage(context, 'Please enter a group name', error: true);
     if (amount == null || amount <= 0) return showMessage(context, 'Please enter a valid amount', error: true);
-    final passphraseError = GroupKeyService.validatePassphrase(_passphrase.text);
-    if (passphraseError != null) return showMessage(context, passphraseError, error: true);
-    if (_passphrase.text.trim() != _confirm.text.trim()) {
-      return showMessage(context, 'Passphrases do not match', error: true);
-    }
 
     setState(() => _isLoading = true);
     try {
       await ref.read(groupListProvider.notifier).createGroup(
             name: name,
             config: GroupConfig(groupId: '', contributionAmount: amount, frequency: _frequency),
-            passphrase: _passphrase.text,
             requireApproval: _requireApproval,
           );
       if (mounted) {
@@ -95,30 +88,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               ),
             ),
             const Gap(20),
-            LabeledField(
-              label: 'Group passphrase',
-              helper: 'Shared secret that encrypts the group\'s records. Tell it to members in person — '
-                  'anyone who knows it can join and read the group\'s data.',
-              child: TextField(cursorOpacityAnimates: false, 
-                controller: _passphrase,
-                obscureText: true,
-                placeholder: const Text('e.g. chilenje-savings-2026'),
-                features: [InputFeature.passwordToggle()],
-                autocorrect: false,
-                enableSuggestions: false,
-              ),
-            ),
-            const Gap(20),
-            LabeledField(
-              label: 'Confirm passphrase',
-              child: TextField(cursorOpacityAnimates: false, 
-                controller: _confirm,
-                obscureText: true,
-                features: [InputFeature.passwordToggle()],
-                autocorrect: false,
-                enableSuggestions: false,
-              ),
-            ),
             const Gap(20),
             Panel(
               child: Basic(
