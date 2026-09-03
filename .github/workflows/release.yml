@@ -1,9 +1,10 @@
 name: Release desktop builds
 
 # Tag a commit `vX.Y.Z` and push the tag: this builds the Linux (tar.gz),
-# Windows (zip + Inno Setup installer) and macOS (dmg) apps and attaches them
-# to a GitHub release of the same name.
-# Mobile builds are not published here.
+# Windows (zip + Inno Setup installer) and macOS (dmg) apps — plus a signed
+# Android APK when the keystore secrets are configured — and attaches them to a
+# GitHub release of the same name. Store publishing (Play / TestFlight) runs on
+# Codemagic from the same tag (codemagic.yaml).
 on:
   push:
     tags: ['v*']
@@ -106,8 +107,53 @@ jobs:
           name: macos
           path: vbank-*-macos.dmg
 
+  # Signed Android APK, attached to the GitHub release when the keystore
+  # secrets exist (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD —
+  # see DEPLOYMENT.md). Play Store publishing is Codemagic's job (codemagic.yaml);
+  # this is the same keystore, the same CM_KEYSTORE_* contract the Gradle file
+  # reads, so the two pipelines produce identically signed builds.
+  android:
+    runs-on: ubuntu-24.04
+    env:
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Decode the release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/vbank-release.jks"
+          echo "CM_KEYSTORE_PATH=$RUNNER_TEMP/vbank-release.jks" >> "$GITHUB_ENV"
+      - name: Build signed APK
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          CM_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          CM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          CM_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          flutter build apk --release
+          VERSION=${GITHUB_REF_NAME#v}
+          mv build/app/outputs/flutter-apk/app-release.apk "vbank-$VERSION-android.apk"
+      - name: Skipped (no keystore secrets)
+        if: env.HAS_KEYSTORE != 'true'
+        run: echo "KEYSTORE_BASE64 not set — no Android build attached to this release."
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          name: android
+          path: vbank-*-android.apk
+
   release:
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, android]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -124,3 +170,4 @@ jobs:
             dist/*.zip
             dist/*.exe
             dist/*.dmg
+            dist/*.apk

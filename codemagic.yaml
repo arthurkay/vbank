@@ -1,0 +1,97 @@
+# Codemagic CI/CD for vBank — same pattern as arthurkay/spark.
+#
+# Store builds are signed here (Android keystore reference + App Store Connect
+# integration configured in the Codemagic UI, see DEPLOYMENT.md) and triggered
+# by pushing a `v*` tag. Desktop builds are GitHub Actions' job
+# (.github/workflows/release.yml); PR checks run on both.
+workflows:
+  pr-checks:
+    name: PR checks
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      flutter: 3.41.6
+    triggering:
+      events:
+        - pull_request
+    scripts:
+      - name: Dependencies
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze lib test integration_test bin
+      - name: Unit tests (network-tagged loopback tests excluded)
+        script: flutter test test/ --exclude-tags network
+
+  android-release:
+    name: Android release (Play)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      flutter: 3.41.6
+      java: 17
+      android_signing:
+        - vbank_keystore            # Teams → Codemagic.yaml settings → Android signing
+      groups:
+        - android                   # PLAY_SERVICE_ACCOUNT_JSON
+      vars:
+        PACKAGE_NAME: zm.co.tickethost.vbank
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    scripts:
+      - name: Dependencies
+        script: flutter pub get
+      - name: Build app bundle (signed by the CM_KEYSTORE_* variables Codemagic injects)
+        script: |
+          flutter build appbundle --release
+          flutter build apk --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/mapping/release/mapping.txt
+    publishing:
+      google_play:
+        credentials: $PLAY_SERVICE_ACCOUNT_JSON
+        track: internal              # promote in Play Console after checking
+        submit_as_draft: true
+
+  ios-release:
+    name: iOS release (TestFlight)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: vBank App Store Connect   # Teams → Integrations → Developer Portal
+    environment:
+      flutter: 3.41.6
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: zm.co.tickethost.vbank
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    scripts:
+      - name: Dependencies
+        script: flutter pub get
+      - name: Pods
+        script: |
+          cd ios && pod install
+      - name: Use the fetched signing files
+        script: xcode-project use-profiles
+      - name: Build ipa
+        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false

@@ -7,19 +7,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing is read from android/key.properties (git-ignored):
-//   storeFile=/absolute/path/to/upload-keystore.jks
-//   storePassword=...
-//   keyAlias=upload
-//   keyPassword=...
-// See https://docs.flutter.dev/deployment/android#signing-the-app
+// Release signing, in order of preference (see DEPLOYMENT.md):
+//  1. CI environment — the variables Codemagic's `android_signing` injects and
+//     that .github/workflows/release.yml exports after decoding the secret:
+//       CM_KEYSTORE_PATH, CM_KEYSTORE_PASSWORD, CM_KEY_ALIAS, CM_KEY_PASSWORD
+//  2. Local — android/key.properties (git-ignored):
+//       storeFile=/absolute/path/to/vbank-release.jks
+//       storePassword=...  keyAlias=vbank  keyPassword=...
+//  3. Neither — the DEBUG key, so `flutter run --release` still works locally.
+//     Never distribute such a build.
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
         keystorePropertiesFile.inputStream().use { load(it) }
     }
 }
-val hasReleaseKeystore = keystorePropertiesFile.exists()
+val ciKeystorePath: String? = System.getenv("CM_KEYSTORE_PATH")
+val hasCiKeystore = ciKeystorePath != null && file(ciKeystorePath).exists()
+val hasReleaseKeystore = hasCiKeystore || keystorePropertiesFile.exists()
 
 android {
     namespace = "zm.co.tickethost.vbank"
@@ -48,10 +53,17 @@ android {
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+                if (hasCiKeystore) {
+                    storeFile = file(ciKeystorePath!!)
+                    storePassword = System.getenv("CM_KEYSTORE_PASSWORD")
+                    keyAlias = System.getenv("CM_KEY_ALIAS")
+                    keyPassword = System.getenv("CM_KEY_PASSWORD")
+                } else {
+                    storeFile = file(keystoreProperties["storeFile"] as String)
+                    storePassword = keystoreProperties["storePassword"] as String
+                    keyAlias = keystoreProperties["keyAlias"] as String
+                    keyPassword = keystoreProperties["keyPassword"] as String
+                }
             }
         }
     }
@@ -65,7 +77,7 @@ android {
                 // `flutter run --release` still works. NEVER ship this build —
                 // the debug key is public. Create android/key.properties first.
                 logger.warn(
-                    "WARNING: android/key.properties not found — release build is " +
+                    "WARNING: no release keystore (CM_KEYSTORE_PATH or android/key.properties) — release build is " +
                         "signed with the DEBUG keystore and must not be distributed."
                 )
                 signingConfig = signingConfigs.getByName("debug")
