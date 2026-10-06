@@ -28,3 +28,11 @@ Vendored copy of `dart_ipfs` 1.11.7 from pub.dev (MIT), used via
    otherwise keeps a connection whose remote silently went away (an app
    restart) and every `newStream` on it fails while `connect()` still reports
    success.
+
+5. `lib/src/transport/libp2p_router.dart` — `_openStreamWithRetry` redials are
+   gated by a per-peer exponential backoff (5s → 120s cap, plus sub-second
+   jitter); inside the window the original error is rethrown without
+   dialling, and a successful stream clears the backoff. Without this every
+   failed request redialed instantly, so one unreachable peer (a relay blip)
+   turned a sync round into a ~20-dial burst that hammers the remote and
+   trips firewall rate limits.

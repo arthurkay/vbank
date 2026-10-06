@@ -85,6 +85,14 @@ class Libp2pRouter implements RouterInterface {
 
   final Set<String> _connectedPeers = {};
   final Map<String, List<String>> _peerAddresses = {};
+
+  /// vBank: consecutive redial failures per peer for [_openStreamWithRetry],
+  /// with [_redialBackoffUntil] holding when the next redial may be attempted.
+  /// Without this every failed request closes the peer and redials instantly,
+  /// so one unreachable peer (a relay blip) turns a sync round into a dial
+  /// burst that hammers the remote and trips its firewall rate limits.
+  final Map<String, int> _redialFailures = {};
+  final Map<String, DateTime> _redialBackoffUntil = {};
   final Set<String> _registeredProtocols = {};
   final Map<String, void Function(NetworkPacket)> _protocolHandlers = {};
   final Map<String, List<void Function(dynamic)>> _eventHandlers = {};
@@ -575,21 +583,51 @@ class Libp2pRouter implements RouterInterface {
   /// swarm keeps a connection whose remote has silently gone away (a phone
   /// whose app restarted), and `newStream` on that dead session fails for good
   /// while `connect` keeps reporting success.
+  ///
+  /// Redials are gated by a per-peer exponential backoff (5s, 10s, 20s, …
+  /// capped at 120s, plus sub-second jitter): while the backoff window is open
+  /// the original error is rethrown immediately instead of dialling again, so
+  /// a genuinely unreachable peer degrades to at most one dial per window
+  /// rather than one per request. A successful stream clears the backoff.
   Future<libp2p.P2PStream<dynamic>> _openStreamWithRetry(String peerIdStr, String protocol) async {
     final pid = libp2p.PeerId.fromString(peerIdStr);
     try {
-      return await _host!.newStream(pid, [protocol], libp2p.Context(timeout: const Duration(seconds: 15)));
+      final stream = await _host!.newStream(pid, [protocol], libp2p.Context(timeout: const Duration(seconds: 15)));
+      _redialFailures.remove(peerIdStr);
+      _redialBackoffUntil.remove(peerIdStr);
+      return stream;
     } catch (e) {
       final addrs = _peerAddresses[peerIdStr];
       if (addrs == null || addrs.isEmpty) rethrow;
+      final until = _redialBackoffUntil[peerIdStr];
+      if (until != null && DateTime.now().isBefore(until)) {
+        _dbg('newStream($protocol) to $peerIdStr failed ($e); redial on backoff until $until');
+        rethrow;
+      }
       _dbg('newStream($protocol) to $peerIdStr failed ($e); redialing ${addrs.first}');
       try {
         await _host!.network.closePeer(pid);
       } catch (_) {}
       _connectedPeers.remove(peerIdStr);
       final addr = addrs.first;
-      await connect(addr.contains('/p2p/') ? addr : '$addr/p2p/$peerIdStr');
-      return await _host!.newStream(pid, [protocol], libp2p.Context(timeout: const Duration(seconds: 15)));
+      try {
+        await connect(addr.contains('/p2p/') ? addr : '$addr/p2p/$peerIdStr');
+        final stream = await _host!.newStream(pid, [protocol], libp2p.Context(timeout: const Duration(seconds: 15)));
+        _redialFailures.remove(peerIdStr);
+        _redialBackoffUntil.remove(peerIdStr);
+        return stream;
+      } catch (e) {
+        final failures = ((_redialFailures[peerIdStr] ?? 0) + 1).clamp(1, 6);
+        _redialFailures[peerIdStr] = failures;
+        // 5s, 10s, 20s, … capped at 120s, plus 0–999ms jitter so several
+        // devices waiting on the same relay do not redial in lockstep.
+        final backoff = Duration(
+          milliseconds: (5000 << (failures - 1)).clamp(5000, 120000) + DateTime.now().microsecond % 1000,
+        );
+        _redialBackoffUntil[peerIdStr] = DateTime.now().add(backoff);
+        _dbg('redial to $peerIdStr failed; backing off for ${backoff.inSeconds}s');
+        rethrow;
+      }
     }
   }
 
