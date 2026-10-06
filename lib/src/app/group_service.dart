@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
+
 import '../domain/core/failure.dart';
 import '../domain/core/result.dart';
 import '../domain/governance.dart';
@@ -216,10 +218,11 @@ final class GroupService {
     if (saved.isErr) {
       return Err(saved.failure);
     }
-    if (passphrase == null) {
-      await keys.setRandom(groupId);
-    } else {
-      await keys.setFromPassphrase(groupId, passphrase);
+    final Result<SecretKey> keyed = passphrase == null
+        ? await keys.setRandom(groupId)
+        : await keys.setFromPassphrase(groupId, passphrase);
+    if (keyed.isErr) {
+      return Err(keyed.failure);
     }
     return Ok(group);
   }
@@ -250,7 +253,11 @@ final class GroupService {
         .isErr) {
       return const Err(PermissionFailure(GroupFailures.notManager));
     }
-    if (await isBanned(group.id, peerId)) {
+    final Result<bool> banned = await isBanned(group.id, peerId);
+    if (banned.isErr) {
+      return Err(banned.failure);
+    }
+    if (banned.value) {
       return const Err(PermissionFailure('bannedMember'));
     }
     Member? target;
@@ -524,15 +531,18 @@ final class GroupService {
     return Ok(signed);
   }
 
-  /// True while an unlifted removal exists for [peerId].
-  Future<bool> isBanned(String groupId, String peerId) async {
+  /// True while an unlifted removal exists for [peerId]. Storage errors
+  /// propagate: a ban check must fail closed, never admit on a hiccup.
+  Future<Result<bool>> isBanned(String groupId, String peerId) async {
     final Result<List<MemberRemoval>> removals =
         await governance.removalsByGroup(groupId);
     if (removals.isErr) {
-      return false;
+      return Err(removals.failure);
     }
-    return removals.value.any(
-      (MemberRemoval r) => r.removedPeerId == peerId && !r.lifted,
+    return Ok(
+      removals.value.any(
+        (MemberRemoval r) => r.removedPeerId == peerId && !r.lifted,
+      ),
     );
   }
 
@@ -589,6 +599,7 @@ final class GroupService {
     required Group group,
     required String actingPeerId,
     required GroupConfig config,
+    bool? requireApproval,
   }) async {
     final Result<Unit> live = requireLive(group);
     if (live.isErr) {
@@ -617,6 +628,7 @@ final class GroupService {
           savingsTarget: config.savingsTarget,
           requireLoanApproval: config.requireLoanApproval,
         ),
+        requireApproval: requireApproval ?? group.requireApproval,
         sequenceNumber: group.sequenceNumber + 1,
       ),
     );

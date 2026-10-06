@@ -146,34 +146,53 @@ final class GroupKeyService {
       KeyDerivation.deriveGroupKeyFromPassphrase(passphrase, groupId);
 
   /// Generates a random current key for a new group.
-  Future<SecretKey> setRandom(String groupId) async {
+  Future<Result<SecretKey>> setRandom(String groupId) async {
     final Random rng = Random.secure();
     final SecretKey key = SecretKey(
       List<int>.generate(32, (_) => rng.nextInt(256)),
     );
-    await setKey(groupId, key);
-    return key;
+    final Result<Unit> saved = await setKey(groupId, key);
+    if (saved.isErr) {
+      return Err(saved.failure);
+    }
+    return Ok(key);
   }
 
   /// Derives from [passphrase] and stores the key for [groupId].
-  Future<SecretKey> setFromPassphrase(String groupId, String passphrase) async {
+  Future<Result<SecretKey>> setFromPassphrase(
+    String groupId,
+    String passphrase,
+  ) async {
     final SecretKey key = await deriveKey(passphrase, groupId);
-    await setKey(groupId, key);
-    return key;
+    final Result<Unit> saved = await setKey(groupId, key);
+    if (saved.isErr) {
+      return Err(saved.failure);
+    }
+    return Ok(key);
   }
 
   /// Stores [key] as current (version 1 when the group has no ring yet).
-  Future<void> setKey(String groupId, SecretKey key) async {
+  Future<Result<Unit>> setKey(String groupId, SecretKey key) async {
     final Uint8List bytes = Uint8List.fromList(await key.extractBytes());
-    await store.setCurrent(groupId, bytes);
+    final Result<Unit> current = await store.setCurrent(groupId, bytes);
+    if (current.isErr) {
+      return current;
+    }
     final Result<Map<int, Uint8List>> versions = await store.versions(
       groupId,
     );
-    if (versions.isOk && versions.value.isEmpty) {
-      await store.setVersion(groupId, 1, bytes);
+    if (versions.isErr) {
+      return Err(versions.failure);
+    }
+    if (versions.value.isEmpty) {
+      final Result<Unit> first = await store.setVersion(groupId, 1, bytes);
+      if (first.isErr) {
+        return first;
+      }
     }
     _cache[groupId] = key;
     _ringCache.remove(groupId);
+    return const Ok(unit);
   }
 
   /// Every key version of [groupId], oldest first; null when keyless.
@@ -226,42 +245,74 @@ final class GroupKeyService {
       List<int>.generate(32, (_) => rng.nextInt(256)),
     );
     final int version = r.currentVersion + 1;
-    await store.setVersion(groupId, version, next);
-    await store.setCurrent(groupId, next);
+    final Result<Unit> stored = await store.setVersion(groupId, version, next);
+    if (stored.isErr) {
+      return Err(stored.failure);
+    }
+    final Result<Unit> current = await store.setCurrent(groupId, next);
+    if (current.isErr) {
+      return Err(current.failure);
+    }
     _cache[groupId] = SecretKey(next);
     _ringCache.remove(groupId);
-    return Ok((await ring(groupId))!);
+    final GroupKeyRing? rotated = await ring(groupId);
+    if (rotated == null) {
+      return Err(NotFoundFailure('groupkey:$groupId'));
+    }
+    return Ok(rotated);
   }
 
   /// Merges a ring received from an admin: adds unknown versions and moves
   /// the current key forward, never backward.
-  Future<void> importRing(String groupId, GroupKeyRing incoming) async {
+  Future<Result<Unit>> importRing(
+    String groupId,
+    GroupKeyRing incoming,
+  ) async {
     final GroupKeyRing? mine = await ring(groupId);
     for (final MapEntry<int, Uint8List> e in incoming.keys.entries) {
       if (mine?[e.key] == null) {
-        await store.setVersion(groupId, e.key, e.value);
+        final Result<Unit> stored = await store.setVersion(
+          groupId,
+          e.key,
+          e.value,
+        );
+        if (stored.isErr) {
+          return stored;
+        }
       }
     }
     if (mine == null || incoming.currentVersion > mine.currentVersion) {
-      await store.setCurrent(groupId, incoming.current);
+      final Result<Unit> current = await store.setCurrent(
+        groupId,
+        incoming.current,
+      );
+      if (current.isErr) {
+        return current;
+      }
       _cache[groupId] = SecretKey(incoming.current);
     }
     _ringCache.remove(groupId);
+    return const Ok(unit);
   }
 
-  /// Current key bytes, or null.
+  /// Current key bytes, or null when keyless or unreadable (both mean the
+  /// passphrase must be entered).
   Future<SecretKey?> getKey(String groupId) async {
     final SecretKey? cached = _cache[groupId];
     if (cached != null) {
       return cached;
     }
-    final Result<Uint8List?> bytes = await store.current(groupId);
-    if (bytes.isErr || bytes.value == null) {
+    try {
+      final Result<Uint8List?> bytes = await store.current(groupId);
+      if (bytes.isErr || bytes.value == null) {
+        return null;
+      }
+      final SecretKey key = SecretKey(bytes.value!);
+      _cache[groupId] = key;
+      return key;
+    } catch (_) {
       return null;
     }
-    final SecretKey key = SecretKey(bytes.value!);
-    _cache[groupId] = key;
-    return key;
   }
 
   /// Current key, or `Err(NotFoundFailure)` (presentation tells the user
@@ -278,20 +329,24 @@ final class GroupKeyService {
   Future<bool> hasKey(String groupId) async => (await getKey(groupId)) != null;
 
   /// Forgets every key of [groupId].
-  Future<void> removeKey(String groupId) async {
+  Future<Result<Unit>> removeKey(String groupId) async {
     _cache.remove(groupId);
     _ringCache.remove(groupId);
-    await store.delete(groupId);
+    return store.delete(groupId);
   }
 
   /// Raw key material for backups.
   Future<Result<Map<String, Uint8List>>> exportAll() => store.allCurrent();
 
   /// Restores backup key material.
-  Future<void> importAll(Map<String, Uint8List> keys) async {
+  Future<Result<Unit>> importAll(Map<String, Uint8List> keys) async {
     for (final MapEntry<String, Uint8List> e in keys.entries) {
-      await store.setCurrent(e.key, e.value);
+      final Result<Unit> saved = await store.setCurrent(e.key, e.value);
+      if (saved.isErr) {
+        return saved;
+      }
       _cache[e.key] = SecretKey(e.value);
     }
+    return const Ok(unit);
   }
 }

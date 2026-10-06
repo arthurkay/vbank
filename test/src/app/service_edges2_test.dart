@@ -455,6 +455,72 @@ void main() {
     });
   });
 
+  group('ReportService sums', () {
+    test('loans, repayments and penalties add their lines', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+      final ServiceStack member = world.stackFor('member');
+      for (var i = 0; i < 3; i++) {
+        await owner.transactions.createTransaction(
+          groupId: gid,
+          authorPeerId: 'owner',
+          fromPeerId: 'member',
+          toPeerId: 'group',
+          type: TransactionType.contribution,
+          amount: 100,
+        );
+      }
+      final LoanRequest loan = (await member.loans.requestLoan(
+        groupId: gid,
+        borrowerPeerId: 'member',
+        requestedAmount: 200,
+        termWeeks: 4,
+      ))
+          .value;
+      await owner.loans.approveLoan(
+        loanId: loan.id,
+        approvedAmount: 200,
+        approverPeerId: 'owner',
+      );
+      await owner.loans.disburseLoan(
+        loanId: loan.id,
+        adminPeerId: 'owner',
+      );
+      await owner.loans.recordRepayment(
+        loanId: loan.id,
+        adminPeerId: 'owner',
+        amount: 55,
+      );
+      await owner.transactions.createTransaction(
+        groupId: gid,
+        authorPeerId: 'owner',
+        fromPeerId: 'member',
+        toPeerId: 'group',
+        type: TransactionType.penalty,
+        amount: 5,
+      );
+      await owner.meetings.createMeeting(
+        groupId: gid,
+        actingPeerId: 'owner',
+        scheduledAt: world.now,
+      );
+
+      final report = (await world.reports.generateGroupReport(
+        groupId: gid,
+        period: DateTimePeriod(
+          start: DateTime.utc(2026, 1, 1),
+          end: DateTime.utc(2026, 12, 31),
+        ),
+      ))
+          .value;
+      expect(report.totalContributions, 500);
+      expect(report.totalLoansDisbursed, 200);
+      expect(report.totalLoansRepaid, 55);
+      expect(report.totalPenalties, 5);
+      expect(report.totalMeetings, 1);
+    });
+  });
+
   group('ReportService edges', () {
     test('missing groups fail, empty groups zero out', () async {
       expect(

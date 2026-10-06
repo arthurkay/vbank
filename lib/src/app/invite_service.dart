@@ -183,6 +183,9 @@ final class InviteService {
 
   /// One invite, or `Err(NotFoundFailure)`.
   Future<Result<Invite>> getById(String id) => invites.findById(id);
+
+  /// Marks an invite consumed. Never reverts.
+  Future<Result<Unit>> markUsed(String id) => invites.markUsed(id);
 }
 
 /// A freshly created invite and, when the group key was wrapped, the

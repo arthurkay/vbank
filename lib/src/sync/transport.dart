@@ -32,6 +32,13 @@ abstract interface class SyncTransport {
   /// fallback.
   Future<Uint8List?> fetchBlock(String cid, List<String> peerIds);
 
+  /// Stores [bytes] locally and returns its CID.
+  Future<String> addData(Uint8List bytes);
+
+  /// Reads a locally stored block by CID, or null when absent. Used for
+  /// relay pushes without network traffic.
+  Future<Uint8List?> localBlock(String cid);
+
   /// Handles incoming sync-protocol requests; the engine installs
   /// `SyncEngine.handleRequest` here at startup.
   /// See above.

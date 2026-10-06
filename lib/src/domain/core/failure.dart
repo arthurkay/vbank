@@ -69,4 +69,7 @@ final class StorageFailure extends Failure {
 
   /// Creates a storage failure wrapping [cause].
   const StorageFailure(this.cause);
+
+  @override
+  String toString() => 'StorageFailure($cause)';
 }

@@ -237,7 +237,7 @@ void main() {
         )).failure,
         isA<ValidationFailure>(),
       );
-      expect(await owner.groups.isBanned(gid, 'member'), isFalse);
+      expect((await owner.groups.isBanned(gid, 'member')).value, isFalse);
 
       // Clean removals record a plain remove.
       final removal = (await owner.groups.removeMember(
@@ -249,7 +249,7 @@ void main() {
           .value;
       expect(removal.action, RemovalAction.remove);
       expect(removal.hasOutstandingLoan, isFalse);
-      expect(await owner.groups.isBanned(gid, 'member'), isTrue);
+      expect((await owner.groups.isBanned(gid, 'member')).value, isTrue);
     });
 
     test('enc keys store and miss cleanly', () async {
@@ -467,6 +467,28 @@ void main() {
       expect(member.netBalance, 100 - 15 - 20);
     });
 
+    test('reversal-type records move nothing', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+
+      expect(
+        (await owner.transactions.createTransaction(
+          groupId: gid,
+          authorPeerId: 'owner',
+          fromPeerId: 'member',
+          toPeerId: 'group',
+          type: TransactionType.reversal,
+          amount: 10,
+        )).isOk,
+        isTrue,
+      );
+      final balances = await owner.transactions.balances.listByGroup(gid);
+      expect(
+        balances.value.firstWhere((b) => b.peerId == 'member').netBalance,
+        100,
+      );
+    });
+
     test('remote reversed records skip balance effects', () async {
       final String gid = await world.seedGroup();
       final ServiceStack owner = world.stackFor('owner');
@@ -556,6 +578,35 @@ void main() {
           authorPublicKey: world.publicKeys['owner']!,
         )).failure,
         isA<ValidationFailure>(),
+      );
+    });
+  });
+
+  group('MeetingService attendance', () {
+    test('unknown peers gain a row', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+      final Meeting meeting = (await owner.meetings.createMeeting(
+        groupId: gid,
+        actingPeerId: 'owner',
+        scheduledAt: world.now,
+      ))
+          .value;
+
+      expect(
+        (await owner.meetings.recordAttendance(
+          groupId: gid,
+          actingPeerId: 'owner',
+          meetingId: meeting.id,
+          peerId: 'ghost',
+          status: MeetingAttendanceStatus.present,
+        )).isOk,
+        isTrue,
+      );
+      final Meeting updated = (await owner.meetings.getById(meeting.id)).value;
+      expect(
+        updated.attendance.any((a) => a.peerId == 'ghost'),
+        isTrue,
       );
     });
   });

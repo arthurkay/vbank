@@ -7,11 +7,16 @@ import 'package:vbank/src/domain/group.dart';
 /// Opens a fresh plaintext database for repository tests: fast, hermetic,
 /// no SQLCipher build needed. The schema and SQL are identical; only the
 /// keying differs (covered by `database_test.dart` on cipher hosts).
-Future<Database> openTestDb() async {
+Future<Database> openTestDb() async => openTestDbAt(inMemoryDatabasePath);
+
+/// Opens a test database at [path]. Multi-device tests pass distinct temp
+/// files so each harness owns its data; the default in-memory path must
+/// not be shared across harnesses in one test.
+Future<Database> openTestDbAt(String path) async {
   sqfliteFfiInit();
   final OpenResult result = (await VBankDatabase.open(
     factory: databaseFactoryFfi,
-    path: inMemoryDatabasePath,
+    path: path,
     password: '00',
     encrypted: false,
   ))

@@ -142,6 +142,155 @@ void main() {
       );
     });
 
+    test('approval-free groups self-approve on request', () async {
+      await world.keyFor('owner');
+      await world.keyFor('member');
+      final ServiceStack owner = world.stackFor('owner');
+      final ServiceStack member = world.stackFor('member');
+      const GroupConfig autoConfig = GroupConfig(
+        groupId: 'template',
+        contributionAmount: 100,
+        requireLoanApproval: false,
+      );
+      final Group group = (await owner.groups.createGroup(
+        name: 'Auto Group',
+        config: autoConfig,
+        ownerPeerId: 'owner',
+        ownerName: 'Owner',
+        ownerPublicKey: world.publicKeys['owner']!,
+      ))
+          .value;
+      await owner.groups.addMember(
+        group,
+        Member(
+          peerId: 'member',
+          name: 'Member',
+          joinedAt: world.now,
+          publicKey: world.publicKeys['member']!,
+        ),
+      );
+      for (var i = 0; i < 3; i++) {
+        await owner.transactions.createTransaction(
+          groupId: group.id,
+          authorPeerId: 'owner',
+          fromPeerId: 'member',
+          toPeerId: 'group',
+          type: TransactionType.contribution,
+          amount: 100,
+        );
+      }
+
+      final LoanRequest loan = (await member.loans.requestLoan(
+        groupId: group.id,
+        borrowerPeerId: 'member',
+        requestedAmount: 150,
+        termWeeks: 2,
+      ))
+          .value;
+
+      expect(loan.status, LoanStatus.approved);
+      expect(loan.approvedAmount, 150);
+      expect(loan.approvedByPeerId, 'member');
+      expect(
+        await member.loans.verifyApprovalSignature(
+          loan,
+          world.publicKeys['member']!,
+        ),
+        isTrue,
+      );
+      // And it disburses like any approved loan.
+      final LoanRequest disbursed = (await owner.loans.disburseLoan(
+        loanId: loan.id,
+        adminPeerId: 'owner',
+      ))
+          .value;
+      expect(disbursed.status, LoanStatus.disbursed);
+    });
+
+    test('fresh imports insert, completions clear flags', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+      final ServiceStack member = world.stackFor('member');
+      for (var i = 0; i < 3; i++) {
+        await owner.transactions.createTransaction(
+          groupId: gid,
+          authorPeerId: 'owner',
+          fromPeerId: 'member',
+          toPeerId: 'group',
+          type: TransactionType.contribution,
+          amount: 100,
+        );
+      }
+      final LoanRequest requested = (await member.loans.requestLoan(
+        groupId: gid,
+        borrowerPeerId: 'member',
+        requestedAmount: 100,
+        termWeeks: 2,
+      ))
+          .value;
+
+      // Unknown id inserts outright.
+      expect(
+        (await owner.loans.importRemote(requested)).isOk,
+        isTrue,
+      );
+
+      // A completed record clears the borrower flag.
+      await owner.loans.approveLoan(
+        loanId: requested.id,
+        approvedAmount: 100,
+        approverPeerId: 'owner',
+      );
+      await owner.loans.disburseLoan(
+        loanId: requested.id,
+        adminPeerId: 'owner',
+      );
+      LoanRequest loan = (await owner.loans.getById(requested.id)).value;
+      for (var i = 0; i < 2; i++) {
+        world.elapse(const Duration(days: 7));
+        loan = (await owner.loans.recordRepayment(
+          loanId: loan.id,
+          adminPeerId: 'owner',
+          amount: 55,
+        ))
+            .value;
+      }
+      expect(loan.status, LoanStatus.completed);
+      expect(
+        (await owner.loans.importRemote(loan)).isOk,
+        isTrue,
+      );
+      final Group group = (await owner.groups.getGroup(gid)).value;
+      final Member borrower = group.members
+          .where((Member m) => m.peerId == 'member')
+          .single;
+      expect(borrower.hasOutstandingLoan, isFalse);
+
+      // The public schedule allocator delegates faithfully.
+      final LoanRequest again = (await member.loans.requestLoan(
+        groupId: gid,
+        borrowerPeerId: 'member',
+        requestedAmount: 100,
+        termWeeks: 2,
+      ))
+          .value;
+      await owner.loans.approveLoan(
+        loanId: again.id,
+        approvedAmount: 100,
+        approverPeerId: 'owner',
+      );
+      await owner.loans.disburseLoan(
+        loanId: again.id,
+        adminPeerId: 'owner',
+      );
+      final LoanRequest moved = (await owner.loans.applyRepaymentToSchedule(
+        (await owner.loans.getById(again.id)).value,
+        55,
+      ))
+          .value;
+      expect(moved.status, LoanStatus.repaying);
+    });
+
     test('open loans block second requests until settled', () async {
       final String gid = await world.seedGroup();
       await qualifyBorrower(world, gid);

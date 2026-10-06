@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vbank/src/app/apply_pipeline.dart';
+import 'package:vbank/src/crypto/sync_envelope.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:vbank/src/app/context.dart';
 import 'package:vbank/src/app/governance_service.dart';
@@ -92,11 +94,17 @@ final class AppHarness {
   late final SqlBackupRepository _backupRepo;
   late final SqlBalanceRepository _balanceRepo;
   late final SqlSettingsRepository _settingsRepo;
+  late Database _db;
 
-  /// Opens the world. Call in `setUp`, or once per file with fresh state
-  /// per test via [reset].
-  Future<void> init() async {
-    final Database db = await openTestDb();
+  /// Settings (sync ledger, peer book, key store share it).
+  SqlSettingsRepository get settings => _settingsRepo;
+
+  /// Opens the world. Pass a distinct temp file per harness in
+  /// multi-device tests; the default in-memory database must not be
+  /// shared across harnesses in one test.
+  Future<void> init({String? dbPath}) async {
+    final Database db = _db =
+        dbPath == null ? await openTestDb() : await openTestDbAt(dbPath);
     _groupRepo = SqlGroupRepository(db);
     _txRepo = SqlTransactionRepository(db);
     _loanRepo = SqlLoanRepository(db);
@@ -130,6 +138,10 @@ final class AppHarness {
   void elapse(Duration d) {
     now = now.add(d);
   }
+
+  /// Closes the database: every subsequent repository call fails, proving
+  /// services map storage errors instead of throwing.
+  Future<void> closeDatabase() => _db.close();
 
   /// The signer for [peer], generating their keypair on first use.
   SignPayload signerFor(String peer) => (List<int> payload) async {
@@ -218,6 +230,37 @@ final class AppHarness {
     );
   }
 
+  /// A sync apply pipeline acting as [peer] over this world's services.
+  /// Shared by pipeline unit tests and device-to-device integration.
+  PipelineHarness pipelineFor(
+    String peer, {
+    Future<SimpleKeyPair?> Function()? memberKeyPair,
+  }) {
+    final ServiceStack stack = stackFor(peer);
+    final PipelineHarness harness = PipelineHarness._();
+    harness.pipeline = ApplyPipeline(
+      groups: stack.groups,
+      transactions: stack.transactions,
+      loans: stack.loans,
+      meetings: stack.meetings,
+      governance: stack.governance,
+      invites: stack.invites,
+      keys: keys,
+      rememberAddrs: (String groupId, Iterable<String> addrs) async {
+        harness.remembered[groupId] = [...addrs];
+      },
+      lastPublishedAt: (String groupId) async =>
+          harness.publishedAt[groupId],
+      recordPublishedAt: (String groupId, DateTime at) async {
+        harness.publishedAt[groupId] = at;
+      },
+      ownPeerId: peer,
+      memberKeyPair: memberKeyPair ?? () async => null,
+      clock: () => now,
+    );
+    return harness;
+  }
+
   /// Creates a group owned by [owner] with one funded member [member]:
   /// owner creates, member joins the roster, both contribute. Returns the
   /// group id. Groups are created with a random key (invite flow).
@@ -256,8 +299,10 @@ final class AppHarness {
       sequenceNumber: group.sequenceNumber + 1,
     );
     await ownerStack.groups.saveGroup(withMember);
+    // The treasurer records every contribution: author and signer are the
+    // owner for both rows (signing as someone else forges their signature).
     for (final String who in [owner, member]) {
-      final result = await stackFor(who).transactions.createTransaction(
+      final result = await ownerStack.transactions.createTransaction(
             groupId: group.id,
             authorPeerId: owner,
             fromPeerId: who,
@@ -270,3 +315,37 @@ final class AppHarness {
     return group.id;
   }
 }
+
+/// An apply pipeline over one world's services, journaling side effects
+/// for assertions. Shared by pipeline unit tests and integration.
+final class PipelineHarness {
+  /// Addresses learned per group.
+  final Map<String, List<String>> remembered = {};
+
+  /// Snapshot times per group.
+  final Map<String, DateTime> publishedAt = {};
+
+  /// The pipeline under test.
+  late final ApplyPipeline pipeline;
+
+  /// Creates an unbound harness; use [AppHarness.pipelineFor].
+  PipelineHarness._();
+}
+
+/// Seals [payload] for [groupId] with [key] in tests.
+Future<Uint8List> sealFor({
+  required SyncPayloadType type,
+  required String groupId,
+  required Map<String, dynamic> payload,
+  required SecretKey key,
+  int keyVersion = 1,
+  Map<String, Uint8List> rekeys = const {},
+}) =>
+    SyncEnvelope.seal(
+      type: type,
+      groupId: groupId,
+      plaintextJson: payload,
+      groupKey: key,
+      keyVersion: keyVersion,
+      rekeys: rekeys,
+    );

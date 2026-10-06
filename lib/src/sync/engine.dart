@@ -25,6 +25,10 @@ enum ApplyOutcome {
 
   /// Invalid (bad signature, wrong key, corrupt); do not retry this round.
   rejected,
+
+  /// Not actionable yet (unknown group, missing key version): skip without
+  /// parking, so a later round retries once the key or roster arrives.
+  deferred,
 }
 
 /// Local block bytes by CID, for pushing to relays. Null when not held.
@@ -319,7 +323,7 @@ final class SyncEngine {
         await ledgerRecord(groupId, cid);
         mine.add(cid);
         applied++;
-      } else {
+      } else if (outcome == ApplyOutcome.rejected) {
         failedCids.add(cid);
       }
     }

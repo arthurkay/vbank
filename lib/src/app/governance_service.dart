@@ -274,6 +274,39 @@ final class GovernanceService {
   ) =>
       reversals.reversalsByGroup(groupId);
 
+  /// A group's removals, newest first.
+  Future<Result<List<MemberRemoval>>> removalsByGroup(String groupId) =>
+      governance.removalsByGroup(groupId);
+
+  /// A group's ownership transfers, newest first.
+  Future<Result<List<OwnershipTransfer>>> transfersByGroup(String groupId) =>
+      governance.transfersByGroup(groupId);
+
+  /// A group's latest dissolution, or null when never started.
+  Future<Result<GroupDissolution?>> latestDissolution(String groupId) async {
+    final Result<GroupDissolution> dissolution =
+        await governance.dissolutionByGroup(groupId);
+    if (dissolution.isErr) {
+      if (dissolution.failure is NotFoundFailure) {
+        return const Ok(null);
+      }
+      return Err(dissolution.failure);
+    }
+    return Ok(dissolution.value);
+  }
+
+  /// Stores a removal record (snapshot history, never deletions).
+  Future<Result<Unit>> saveRemoval(MemberRemoval removal) =>
+      governance.saveRemoval(removal);
+
+  /// Stores a transfer record.
+  Future<Result<Unit>> saveTransfer(OwnershipTransfer transfer) =>
+      governance.saveTransfer(transfer);
+
+  /// Stores a dissolution stage.
+  Future<Result<Unit>> saveDissolution(GroupDissolution dissolution) =>
+      governance.saveDissolution(dissolution);
+
   /// What blocks a dissolution right now: open loans and pending
   /// reversals.
   Future<Result<List<String>>> dissolutionBlockers(String groupId) async {

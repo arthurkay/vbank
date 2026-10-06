@@ -108,7 +108,8 @@ final class GroupConfig {
     return const Ok(unit);
   }
 
-  /// Copies this configuration, replacing the given fields.
+  /// Copies this configuration, replacing the given fields. The group id
+  /// never changes: configs belong to exactly one group.
   GroupConfig copyWith({
     double? contributionAmount,
     ContributionFrequency? frequency,

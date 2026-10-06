@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vbank/src/app/key_service.dart';
 import 'package:vbank/src/crypto/member_keys.dart';
 import 'package:vbank/src/domain/core/failure.dart';
+import 'package:vbank/src/domain/governance.dart';
 import 'package:vbank/src/domain/group.dart';
+import 'package:vbank/src/domain/membership.dart';
 import 'package:vbank/src/domain/reports.dart';
 import 'package:vbank/src/domain/transactions.dart';
 
@@ -218,6 +222,94 @@ void main() {
     });
   });
 
+  group('GovernanceService records', () {
+    test('removals, transfers and dissolutions persist directly', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+      Group group = (await owner.groups.getGroup(gid)).value;
+      await owner.groups.updateMemberRole(
+        group: group,
+        actingPeerId: 'owner',
+        peerId: 'member',
+        newRole: MemberRole.admin,
+      );
+      group = (await owner.groups.getGroup(gid)).value;
+      final transfer = (await owner.groups.transferOwnership(
+        group: group,
+        actingPeerId: 'owner',
+        toPeerId: 'member',
+      ))
+          .value;
+      expect(
+        (await owner.governance.transfersByGroup(gid)).value.single.id,
+        transfer.id,
+      );
+
+      group = (await owner.groups.getGroup(gid)).value;
+      final removal = (await owner.groups.removeMember(
+        group: group,
+        actingPeerId: 'member',
+        peerId: 'owner',
+        reason: 'test',
+      ))
+          .value;
+      expect(
+        (await owner.governance.removalsByGroup(gid)).value.single.id,
+        removal.id,
+      );
+
+      final GroupDissolution dissolution = GroupDissolution(
+        id: 'd-1',
+        groupId: gid,
+        initiatedByPeerId: 'member',
+        initiatedAt: world.now,
+      );
+      expect(
+        (await owner.governance.saveDissolution(dissolution)).isOk,
+        isTrue,
+      );
+      expect(
+        (await owner.governance.latestDissolution(gid)).value!.id,
+        'd-1',
+      );
+      expect(
+        (await owner.governance.latestDissolution('nope')).value,
+        isNull,
+      );
+    });
+
+    test('pending reversals block dissolution', () async {
+      final String gid = await world.seedGroup();
+      final ServiceStack owner = world.stackFor('owner');
+      final ServiceStack member = world.stackFor('member');
+      final Transaction tx = (await owner.transactions.createTransaction(
+        groupId: gid,
+        authorPeerId: 'owner',
+        fromPeerId: 'member',
+        toPeerId: 'group',
+        type: TransactionType.contribution,
+        amount: 100,
+      ))
+          .value;
+      await member.governance.requestReversal(
+        groupId: gid,
+        actingPeerId: 'member',
+        transactionId: tx.id,
+        reason: 'test',
+      );
+
+      final blockers = await owner.governance.dissolutionBlockers(gid);
+      expect(blockers.value.single, contains('reversal'));
+      expect(
+        (await owner.governance.dissolveGroup(
+          groupId: gid,
+          actingPeerId: 'owner',
+        )).failure,
+        isA<ConflictFailure>(),
+      );
+    });
+  });
+
   group('GovernanceService dissolution', () {
     test('blockers, payouts and the dissolved flag', () async {
       final String gid = await world.seedGroup();
@@ -299,6 +391,69 @@ void main() {
         )).failure,
         isA<ConflictFailure>(),
       );
+    });
+  });
+
+  group('GroupKeyService failures', () {
+    test('closed storage maps to failures and nulls', () async {
+      final String gid = await world.seedGroup();
+      // Prime the ring cache while open: post-close rotates and imports
+      // then fail on writes rather than reads.
+      expect((await world.keys.ring(gid))!.currentVersion, 1);
+      await world.closeDatabase();
+
+      expect(
+        (await world.keys.setKey(gid, SecretKey(List.filled(32, 1)))).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (await world.keys.setRandom(gid)).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (await world.keys.rotate(gid)).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (
+          await world.keys.importRing(gid, GroupKeyRing({
+            2: Uint8List.fromList(List.filled(32, 2)),
+          }))
+        ).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (await world.keys.removeKey(gid)).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (await world.keys.importAll({'g': Uint8List.fromList([1])})).failure,
+        isA<StorageFailure>(),
+      );
+      expect(
+        (await world.keys.exportAll()).failure,
+        isA<StorageFailure>(),
+      );
+      expect(await world.keys.getKey('uncached-group'), isNull);
+      expect(await world.keys.ring('uncached-group'), isNull);
+      expect(await world.keys.keyFor('uncached-group', 1), isNull);
+    });
+
+    test('rings bootstrap and fall back faithfully', () async {
+      // Current without versions bootstraps version 1 (legacy upgrade).
+      await world.keys.store.setCurrent(
+        'g-9',
+        Uint8List.fromList(List.filled(32, 9)),
+      );
+      expect((await world.keys.ring('g-9'))!.currentVersion, 1);
+
+      // A ring without version 1 falls back to the current key.
+      final GroupKeyRing onlyV2 = GroupKeyRing({
+        2: Uint8List.fromList(List.filled(32, 2)),
+      });
+      expect((await world.keys.importRing('g-8', onlyV2)).isOk, isTrue);
+      final SecretKey? v1ish = await world.keys.keyFor('g-8', 1);
+      expect(await v1ish!.extractBytes(), List.filled(32, 2));
     });
   });
 

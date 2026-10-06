@@ -131,4 +131,20 @@ abstract final class SigningPayloads {
   /// Group creation payload: binds the first owner to the fresh id.
   static List<int> groupOwner(String groupId, String ownerPeerId) =>
       utf8.encode('$groupId:$ownerPeerId');
+
+  /// Member-key announcement payload over the published X25519 key.
+  static List<int> memberKey({
+    required String groupId,
+    required String peerId,
+    required List<int> encKey,
+  }) =>
+      utf8.encode('vbank:enckey:$groupId:$peerId:${base64Encode(encKey)}');
+
+  /// Join announcement payload over the invite that authorised it.
+  static List<int> memberJoin({
+    required String groupId,
+    required String peerId,
+    required String inviteId,
+  }) =>
+      utf8.encode('vbank:join:$groupId:$peerId:$inviteId');
 }

@@ -18,14 +18,16 @@ final class Invite {
   /// CID of the group's encrypted metadata for fetching.
   final String groupCid;
 
-  /// PubSub topic to announce on after joining.
-  final String groupTopic;
+  /// PubSub topic to announce on after joining. Absent on records merged
+  /// from snapshots (the legacy wire shape carries no topic); links derive
+  /// it as `vbank/group/<groupId>` and names from the roster.
+  final String? groupTopic;
 
   /// Who sent it.
   final String inviterPeerId;
 
-  /// Who sent it, in human words.
-  final String inviterName;
+  /// Who sent it, in human words. Absent on snapshot-merged records.
+  final String? inviterName;
 
   /// The group key wrapped under this invite's one-time secret (null for
   /// passphrase-only invites). The secret itself rides the link and is

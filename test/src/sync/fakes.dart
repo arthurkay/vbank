@@ -109,6 +109,31 @@ final class FakeTransport implements SyncTransport {
     return remote.handle(peerId ?? '', payload);
   }
 
+  /// CIDs minted by [addData], in order.
+  final List<String> mintedCids = [];
+
+  @override
+  Future<String> addData(Uint8List bytes) async {
+    // Content-derived like real CIDs: identical bytes mint identically on
+    // every transport, and distinct content never collides. A per-mint
+    // counter would hand two transports the same name for different
+    // blocks, breaking ledger dedup.
+    var hash = 0;
+    for (final int b in bytes) {
+      hash = ((hash * 31) + b) & 0x7fffffff;
+    }
+    final String cid = 'fakecid-${bytes.length}-$hash';
+    mintedCids.add(cid);
+    blocks[cid] = bytes;
+    if (!inventoryCids.contains(cid)) {
+      inventoryCids.add(cid);
+    }
+    return cid;
+  }
+
+  @override
+  Future<Uint8List?> localBlock(String cid) async => blocks[cid];
+
   @override
   Future<Uint8List?> fetchBlock(String cid, List<String> peerIds) async {
     if (blocks.containsKey(cid)) {
