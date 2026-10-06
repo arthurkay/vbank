@@ -3,6 +3,20 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  # Rewrite in progress: only rewritten code is gated. Legacy paths are
+  # excluded until their module is ported into lib/src, then un-excluded.
+  exclude:
+    - lib/core/**
+    - lib/desktop/**
+    - lib/models/**
+    - lib/providers/**
+    - lib/screens/**
+    - lib/services/**
+    - lib/ui/**
+    - lib/widgets/**
+    - lib/main.dart
+    - test/*.dart
+    - test/helpers/**
   errors:
     # Treat these as build-breaking.
     missing_required_param: error
