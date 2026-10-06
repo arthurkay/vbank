@@ -166,10 +166,11 @@ abstract final class VBankSchema {
       group_topic TEXT NOT NULL,
       inviter_peer_id TEXT NOT NULL,
       inviter_name TEXT NOT NULL,
-      group_key BLOB NOT NULL,
+      wrapped_key BLOB,
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
       used INTEGER NOT NULL DEFAULT 0,
+      used_by_peer_id TEXT,
       nonce BLOB NOT NULL,
       inviter_signature BLOB NOT NULL
     )

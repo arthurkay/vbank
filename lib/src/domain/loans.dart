@@ -147,6 +147,7 @@ final class LoanRequest {
     DateTime? disbursedAt,
     DateTime? completedAt,
     DateTime? defaultedAt,
+    Uint8List? borrowerSignature,
     Uint8List? approverSignature,
   }) =>
       LoanRequest(
@@ -165,7 +166,7 @@ final class LoanRequest {
         disbursedAt: disbursedAt ?? this.disbursedAt,
         completedAt: completedAt ?? this.completedAt,
         defaultedAt: defaultedAt ?? this.defaultedAt,
-        borrowerSignature: borrowerSignature,
+        borrowerSignature: borrowerSignature ?? this.borrowerSignature,
         approverSignature: approverSignature ?? this.approverSignature,
       );
 

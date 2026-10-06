@@ -41,10 +41,12 @@ final class SqlLoanRepository extends SqlRepository
   @override
   Future<Result<Unit>> saveLoan(LoanRequest loan) async {
     final Result<Unit> result = await attempt(() async {
-      await db.insert(
+      await upsertRow(
+        db,
         'loans',
         LoanDto.toRow(loan),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        'id = ?',
+        [loan.id],
       );
       return unit;
     });

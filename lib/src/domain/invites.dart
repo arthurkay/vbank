@@ -27,17 +27,22 @@ final class Invite {
   /// Who sent it, in human words.
   final String inviterName;
 
-  /// The group symmetric key, wrapped for the recipient.
-  final Uint8List groupKey;
+  /// The group key wrapped under this invite's one-time secret (null for
+  /// passphrase-only invites). The secret itself rides the link and is
+  /// never stored.
+  final Uint8List? wrappedKey;
 
   /// When it was created.
   final DateTime createdAt;
 
-  /// When it stops working (default: 7 days after creation).
+  /// When it stops working (12 hours after creation by default).
   final DateTime expiresAt;
 
   /// True once consumed. Never reverts — like a used ticket.
   final bool used;
+
+  /// Who consumed it, once consumed.
+  final String? usedByPeerId;
 
   /// Unique per invite; the group records it so replays are rejected.
   final Uint8List nonce;
@@ -53,10 +58,11 @@ final class Invite {
     required this.groupTopic,
     required this.inviterPeerId,
     required this.inviterName,
-    required this.groupKey,
+    this.wrappedKey,
     required this.createdAt,
     required this.expiresAt,
     this.used = false,
+    this.usedByPeerId,
     required this.nonce,
     required this.inviterSignature,
   });
@@ -82,19 +88,26 @@ final class Invite {
   }
 
   /// Copies this invite, replacing the given fields.
-  Invite copyWith({bool? used}) => Invite(
+  Invite copyWith({
+    bool? used,
+    String? usedByPeerId,
+    Uint8List? wrappedKey,
+    Uint8List? inviterSignature,
+  }) =>
+      Invite(
         id: id,
         groupId: groupId,
         groupCid: groupCid,
         groupTopic: groupTopic,
         inviterPeerId: inviterPeerId,
         inviterName: inviterName,
-        groupKey: groupKey,
+        wrappedKey: wrappedKey ?? this.wrappedKey,
         createdAt: createdAt,
         expiresAt: expiresAt,
         used: used ?? this.used,
+        usedByPeerId: usedByPeerId ?? this.usedByPeerId,
         nonce: nonce,
-        inviterSignature: inviterSignature,
+        inviterSignature: inviterSignature ?? this.inviterSignature,
       );
 
   @override
@@ -107,10 +120,13 @@ final class Invite {
           groupTopic == other.groupTopic &&
           inviterPeerId == other.inviterPeerId &&
           inviterName == other.inviterName &&
-          bytesEqual(groupKey, other.groupKey) &&
+          (wrappedKey == null || other.wrappedKey == null
+              ? wrappedKey == other.wrappedKey
+              : bytesEqual(wrappedKey!, other.wrappedKey!)) &&
           createdAt == other.createdAt &&
           expiresAt == other.expiresAt &&
           used == other.used &&
+          usedByPeerId == other.usedByPeerId &&
           bytesEqual(nonce, other.nonce) &&
           bytesEqual(inviterSignature, other.inviterSignature);
 
@@ -122,10 +138,11 @@ final class Invite {
         groupTopic,
         inviterPeerId,
         inviterName,
-        bytesHash(groupKey),
+        wrappedKey == null ? null : bytesHash(wrappedKey!),
         createdAt,
         expiresAt,
         used,
+        usedByPeerId,
         bytesHash(nonce),
         bytesHash(inviterSignature),
       );

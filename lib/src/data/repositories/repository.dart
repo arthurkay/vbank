@@ -14,6 +14,29 @@ Future<Result<T>> attempt<T>(Future<T> Function() run) async {
   }
 }
 
+/// Updates the row matching [where], inserting when absent.
+///
+/// Never `INSERT OR REPLACE` on a parent row: REPLACE deletes and
+/// re-inserts, firing `ON DELETE CASCADE` and silently wiping every child
+/// table (members, transactions, loans, …) on each save.
+Future<void> upsertRow(
+  DatabaseExecutor db,
+  String table,
+  Map<String, Object?> row,
+  String where,
+  List<Object?> whereArgs,
+) async {
+  final int count = await db.update(
+    table,
+    row,
+    where: where,
+    whereArgs: whereArgs,
+  );
+  if (count == 0) {
+    await db.insert(table, row);
+  }
+}
+
 /// A stored row that no longer parses, surfacing inside `watch…` queries.
 ///
 /// One-shot readers return `Err(StorageFailure)` instead; streams have no

@@ -42,10 +42,12 @@ final class SqlMeetingRepository extends SqlRepository
   Future<Result<Unit>> save(Meeting meeting) async {
     final Result<Unit> result = await attempt(() async {
       await db.transaction((Transaction txn) async {
-        await txn.insert(
+        await upsertRow(
+          txn,
           'meetings',
           MeetingDto.toRow(meeting),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          'id = ?',
+          [meeting.id],
         );
         await txn.delete(
           'attendance',

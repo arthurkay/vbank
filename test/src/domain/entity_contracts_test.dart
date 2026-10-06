@@ -141,7 +141,7 @@ void main() {
             groupTopic: 't',
             inviterPeerId: 'a',
             inviterName: 'A',
-            groupKey: Uint8List.fromList(const [1]),
+            wrappedKey: Uint8List.fromList(const [1]),
             createdAt: DateTime.utc(2026, 4, 1),
             expiresAt: DateTime.utc(2026, 4, 8),
             nonce: Uint8List.fromList(const [2]),

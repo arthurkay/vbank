@@ -14,6 +14,23 @@ final class SqlSettingsRepository extends SqlRepository
   SqlSettingsRepository(super.db);
 
   @override
+  Future<Result<List<String>>> keysWithPrefix(String prefix) async {
+    try {
+      final List<Map<String, Object?>> rows = await db.query(
+        'settings',
+        columns: ['key'],
+      );
+      return Ok([
+        for (final Map<String, Object?> row in rows)
+          if ((row['key']! as String).startsWith(prefix))
+            row['key']! as String,
+      ]);
+    } catch (e) {
+      return Err(StorageFailure(e));
+    }
+  }
+
+  @override
   Future<Result<Uint8List?>> get(String key) async {
     try {
       final List<Map<String, Object?>> rows = await db.query(

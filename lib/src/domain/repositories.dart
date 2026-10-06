@@ -25,6 +25,9 @@ abstract interface class GroupRepository {
   /// All groups with their members attached, live.
   Stream<List<Group>> watchGroups();
 
+  /// All groups with their members attached, by name.
+  Future<Result<List<Group>>> listAll();
+
   /// The group with its members, or `Err(NotFoundFailure)`.
   Future<Result<Group>> findById(String id);
 
@@ -201,6 +204,10 @@ abstract interface class BalanceRepository {
 /// Opaque key-value storage: relay addresses, peer books, sync cursors.
 /// Values are bytes; callers encode (JSON, UTF-8) before storing.
 abstract interface class SettingsRepository {
+  /// Keys starting with [prefix], for enumerating namespaced entries
+  /// (e.g. all stored group keys for backup).
+  Future<Result<List<String>>> keysWithPrefix(String prefix);
+
   /// The value for [key], or null when never set.
   Future<Result<Uint8List?>> get(String key);
 

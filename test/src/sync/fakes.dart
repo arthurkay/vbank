@@ -17,6 +17,11 @@ final class MemorySettingsRepository implements SettingsRepository {
   final Set<String> failOn = {};
 
   @override
+  Future<Result<List<String>>> keysWithPrefix(String prefix) async => Ok(
+        [for (final String key in store.keys) if (key.startsWith(prefix)) key],
+      );
+
+  @override
   Future<Result<Uint8List?>> get(String key) async {
     if (failOn.contains(key)) {
       return const Err(StorageFailure('unavailable'));

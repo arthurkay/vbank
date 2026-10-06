@@ -54,6 +54,9 @@ bool canRemove(MemberRole role) => role == MemberRole.owner;
 /// True when [role] may dissolve the group.
 bool canDissolve(MemberRole role) => role == MemberRole.owner;
 
+/// True when [role] may hand ownership to an admin.
+bool canTransferOwnership(MemberRole role) => role == MemberRole.owner;
+
 /// One person in a group.
 final class Member {
   /// Ed25519 public key, also the IPFS peer id.

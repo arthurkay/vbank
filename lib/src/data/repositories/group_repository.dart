@@ -18,6 +18,7 @@ final class SqlGroupRepository extends SqlRepository
   Stream<List<Group>> watchGroups() => watch(listAll);
 
   /// All groups with members, newest business first by name.
+  @override
   Future<Result<List<Group>>> listAll() async {
     try {
       final List<Map<String, Object?>> rows = await db.query(
@@ -59,10 +60,12 @@ final class SqlGroupRepository extends SqlRepository
   Future<Result<Unit>> save(Group group) async {
     final Result<Unit> result = await attempt(() async {
       await db.transaction((Transaction txn) async {
-        await txn.insert(
+        await upsertRow(
+          txn,
           'groups',
           GroupDto.toRow(group),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+          'id = ?',
+          [group.id],
         );
         await txn.delete(
           'members',

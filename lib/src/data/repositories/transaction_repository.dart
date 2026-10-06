@@ -41,10 +41,12 @@ final class SqlTransactionRepository extends SqlRepository
   @override
   Future<Result<Unit>> save(Transaction transaction) async {
     final Result<Unit> result = await attempt(() async {
-      await db.insert(
+      await upsertRow(
+        db,
         'transactions',
         TransactionDto.toRow(transaction),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        'id = ?',
+        [transaction.id],
       );
       return unit;
     });
