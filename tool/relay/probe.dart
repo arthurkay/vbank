@@ -1,13 +1,14 @@
-/// Probes a relay from this machine: resolves the dnsaddr TXT record, dials the
-/// relay and asks for an inventory. Usage: dart run tool/relay/probe.dart [host]
+/// Probes a relay from this machine: resolves the dnsaddr TXT record,
+/// dials the relay and asks for an inventory.
+/// Usage: dart run tool/relay/probe.dart [host]
 library;
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:vbank/core/ipfs/ipfs_node_host.dart';
-import 'package:vbank/core/relay/relay_directory.dart';
+import 'package:vbank/src/sync/node_host.dart';
+import 'package:vbank/src/sync/relay_directory.dart';
 
 Future<void> main(List<String> args) async {
   final host = args.isNotEmpty ? args.first : kBuiltInRelayHosts.first;
@@ -35,10 +36,15 @@ Future<void> main(List<String> args) async {
     final peer = addr.split('/p2p/').last;
     final reply = await node.request(
       peer,
-      Uint8List.fromList(utf8.encode(jsonEncode({'op': 'inventory', 'groupId': 'probe'}))),
+      Uint8List.fromList(
+        utf8.encode(jsonEncode({'op': 'inventory', 'groupId': 'probe'})),
+      ),
       const Duration(seconds: 15),
     );
-    stdout.writeln('inventory reply → ${reply == null ? 'null (timeout/dial failure)' : utf8.decode(reply)}');
+    stdout.writeln(
+      'inventory reply → '
+      '${reply == null ? 'null (timeout/dial failure)' : utf8.decode(reply)}',
+    );
   } catch (e) {
     stdout.writeln('FAILED: $e');
   } finally {
