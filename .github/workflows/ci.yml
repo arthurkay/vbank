@@ -1,0 +1,39 @@
+name: CI
+
+# Zero analyzer issues and a green suite with line coverage at or above the
+# floor on every push and pull request.
+on:
+  push:
+    branches: [main, rewrite/clean]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.6'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analyze (zero issues)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Test with coverage
+        run: flutter test --coverage test/src
+      - name: Coverage floor (80% of lines)
+        run: |
+          python3 - <<'EOF'
+          import sys
+          found = hit = 0
+          for line in open('coverage/lcov.info'):
+              if line.startswith('LF:'):
+                  found += int(line[3:])
+              elif line.startswith('LH:'):
+                  hit += int(line[3:])
+          pct = 100.0 * hit / found if found else 0
+          print(f'line coverage: {hit}/{found} = {pct:.1f}%')
+          sys.exit(0 if pct >= 80 else 1)
+          EOF

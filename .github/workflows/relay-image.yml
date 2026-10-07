@@ -7,8 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'lib/core/relay/**'
-      - 'lib/core/ipfs/**'
+      - 'lib/src/sync/**'
       - 'bin/vbank_relay.dart'
       - 'deploy/relay/Dockerfile'
       - 'pubspec.yaml'
