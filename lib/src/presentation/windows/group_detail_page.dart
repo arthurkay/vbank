@@ -9,6 +9,9 @@ import '../../domain/transactions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'invites_page.dart';
+import 'loans_page.dart';
+import 'meetings_page.dart';
 import 'record_page.dart';
 
 /// One group's books on Windows: stats, balances, roster, ledger, record.
@@ -70,14 +73,44 @@ final class _WindowsGroupDetailState
         ),
         content: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-          children: const [
-            _FundStats(),
-            SizedBox(height: 14),
-            _BalanceSection(),
-            SizedBox(height: 14),
-            _MemberSection(),
-            SizedBox(height: 14),
-            _TransactionSection(),
+          children: [
+            const _FundStats(),
+            const SizedBox(height: 14),
+            const _BalanceSection(),
+            const SizedBox(height: 14),
+            const _MemberSection(),
+            const SizedBox(height: 14),
+            const _TransactionSection(),
+            const SizedBox(height: 14),
+            Button(
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => WindowsLoansPage(groupId: widget.groupId),
+                ),
+              ),
+              child: const Text('Loans'),
+            ),
+            const SizedBox(height: 8),
+            Button(
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => WindowsMeetingsPage(groupId: widget.groupId),
+                ),
+              ),
+              child: const Text('Meetings'),
+            ),
+            const SizedBox(height: 8),
+            Button(
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => WindowsInvitesPage(groupId: widget.groupId),
+                ),
+              ),
+              child: const Text('Invites'),
+            ),
           ],
         ),
       ),

@@ -281,6 +281,10 @@ final class MemoryInviteRepository extends _MemoryRepo
   final Map<String, Invite> invites = {};
 
   @override
+  Stream<List<Invite>> watchByGroup(String groupId) =>
+      watch(() async => _ordered(groupId));
+
+  @override
   Future<Result<Invite>> findById(String id) async {
     final Invite? invite = invites[id];
     if (invite == null) {
@@ -290,10 +294,16 @@ final class MemoryInviteRepository extends _MemoryRepo
   }
 
   @override
-  Future<Result<List<Invite>>> listByGroup(String groupId) async => Ok([
-        for (final Invite i in invites.values)
-          if (i.groupId == groupId) i,
-      ]);
+  Future<Result<List<Invite>>> listByGroup(String groupId) async =>
+      Ok(_ordered(groupId));
+
+  List<Invite> _ordered(String groupId) {
+    final List<Invite> all = [
+      for (final Invite i in invites.values)
+        if (i.groupId == groupId) i,
+    ]..sort((Invite a, Invite b) => b.createdAt.compareTo(a.createdAt));
+    return all;
+  }
 
   @override
   Future<Result<Unit>> save(Invite invite) async {

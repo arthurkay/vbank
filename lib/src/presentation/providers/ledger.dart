@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/balance.dart';
 import '../../domain/loans.dart';
+import '../../domain/meetings.dart';
 import '../../domain/transactions.dart';
 import '../app_scope.dart';
 
@@ -26,6 +27,13 @@ final loanListProvider =
   return loans.watchByGroup(groupId);
 });
 
+/// A group's meetings, newest first, live.
+final meetingListProvider =
+    StreamProvider.family<List<Meeting>, String>((ref, groupId) {
+  final meetings = ref.watch(appRepositoriesProvider).meetings;
+  return meetings.watchByGroup(groupId);
+});
+
 /// Where the group's money is, recomputed whenever the ledger or the
 /// loans change.
 final fundProvider = FutureProvider.family<GroupFund, String>(
@@ -36,4 +44,13 @@ final fundProvider = FutureProvider.family<GroupFund, String>(
         await ref.watch(loanListProvider(groupId).future);
     return GroupFund.compute(transactions, loans);
   },
+);
+
+/// One loan's schedule, instalment order.
+final scheduleProvider =
+    FutureProvider.family<List<RepaymentSchedule>, String>(
+  (ref, loanId) => ref
+      .watch(appServicesProvider)
+      .loans.schedule(loanId)
+      .then((r) => r.value),
 );

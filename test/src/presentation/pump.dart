@@ -126,7 +126,10 @@ final class PresentationWorld {
   );
 
   /// Service set signing as the owner persona.
-  late final AppServices services = _services(signAs('owner'));
+  late final AppServices services = servicesFor('owner');
+
+  /// Service set signing as [peer].
+  AppServices servicesFor(String peer) => _services(signAs(peer));
 
   /// Signs canonical payloads with a throwaway persona key.
   SignPayload signAs(String peer) => (List<int> payload) async {

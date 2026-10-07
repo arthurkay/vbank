@@ -116,6 +116,9 @@ abstract interface class MeetingRepository {
 
 /// One-use tickets into groups.
 abstract interface class InviteRepository {
+  /// A group's invites, newest first, live.
+  Stream<List<Invite>> watchByGroup(String groupId);
+
   /// An invite, or `Err(NotFoundFailure)`.
   Future<Result<Invite>> findById(String id);
 

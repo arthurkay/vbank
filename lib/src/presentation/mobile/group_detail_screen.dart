@@ -8,6 +8,9 @@ import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'invites_screen.dart';
+import 'loans_screen.dart';
+import 'meetings_screen.dart';
 import 'record_screen.dart';
 
 /// One group's books: fund stats, balances, members and ledger, plus a
@@ -68,14 +71,44 @@ final class _MobileGroupDetailState
       ],
       child: ListView(
         padding: const EdgeInsets.all(20),
-        children: const [
-          _FundStats(),
-          Gap(16),
-          _BalanceSection(),
-          Gap(16),
-          _MemberSection(),
-          Gap(16),
-          _TransactionSection(),
+        children: [
+          const _FundStats(),
+          const Gap(16),
+          const _BalanceSection(),
+          const Gap(16),
+          const _MemberSection(),
+          const Gap(16),
+          const _TransactionSection(),
+          const Gap(16),
+          OutlineButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => MobileLoansScreen(groupId: widget.groupId),
+              ),
+            ),
+            child: const Text('Loans'),
+          ),
+          const Gap(8),
+          OutlineButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => MobileMeetingsScreen(groupId: widget.groupId),
+              ),
+            ),
+            child: const Text('Meetings'),
+          ),
+          const Gap(8),
+          OutlineButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => MobileInvitesScreen(groupId: widget.groupId),
+              ),
+            ),
+            child: const Text('Invites'),
+          ),
         ],
       ),
     );

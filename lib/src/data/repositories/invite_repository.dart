@@ -14,6 +14,10 @@ final class SqlInviteRepository extends SqlRepository
   SqlInviteRepository(super.db);
 
   @override
+  Stream<List<Invite>> watchByGroup(String groupId) =>
+      watch(() => attempt(() => _ordered(groupId)));
+
+  @override
   Future<Result<Invite>> findById(String id) async {
     try {
       final List<Map<String, Object?>> rows = await db.query(
@@ -33,24 +37,29 @@ final class SqlInviteRepository extends SqlRepository
   @override
   Future<Result<List<Invite>>> listByGroup(String groupId) async {
     try {
-      final List<Map<String, Object?>> rows = await db.query(
-        'invites',
-        where: 'group_id = ?',
-        whereArgs: [groupId],
-        orderBy: 'created_at DESC',
-      );
-      final List<Invite> invites = [];
-      for (final Map<String, Object?> row in rows) {
-        final Result<Invite> invite = InviteDto.fromRow(row);
-        if (invite.isErr) {
-          return Err(invite.failure);
-        }
-        invites.add(invite.value);
-      }
-      return Ok(invites);
+      return Ok(await _ordered(groupId));
     } catch (e) {
       return Err(StorageFailure(e));
     }
+  }
+
+  /// A group's invites, newest first.
+  Future<List<Invite>> _ordered(String groupId) async {
+    final List<Map<String, Object?>> rows = await db.query(
+      'invites',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'created_at DESC',
+    );
+    final List<Invite> invites = [];
+    for (final Map<String, Object?> row in rows) {
+      final Result<Invite> invite = InviteDto.fromRow(row);
+      if (invite.isErr) {
+        throw CorruptRow(invite.failure);
+      }
+      invites.add(invite.value);
+    }
+    return invites;
   }
 
   @override

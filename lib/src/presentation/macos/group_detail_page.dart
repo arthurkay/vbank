@@ -10,6 +10,9 @@ import '../../domain/transactions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'invites_page.dart';
+import 'loans_page.dart';
+import 'meetings_page.dart';
 import 'record_page.dart';
 
 /// One group's books on macOS: stats, balances, roster, ledger, record.
@@ -68,14 +71,53 @@ final class _MacosGroupDetailState
               ListView(
             controller: controller,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            children: const [
-              _FundStats(),
-              SizedBox(height: 16),
-              _BalanceSection(),
-              SizedBox(height: 16),
-              _MemberSection(),
-              SizedBox(height: 16),
-              _TransactionSection(),
+            children: [
+              const _FundStats(),
+              const SizedBox(height: 16),
+              const _BalanceSection(),
+              const SizedBox(height: 16),
+              const _MemberSection(),
+              const SizedBox(height: 16),
+              const _TransactionSection(),
+              const SizedBox(height: 16),
+              PushButton(
+                controlSize: ControlSize.large,
+                secondary: true,
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) =>
+                        MacosLoansPage(groupId: widget.groupId),
+                  ),
+                ),
+                child: const Text('Loans'),
+              ),
+              const SizedBox(height: 8),
+              PushButton(
+                controlSize: ControlSize.large,
+                secondary: true,
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) =>
+                        MacosMeetingsPage(groupId: widget.groupId),
+                  ),
+                ),
+                child: const Text('Meetings'),
+              ),
+              const SizedBox(height: 8),
+              PushButton(
+                controlSize: ControlSize.large,
+                secondary: true,
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) =>
+                        MacosInvitesPage(groupId: widget.groupId),
+                  ),
+                ),
+                child: const Text('Invites'),
+              ),
             ],
           ),
         ),
