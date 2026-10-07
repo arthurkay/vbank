@@ -5,6 +5,7 @@ import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
 import 'package:vbank/src/presentation/mobile/home_screen.dart';
+import 'package:vbank/src/presentation/onboarding/onboarding_screen.dart';
 import 'package:vbank/src/presentation/providers/groups.dart';
 
 import 'pump.dart';
@@ -52,6 +53,48 @@ void main() {
       await tester.tap(find.text('Test Group'));
       await tester.pump();
       expect(container.read(selectedGroupIdProvider), isNotNull);
+    });
+
+    testWidgets('get started opens onboarding under the mobile shell', (
+      tester,
+    ) async {
+      final PresentationWorld world = PresentationWorld();
+      // Same composition as main: a Builder below the app root gives the
+      // push a context with a Navigator.
+      await tester.pumpWidget(
+        VBankScope(
+          repositories: world.repositories,
+          services: world.services,
+          child: ShadcnApp(
+            home: Builder(
+              builder: (context) => MobileHomeScreen(
+                onCreateIdentity: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => OnboardingScreen(
+                      peerIdOf: () => 'owner',
+                      publicKey: world.publicKeys['owner']!,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await world.publicKeyFor('owner');
+      await settle(tester);
+
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+
+      // The onboarding form is up and completes the sign-in.
+      expect(find.text('Your name'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Amina');
+      await tester.tap(find.text('Get started').last);
+      await settle(tester);
+
+      expect(find.text('No groups yet'), findsOneWidget);
     });
   });
 }

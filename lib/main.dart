@@ -303,16 +303,21 @@ final class _VBankRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Each home sits behind a Builder: pushes need a context below the
+    // app's Navigator, and this root context is above it. Without the
+    // Builder every Get started tap throws a silent gesture exception.
     if (Platform.isAndroid || Platform.isIOS) {
       return ShadcnApp(
         title: 'vBank',
         debugShowCheckedModeBanner: false,
-        home: MobileHomeScreen(
-          onCreateIdentity: () => _push(
-            context,
-            OnboardingScreen(
-              peerIdOf: startup.peerIdOf,
-              publicKey: startup.identityPublicKey,
+        home: Builder(
+          builder: (context) => MobileHomeScreen(
+            onCreateIdentity: () => _push(
+              context,
+              OnboardingScreen(
+                peerIdOf: startup.peerIdOf,
+                publicKey: startup.identityPublicKey,
+              ),
             ),
           ),
         ),
@@ -325,12 +330,14 @@ final class _VBankRoot extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: yaru.theme,
           darkTheme: yaru.darkTheme,
-          home: LinuxHomePage(
-            onCreateIdentity: () => _push(
-              context,
-              LinuxOnboardingPage(
-                peerIdOf: startup.peerIdOf,
-                publicKey: startup.identityPublicKey,
+          home: Builder(
+            builder: (context) => LinuxHomePage(
+              onCreateIdentity: () => _push(
+                context,
+                LinuxOnboardingPage(
+                  peerIdOf: startup.peerIdOf,
+                  publicKey: startup.identityPublicKey,
+                ),
               ),
             ),
           ),
@@ -341,12 +348,14 @@ final class _VBankRoot extends StatelessWidget {
       return MacosApp(
         title: 'vBank',
         debugShowCheckedModeBanner: false,
-        home: MacosHomePage(
-          onCreateIdentity: () => _push(
-            context,
-            MacosOnboardingPage(
-              peerIdOf: startup.peerIdOf,
-              publicKey: startup.identityPublicKey,
+        home: Builder(
+          builder: (context) => MacosHomePage(
+            onCreateIdentity: () => _push(
+              context,
+              MacosOnboardingPage(
+                peerIdOf: startup.peerIdOf,
+                publicKey: startup.identityPublicKey,
+              ),
             ),
           ),
         ),
@@ -355,12 +364,14 @@ final class _VBankRoot extends StatelessWidget {
     return fluent.FluentApp(
       title: 'vBank',
       debugShowCheckedModeBanner: false,
-      home: WindowsHomePage(
-        onCreateIdentity: () => _push(
-          context,
-          WindowsOnboardingPage(
-            peerIdOf: startup.peerIdOf,
-            publicKey: startup.identityPublicKey,
+      home: Builder(
+        builder: (context) => WindowsHomePage(
+          onCreateIdentity: () => _push(
+            context,
+            WindowsOnboardingPage(
+              peerIdOf: startup.peerIdOf,
+              publicKey: startup.identityPublicKey,
+            ),
           ),
         ),
       ),
