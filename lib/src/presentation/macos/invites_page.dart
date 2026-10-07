@@ -73,6 +73,7 @@ final class _MacosInvitesState extends ConsumerState<MacosInvitesPage> {
                     if (list.isEmpty) const Text('No invites yet'),
                     for (final Invite i in list)
                       MacosListTile(
+                        onClick: () => _reshare(i),
                         title: Text(
                           _codeOf(i),
                           key: ValueKey('invite-${i.id}'),
@@ -159,32 +160,63 @@ final class _MacosInvitesState extends ConsumerState<MacosInvitesPage> {
       setState(() => _error = _explain(result.failure));
       return;
     }
-    // The secret exists only here: show the link at once, because the
-    // stored row can never rebuild it.
+    // The secret exists only here: show the link at once, and keep a
+    // copy for re-sharing while the ticket is live.
     final CreatedInvite created = result.value;
     if (created.secret == null || created.invite.inviterName == null) {
       return;
     }
-    final String inviterName = created.invite.inviterName!;
+    final String link = InviteLink(
+      groupId: g.id,
+      groupCid: g.cid ?? '',
+      groupTopic: 'vbank/group/${g.id}',
+      inviterPeerId: me,
+      inviterName: created.invite.inviterName!,
+      inviteId: created.invite.id,
+      secret: created.secret!,
+      nonce: created.invite.nonce,
+      expiresAt: created.invite.expiresAt,
+    ).encode();
+    await InviteLink.storeLink(
+      ref.read(appRepositoriesProvider).settings,
+      created.invite.id,
+      link,
+    );
     if (!mounted) {
       return;
     }
     await Navigator.push(
       context,
       CupertinoPageRoute<void>(
-        builder: (_) => MacosInviteSharePage(
-          link: InviteLink(
-            groupId: g.id,
-            groupCid: g.cid ?? '',
-            groupTopic: 'vbank/group/${g.id}',
-            inviterPeerId: me,
-            inviterName: inviterName,
-            inviteId: created.invite.id,
-            secret: created.secret!,
-            nonce: created.invite.nonce,
-            expiresAt: created.invite.expiresAt,
-          ).encode(),
-        ),
+        builder: (_) => MacosInviteSharePage(link: link),
+      ),
+    );
+  }
+
+  /// Re-shares a live ticket from its stored link. Spent or expired
+  /// tickets clear their link and say so instead.
+  Future<void> _reshare(Invite invite) async {
+    final settings = ref.read(appRepositoriesProvider).settings;
+    final String? link = await InviteLink.loadLink(
+      settings,
+      invite.id,
+    );
+    if (link == null || invite.used || invite.isExpiredAt(_now())) {
+      await InviteLink.clearLink(settings, invite.id);
+      if (mounted) {
+        setState(
+          () => _error = 'That invite was already used or expired.',
+        );
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.push(
+      context,
+      CupertinoPageRoute<void>(
+        builder: (_) => MacosInviteSharePage(link: link),
       ),
     );
   }

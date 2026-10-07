@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:cbor/cbor.dart';
 
+import '../domain/repositories.dart';
+
 /// A shareable invite link: everything the joiner needs to fetch the
 /// snapshot and unwrap the group key, with no network round trip to
 /// build it.
@@ -78,6 +80,50 @@ final class InviteLink {
       cborEncode(CborValue(map)),
     );
     return '$prefix${base64Url.encode(bytes)}';
+  }
+
+  /// Settings key holding the shareable link for [inviteId].
+  ///
+  /// The link carries the one-time secret, so it lives here — inside the
+  /// encrypted database — from creation until the ticket is used or
+  /// expires. Stored rows alone can never rebuild it.
+  static String storageKey(String inviteId) => 'invite.link.$inviteId';
+
+  /// Stores [link] for later re-sharing.
+  static Future<void> storeLink(
+    SettingsRepository settings,
+    String inviteId,
+    String link,
+  ) async {
+    await settings.set(
+      storageKey(inviteId),
+      Uint8List.fromList(utf8.encode(link)),
+    );
+  }
+
+  /// The stored link for [inviteId], or null when never saved or already
+  /// cleared.
+  static Future<String?> loadLink(
+    SettingsRepository settings,
+    String inviteId,
+  ) async {
+    final result = await settings.get(storageKey(inviteId));
+    if (result.isErr || result.value == null) {
+      return null;
+    }
+    try {
+      return utf8.decode(result.value!);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Forgets the stored link for [inviteId].
+  static Future<void> clearLink(
+    SettingsRepository settings,
+    String inviteId,
+  ) async {
+    await settings.remove(storageKey(inviteId));
   }
 
   /// Parses a link, or null when malformed. Expiry is the caller's check.
