@@ -13,7 +13,10 @@ import 'package:vbank/src/app/loan_service.dart';
 import 'package:vbank/src/app/meeting_service.dart';
 import 'package:vbank/src/app/report_service.dart';
 import 'package:vbank/src/app/transaction_service.dart';
+import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/identity.dart';
+import 'package:vbank/src/domain/meeting_time.dart';
+import 'package:vbank/src/domain/membership.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
 import 'package:vbank/src/presentation/providers/auth.dart';
 
@@ -25,6 +28,52 @@ Future<void> settle(WidgetTester tester) async {
   for (var i = 0; i < 10; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+/// A signed-in world with one group (owner plus member, no transactions).
+/// The container is for setup only; screens pump their own scope over the
+/// same shared fakes.
+Future<
+  ({
+    PresentationWorld world,
+    ProviderContainer container,
+    Group group,
+  })
+> setupGroupWorld() async {
+  final PresentationWorld world = PresentationWorld();
+  final ProviderContainer container = ProviderContainer(
+    overrides: [
+      appRepositoriesProvider.overrideWithValue(world.repositories),
+      appServicesProvider.overrideWithValue(world.services),
+    ],
+  );
+  await world.signIn(container);
+  final Group group = (await world.services.groups.createGroup(
+    name: 'Test Group',
+    config: const GroupConfig(
+      groupId: 'template',
+      contributionAmount: 100,
+      meetingTime: MeetingTime(hour: 9, minute: 0),
+    ),
+    ownerPeerId: 'owner',
+    ownerName: 'Owner',
+    ownerPublicKey: world.publicKeys['owner']!,
+  ))
+      .value;
+  final Group withMember = group.copyWith(
+    members: [
+      ...group.members,
+      Member(
+        peerId: 'member',
+        name: 'Member',
+        joinedAt: world.now,
+        publicKey: await world.publicKeyFor('member'),
+      ),
+    ],
+    sequenceNumber: group.sequenceNumber + 1,
+  );
+  await world.groupRepo.save(withMember);
+  return (world: world, container: container, group: withMember);
 }
 
 /// A presentation test world: everything in memory, so widget tests run
@@ -174,15 +223,24 @@ final class PresentationWorld {
     );
   }
 
-  /// Signs in as the owner: generates keys, writes the identity, refreshes
-  /// auth. Callers pump afterwards to rebuild.
-  Future<void> signIn(ProviderContainer container) async {
-    await _keyFor('owner');
+  /// Public key bytes for [peer], generating their keypair on first use.
+  Future<Uint8List> publicKeyFor(String peer) async {
+    await _keyFor(peer);
+    return publicKeys[peer]!;
+  }
+
+  /// Signs in as [peer] (default the owner): generates keys, writes the
+  /// identity, refreshes auth. Callers pump afterwards to rebuild.
+  Future<void> signIn(
+    ProviderContainer container, {
+    String peer = 'owner',
+  }) async {
+    await _keyFor(peer);
     await backupRepo.saveIdentity(
       UserIdentity(
-        peerId: 'owner',
-        displayName: 'Owner',
-        publicKey: publicKeys['owner']!,
+        peerId: peer,
+        displayName: peer,
+        publicKey: publicKeys[peer]!,
         createdAt: now,
       ),
     );
