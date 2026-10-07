@@ -28,6 +28,7 @@ import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
 import 'package:vbank/src/domain/membership.dart';
 import 'package:vbank/src/domain/transactions.dart';
+import 'package:vbank/src/presentation/app_scope.dart';
 
 import '../data/test_db.dart';
 
@@ -99,6 +100,9 @@ final class AppHarness {
   /// Settings (sync ledger, peer book, key store share it).
   SqlSettingsRepository get settings => _settingsRepo;
 
+  /// Backups and identity rows.
+  SqlBackupRepository get backups => _backupRepo;
+
   /// Opens the world. Pass a distinct temp file per harness in
   /// multi-device tests; the default in-memory database must not be
   /// shared across harnesses in one test.
@@ -162,6 +166,34 @@ final class AppHarness {
       await SigningService.extractPublicKeyBytes(kp),
     );
     return kp;
+  }
+
+  /// Repository set for presentation scopes.
+  AppRepositories get repositories => AppRepositories(
+        groups: _groupRepo,
+        transactions: _txRepo,
+        loans: _loanRepo,
+        meetings: _meetingRepo,
+        invites: _inviteRepo,
+        governance: _govRepo,
+        backups: _backupRepo,
+        balances: _balanceRepo,
+        settings: _settingsRepo,
+      );
+
+  /// Full service set for [peer], including keys and reports.
+  AppServices servicesFor(String peer) {
+    final ServiceStack stack = stackFor(peer);
+    return AppServices(
+      groups: stack.groups,
+      transactions: stack.transactions,
+      loans: stack.loans,
+      meetings: stack.meetings,
+      invites: stack.invites,
+      governance: stack.governance,
+      keys: keys,
+      reports: reports,
+    );
   }
 
   /// A persona's stack: every call signs as [peer].
