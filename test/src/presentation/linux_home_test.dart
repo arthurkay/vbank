@@ -6,6 +6,7 @@ import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
 import 'package:vbank/src/presentation/linux/home_page.dart';
+import 'package:vbank/src/presentation/linux/onboarding_page.dart';
 
 import 'pump.dart';
 
@@ -52,6 +53,53 @@ void main() {
       );
       await settle(tester);
       expect(find.text('Test Group'), findsOneWidget);
+    });
+
+    testWidgets('get started opens onboarding under the linux shell', (
+      tester,
+    ) async {
+      final PresentationWorld world = PresentationWorld();
+      // Same composition as main: the shell page pushes its own
+      // onboarding page with a live peer id reader.
+      Future<void> createIdentity(BuildContext context) => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => LinuxOnboardingPage(
+            peerIdOf: () => 'owner',
+            publicKey: world.publicKeys['owner']!,
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        VBankScope(
+          repositories: world.repositories,
+          services: world.services,
+          child: YaruTheme(
+            builder: (context, yaru, child) => MaterialApp(
+              theme: yaru.theme,
+              darkTheme: yaru.darkTheme,
+              home: Builder(
+                builder: (context) => LinuxHomePage(
+                  onCreateIdentity: () => createIdentity(context),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await world.publicKeyFor('owner');
+      await settle(tester);
+
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+
+      // The onboarding form is up and completes the sign-in.
+      expect(find.text('Your name'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Amina');
+      await tester.tap(find.text('Get started').last);
+      await settle(tester);
+
+      expect(find.text('No groups yet'), findsOneWidget);
     });
   });
 }

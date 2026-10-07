@@ -3,7 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/material.dart' as m;
+import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:yaru/yaru.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' as ffi;
@@ -35,9 +39,12 @@ import 'src/data/repositories/transaction_repository.dart';
 import 'src/domain/core/result.dart';
 import 'src/presentation/app_scope.dart';
 import 'src/presentation/linux/home_page.dart';
+import 'src/presentation/linux/onboarding_page.dart';
 import 'src/presentation/macos/home_page.dart';
+import 'src/presentation/macos/onboarding_page.dart';
 import 'src/presentation/mobile/home_screen.dart';
 import 'src/presentation/onboarding/onboarding_screen.dart';
+import 'src/presentation/windows/onboarding_page.dart';
 import 'src/presentation/windows/home_page.dart';
 import 'src/sync/ipfs_transport.dart';
 import 'src/sync/ledger.dart';
@@ -220,12 +227,15 @@ final class _Startup {
       signingKey: () async => identityKey,
       clock: clock,
     );
-    // Best effort: the app works offline; rounds retry once the node is up
-    // because every synchronizeNow re-runs ensureStarted.
+    // Best effort: the app works offline, and every round re-runs
+    // ensureStarted, so a node that failed here (port busy, no network)
+    // heals itself on the next round instead of staying down.
     try {
       await coordinator.ensureStarted();
-      coordinator.startPeriodic(every: const Duration(minutes: 15));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('vBank: sync node failed to start: $e');
+    }
+    coordinator.startPeriodic(every: const Duration(minutes: 15));
     return _Startup._(
       repositories: repositories,
       services: services,
@@ -272,7 +282,12 @@ final class _Startup {
   }
 }
 
-/// The platform shell over the signed-in home.
+/// The platform shell over the signed-in home: shadcn on phones, each
+/// desktop's own kit (Yaru, macos_ui, Fluent) everywhere else. Every
+/// onboarding screen shares the [saveOnboardingIdentity] contract and
+/// reads the peer id fresh on every save, so a node that is still
+/// starting (or just healed) works — and a node that is down shows an
+/// error with a retry instead of silence.
 final class _VBankRoot extends StatelessWidget {
   /// Assembled startup (identity bytes for onboarding).
   final _Startup startup;
@@ -280,37 +295,75 @@ final class _VBankRoot extends StatelessWidget {
   /// Creates the root.
   const _VBankRoot({required this.startup});
 
+  /// Pushes a screen on the nearest navigator.
+  Future<void> _push(BuildContext context, Widget screen) => Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => screen),
+      );
+
   @override
   Widget build(BuildContext context) {
-    Future<void> createIdentity() {
-      final String? peerId = startup.peerIdOf();
-      if (peerId == null) {
-        return Future.value();
-      }
-      return Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => OnboardingScreen(
-            peerId: peerId,
-            publicKey: startup.identityPublicKey,
+    if (Platform.isAndroid || Platform.isIOS) {
+      return ShadcnApp(
+        title: 'vBank',
+        debugShowCheckedModeBanner: false,
+        home: MobileHomeScreen(
+          onCreateIdentity: () => _push(
+            context,
+            OnboardingScreen(
+              peerIdOf: startup.peerIdOf,
+              publicKey: startup.identityPublicKey,
+            ),
           ),
         ),
       );
     }
-    final Widget home;
-    if (Platform.isAndroid || Platform.isIOS) {
-      home = MobileHomeScreen(onCreateIdentity: createIdentity);
-    } else if (Platform.isLinux) {
-      home = LinuxHomePage(onCreateIdentity: createIdentity);
-    } else if (Platform.isMacOS) {
-      home = MacosHomePage(onCreateIdentity: createIdentity);
-    } else {
-      home = WindowsHomePage(onCreateIdentity: createIdentity);
+    if (Platform.isLinux) {
+      return YaruTheme(
+        builder: (context, yaru, child) => m.MaterialApp(
+          title: 'vBank',
+          debugShowCheckedModeBanner: false,
+          theme: yaru.theme,
+          darkTheme: yaru.darkTheme,
+          home: LinuxHomePage(
+            onCreateIdentity: () => _push(
+              context,
+              LinuxOnboardingPage(
+                peerIdOf: startup.peerIdOf,
+                publicKey: startup.identityPublicKey,
+              ),
+            ),
+          ),
+        ),
+      );
     }
-    return ShadcnApp(
+    if (Platform.isMacOS) {
+      return MacosApp(
+        title: 'vBank',
+        debugShowCheckedModeBanner: false,
+        home: MacosHomePage(
+          onCreateIdentity: () => _push(
+            context,
+            MacosOnboardingPage(
+              peerIdOf: startup.peerIdOf,
+              publicKey: startup.identityPublicKey,
+            ),
+          ),
+        ),
+      );
+    }
+    return fluent.FluentApp(
       title: 'vBank',
       debugShowCheckedModeBanner: false,
-      home: home,
+      home: WindowsHomePage(
+        onCreateIdentity: () => _push(
+          context,
+          WindowsOnboardingPage(
+            peerIdOf: startup.peerIdOf,
+            publicKey: startup.identityPublicKey,
+          ),
+        ),
+      ),
     );
   }
 }

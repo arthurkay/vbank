@@ -17,7 +17,7 @@ void main() {
           services: world.services,
           child: ShadcnApp(
             home: OnboardingScreen(
-              peerId: 'owner',
+              peerIdOf: () => 'owner',
               publicKey: Uint8List.fromList(List.filled(32, 7)),
             ),
           ),
@@ -45,7 +45,7 @@ void main() {
           services: world.services,
           child: ShadcnApp(
             home: OnboardingScreen(
-              peerId: 'owner',
+              peerIdOf: () => 'owner',
               publicKey: Uint8List.fromList(List.filled(32, 7)),
             ),
           ),
@@ -59,6 +59,46 @@ void main() {
       expect(find.textContaining('name your group'), findsOneWidget);
       final loaded = await world.backupRepo.loadIdentity();
       expect(loaded.value, isNull);
+    });
+
+    testWidgets('node down shows a retry instead of silence', (tester) async {
+      final PresentationWorld world = PresentationWorld();
+      String? peerId;
+      await tester.pumpWidget(
+        VBankScope(
+          repositories: world.repositories,
+          services: world.services,
+          child: ShadcnApp(
+            home: OnboardingScreen(
+              peerIdOf: () => peerId,
+              publicKey: Uint8List.fromList(List.filled(32, 7)),
+            ),
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.enterText(find.byType(TextField), 'Amina');
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+
+      // The node is down: an error, nothing saved — and no silent exit.
+      expect(find.textContaining("isn't running"), findsOneWidget);
+      expect(
+        (await world.backupRepo.loadIdentity()).value,
+        isNull,
+      );
+
+      // The node comes up; the same tap retries and succeeds.
+      peerId = 'owner';
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+
+      expect(
+        (await world.backupRepo.loadIdentity()).value?.displayName,
+        'Amina',
+      );
+      expect(find.text('Get started'), findsNothing);
     });
   });
 }
