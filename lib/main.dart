@@ -382,19 +382,78 @@ final class _VBankRoot extends StatelessWidget {
   }
 }
 
-/// Startup failed before any UI existed: the message names the step.
+/// Startup failed before any UI existed.
+///
+/// Shows a friendly message with the technical details in an expandable
+/// section, plus a retry button. The raw error is never shown as the
+/// primary message — it goes in the details section instead.
 final class _StartupError extends StatelessWidget {
-  /// What failed.
+  /// What failed (raw exception text).
   final String error;
 
   /// Creates the error screen.
   const _StartupError({required this.error});
 
+  /// User-friendly title based on the error type.
+  String get _title => error.contains('database')
+      ? 'Could not open your database'
+      : error.contains('SQLCipher')
+          ? 'Encryption unavailable'
+          : 'vBank could not start';
+
+  /// User-friendly message based on the error type.
+  String get _message => error.contains('database')
+      ? 'Your local data store could not be opened. This usually means '
+            'the database file is corrupted or the encryption key is wrong. '
+            'Your data is safe — it can be restored from other group '
+            'members once sync runs.'
+      : error.contains('SQLCipher')
+          ? 'This device cannot encrypt local data. On Android this means '
+                'the app was built without SQLCipher. Please reinstall '
+                'the app.'
+          : 'Something went wrong while starting vBank. Please try again. '
+                'If the problem persists, restart the app.';
+
   @override
   Widget build(BuildContext context) => ShadcnApp(
         home: Scaffold(
           child: Center(
-            child: Text('vBank could not start:\n$error'),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    LucideIcons.triangleAlert,
+                    size: 48,
+                    color: Colors.orange,
+                  ),
+                  const Gap(16),
+                  Text(_title).xLarge.bold,
+                  const Gap(12),
+                  Text(
+                    _message,
+                    textAlign: TextAlign.center,
+                  ).muted,
+                  const Gap(24),
+                  PrimaryButton(
+                    onPressed: () {
+                      // Re-run main() — the OS keeps the process alive.
+                      main();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                  const Gap(16),
+                  Collapsible(
+                    children: [
+                      const Text('Technical details').small,
+                      const Gap(8),
+                      SelectableText(error).muted.xSmall,
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );

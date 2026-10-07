@@ -77,7 +77,9 @@ abstract final class VBankDatabase {
         'SQLCipher unavailable: refusing to touch a plaintext database',
       );
     }
-    await db.execute('PRAGMA key = "x\'$password\'"');
+    // PRAGMA key returns a result set on some builds (Android sqflite),
+    // so it must go through rawQuery — execute() throws there.
+    await db.rawQuery('PRAGMA key = "x\'$password\'"');
     // A wrong key only fails on first read: probe now.
     await db.rawQuery('SELECT count(*) FROM sqlite_master');
     await db.execute('PRAGMA foreign_keys = ON');
