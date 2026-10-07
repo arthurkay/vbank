@@ -1,224 +1,334 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
-
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' as ffi;
+import 'package:sqflite_sqlcipher/sqflite.dart';
 
-import 'ui/ui.dart' show VBankTheme, pushScreen, showMessage;
-import 'core/ipfs/sync_manager.dart' show SyncChangeType;
-import 'providers/group_provider.dart' show selectedGroupProvider;
-import 'services/group_service.dart';
-import 'services/transaction_service.dart';
-import 'screens/loan/loan_detail_screen.dart';
-import 'screens/meeting/meeting_detail_screen.dart';
-import 'screens/transaction/transaction_detail_screen.dart';
-import 'core/app_bootstrap.dart';
-import 'core/app_platform.dart';
-import 'core/deeplink/deeplink_handler.dart';
-import 'desktop/linux/yaru_app.dart';
-import 'desktop/macos/macos_app.dart';
-import 'desktop/windows/fluent_app.dart';
-import 'core/ipfs/ipfs_service.dart';
-import 'core/notifications/notification_service.dart';
+import 'src/app/context.dart';
+import 'src/app/device_secret.dart';
+import 'src/app/governance_service.dart';
+import 'src/app/group_service.dart';
+import 'src/app/invite_service.dart';
+import 'src/app/key_service.dart';
+import 'src/app/loan_service.dart';
+import 'src/app/meeting_service.dart';
+import 'src/app/report_service.dart';
+import 'src/app/sync_coordinator.dart';
+import 'src/app/transaction_service.dart';
+import 'src/crypto/member_keys.dart';
+import 'src/crypto/signing.dart';
+import 'src/data/database.dart';
+import 'src/data/repositories/backup_repository.dart';
+import 'src/data/repositories/balance_repository.dart';
+import 'src/data/repositories/governance_repository.dart';
+import 'src/data/repositories/group_repository.dart';
+import 'src/data/repositories/invite_repository.dart';
+import 'src/data/repositories/loan_repository.dart';
+import 'src/data/repositories/meeting_repository.dart';
+import 'src/data/repositories/settings_repository.dart';
+import 'src/data/repositories/transaction_repository.dart';
+import 'src/domain/core/result.dart';
+import 'src/presentation/app_scope.dart';
+import 'src/presentation/linux/home_page.dart';
+import 'src/presentation/macos/home_page.dart';
+import 'src/presentation/mobile/home_screen.dart';
+import 'src/presentation/onboarding/onboarding_screen.dart';
+import 'src/presentation/windows/home_page.dart';
+import 'src/sync/ipfs_transport.dart';
+import 'src/sync/ledger.dart';
+import 'src/sync/peer_book.dart';
+import 'src/sync/relay_directory.dart';
 
-import 'screens/onboarding/welcome_screen.dart';
-import 'screens/onboarding/create_account_screen.dart';
-import 'screens/onboarding/restore_backup_screen.dart';
-import 'screens/home/home_screen.dart';
-import 'screens/group/create_group_screen.dart';
-import 'screens/group/group_detail_screen.dart';
-import 'screens/transaction/transaction_list_screen.dart';
-import 'screens/transaction/create_transaction_screen.dart';
-import 'screens/loan/loan_list_screen.dart';
-import 'screens/loan/request_loan_screen.dart';
-import 'screens/meeting/meeting_list_screen.dart';
-import 'screens/invite/join_group_screen.dart';
-import 'screens/invite/invite_screen.dart';
-import 'screens/group/group_settings_screen.dart';
-import 'screens/group/group_reports_screen.dart';
-import 'screens/settings/sync_status_screen.dart';
-import 'screens/settings/notification_settings_screen.dart';
-import 'screens/settings/identity_backup_screen.dart';
-
-void main() async {
+/// Starts vBank: device secret, encrypted database, identity keypair, sync
+/// node, services, then the platform shell.
+///
+/// One 32-byte device secret anchors the install: the Ed25519 identity
+/// keypair uses it directly, the database password and the X25519 member
+/// keypair derive from it with separate HKDF labels. A failure anywhere
+/// before the UI shows a plain error screen instead of a half-built app —
+/// the failure message names the step so logs stay actionable.
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Must precede any dart_ipfs usage (see IpfsService.prepareWorkingDirectory).
-  await IpfsService.prepareWorkingDirectory();
-  // flutter_local_notifications has no Windows backend in this version.
-  if (AppPlatform.canNotify) await NotificationService().initialize();
-
-  runApp(const ProviderScope(child: VBankRoot()));
+  try {
+    final _Startup startup = await _Startup.assemble();
+    runApp(
+      VBankScope(
+        repositories: startup.repositories,
+        services: startup.services,
+        child: _VBankRoot(startup: startup),
+      ),
+    );
+  } catch (e) {
+    runApp(_StartupError(error: '$e'));
+  }
 }
 
-/// Picks the presentation for the host platform: shadcn_flutter on phones and
-/// each desktop's own design system — Yaru on Linux, macos_ui on macOS, Fluent
-/// on Windows (DESIGN_PLAN §37). Everything below the shell — services,
-/// providers, crypto, storage, sync — is shared.
-class VBankRoot extends StatelessWidget {
-  const VBankRoot({super.key});
+/// Everything the UI needs that only exists after async startup.
+final class _Startup {
+  /// Assembled repositories.
+  final AppRepositories repositories;
 
-  @override
-  Widget build(BuildContext context) => switch (AppPlatform.shell) {
-        AppShell.mobile => const VBankApp(),
-        AppShell.linux => const VBankYaruApp(),
-        AppShell.macos => const VBankMacosApp(),
-        AppShell.windows => const VBankFluentApp(),
-      };
-}
+  /// Assembled services.
+  final AppServices services;
 
-/// Every route gets its own sheet layer so `showAppSheet`/`confirmSheet`
-/// can be opened from a screen's own context and the Android back button
-/// closes the sheet (not the screen) — shadcn's Scaffold only provides one
-/// below itself, which screen-level contexts can't see.
-MapEntry<String, WidgetBuilder> _withSheetLayer(String name, WidgetBuilder builder) =>
-    MapEntry(name, (context) => DrawerOverlay(child: builder(context)));
+  /// Sync coordinator (node starting best-effort; offline still works).
+  final SyncCoordinator coordinator;
 
-class VBankApp extends ConsumerStatefulWidget {
-  const VBankApp({super.key});
+  /// This device's Ed25519 public key bytes, for the identity row.
+  final Uint8List identityPublicKey;
 
-  @override
-  ConsumerState<VBankApp> createState() => _VBankAppState();
-}
+  /// This device's libp2p peer id, or null when the node could not start.
+  final String? Function() peerIdOf;
 
-class _VBankAppState extends ConsumerState<VBankApp> {
+  /// Builds everything, in order. Throws with the failing step.
+  static Future<_Startup> assemble() async {
+    final Uint8List secret = await DeviceSecret.get();
+    final SimpleKeyPair identityKey =
+        await SigningService.keyPairFromSeed(secret);
+    final Uint8List identityPublicKey = Uint8List.fromList(
+      await SigningService.extractPublicKeyBytes(identityKey),
+    );
 
-  /// The widget's own context sits *above* the MaterialApp's Navigator, so
-  /// deep-link navigation must go through this key instead.
-  final _navigatorKey = GlobalKey<NavigatorState>();
-
-  /// Opens the record a notification is about: the group first (screens read
-  /// `selectedGroupProvider`), then the transaction, loan or meeting.
-  Future<void> _onNotificationTap(NotificationTarget target) async {
-    final navigator = _navigatorKey.currentState;
-    if (navigator == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap(target));
-      return;
+    final Directory support = await getApplicationSupportDirectory();
+    await support.create(recursive: true);
+    final String dbPath = p.join(support.path, 'vbank.db');
+    final DatabaseFactory factory = _databaseFactory();
+    final String dbPassword = await _dbPasswordHex(secret);
+    final Result<OpenResult> openedResult = await VBankDatabase.open(
+      factory: factory,
+      path: dbPath,
+      password: dbPassword,
+    );
+    if (openedResult.isErr) {
+      throw StateError('database: ${openedResult.failure}');
     }
-    final group = await GroupService().getGroup(target.groupId);
-    if (group == null || !mounted) return;
-    ref.read(selectedGroupProvider.notifier).state = group;
-    switch (target.type) {
-      case SyncChangeType.transaction:
-      case SyncChangeType.reversal:
-        final tx = target.recordId == null ? null : await TransactionService().getById(target.recordId!);
-        if (!mounted) return;
-        if (tx != null) {
-          navigator.pushNamed('/group-detail');
-          pushScreen(navigator.context, TransactionDetailScreen(transaction: tx));
-        } else {
-          navigator.pushNamed('/group-detail');
-        }
-      case SyncChangeType.loan:
-        navigator.pushNamed('/group-detail');
-        if (target.recordId != null) pushScreen(navigator.context, LoanDetailScreen(loanId: target.recordId!));
-      case SyncChangeType.meeting:
-        navigator.pushNamed('/group-detail');
-        if (target.recordId != null) pushScreen(navigator.context, MeetingDetailScreen(meetingId: target.recordId!));
-      case SyncChangeType.group:
-      case SyncChangeType.member:
-        navigator.pushNamed('/group-detail');
+    final OpenResult opened = openedResult.value;
+
+    final Database db = opened.database;
+    final AppRepositories repositories = AppRepositories(
+      groups: SqlGroupRepository(db),
+      transactions: SqlTransactionRepository(db),
+      loans: SqlLoanRepository(db),
+      meetings: SqlMeetingRepository(db),
+      invites: SqlInviteRepository(db),
+      governance: SqlGovernanceRepository(db),
+      backups: SqlBackupRepository(db),
+      balances: SqlBalanceRepository(db),
+      settings: SqlSettingsRepository(db),
+    );
+
+    DateTime clock() => DateTime.now().toUtc();
+    Future<Uint8List> sign(List<int> payload) async {
+      final Signature signature =
+          await SigningService.sign(payload, identityKey);
+      return Uint8List.fromList(signature.bytes);
     }
+
+    final GroupKeyService keys =
+        GroupKeyService(GroupKeyStore(repositories.settings));
+    final GroupService groups = GroupService(
+      groups: repositories.groups,
+      governance: repositories.governance,
+      loans: repositories.loans,
+      keys: keys,
+      sign: sign,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final TransactionService transactions = TransactionService(
+      transactions: repositories.transactions,
+      groups: repositories.groups,
+      balances: repositories.balances,
+      sign: sign,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final LoanService loans = LoanService(
+      loans: repositories.loans,
+      groups: groups,
+      transactions: transactions,
+      balances: repositories.balances,
+      sign: sign,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final MeetingService meetings = MeetingService(
+      meetings: repositories.meetings,
+      groups: groups,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final InviteService invites = InviteService(
+      invites: repositories.invites,
+      sign: sign,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final GovernanceService governance = GovernanceService(
+      groups: groups,
+      transactions: transactions,
+      reversals: repositories.transactions,
+      governance: repositories.governance,
+      loans: repositories.loans,
+      balances: repositories.balances,
+      sign: sign,
+      clock: clock,
+      ids: uuidV7,
+    );
+    final AppServices services = AppServices(
+      groups: groups,
+      transactions: transactions,
+      loans: loans,
+      meetings: meetings,
+      invites: invites,
+      governance: governance,
+      keys: keys,
+      reports: ReportService(
+        transactions: repositories.transactions,
+        meetings: repositories.meetings,
+        balances: repositories.balances,
+        groups: repositories.groups,
+      ),
+    );
+
+    final IpfsTransport transport = IpfsTransport(
+      ipfsDir: p.join(support.path, 'ipfs'),
+      identitySeed: secret,
+    );
+    final SyncCoordinator coordinator = SyncCoordinator(
+      transport: transport,
+      groups: groups,
+      transactions: transactions,
+      loans: loans,
+      meetings: meetings,
+      governance: governance,
+      invites: invites,
+      keys: keys,
+      peers: PeerBook(repositories.settings),
+      ledger: SyncLedger(repositories.settings),
+      relays: RelayDirectory(),
+      settings: repositories.settings,
+      sign: sign,
+      ownPeerId: () => transport.peerId,
+      memberKeyPair: () => MemberKeys.fromIdentitySeed(secret),
+      ownAddrs: () => transport.dialableAddresses,
+      signingKey: () async => identityKey,
+      clock: clock,
+    );
+    // Best effort: the app works offline; rounds retry once the node is up
+    // because every synchronizeNow re-runs ensureStarted.
+    try {
+      await coordinator.ensureStarted();
+      coordinator.startPeriodic(every: const Duration(minutes: 15));
+    } catch (_) {}
+    return _Startup._(
+      repositories: repositories,
+      services: services,
+      coordinator: coordinator,
+      identityPublicKey: identityPublicKey,
+      peerIdOf: () => transport.peerId,
+    );
   }
 
-  void _onDeepLink(DeepLinkResult result) {
-    if (!mounted) return;
-    final navigator = _navigatorKey.currentState;
-    if (navigator == null) {
-      // Navigator not built yet; retry on the next frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _onDeepLink(result));
-      return;
+  const _Startup._({
+    required this.repositories,
+    required this.services,
+    required this.coordinator,
+    required this.identityPublicKey,
+    required this.peerIdOf,
+  });
+
+  /// The database factory: FFI on Linux/Windows, the platform plugin
+  /// (SQLCipher) everywhere else.
+  static DatabaseFactory _databaseFactory() {
+    if (Platform.isLinux || Platform.isWindows) {
+      ffi.sqfliteFfiInit();
+      return ffi.databaseFactoryFfi;
     }
-    switch (result.type) {
-      case DeepLinkType.joinGroup:
-        navigator.pushNamed('/join-group', arguments: result);
-        break;
-      case DeepLinkType.restoreBackup:
-        navigator.pushNamed('/restore-backup', arguments: result);
-        break;
-      case DeepLinkType.error:
-        showMessage(navigator.context, result.error ?? 'Invalid link', error: true);
-        break;
-      case DeepLinkType.unknown:
-        break;
-    }
+    return databaseFactory;
   }
+
+  /// The SQLCipher key as hex: HKDF of the device secret under a label
+  /// that nothing else uses, so the database key and the identity keypair
+  /// never coincide.
+  static Future<String> _dbPasswordHex(Uint8List secret) async {
+    final Hkdf hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
+    final SecretKey key = await hkdf.deriveKey(
+      secretKey: SecretKey(secret),
+      info: 'vbank-db-v1'.codeUnits,
+      nonce: List<int>.filled(16, 0),
+    );
+    final List<int> bytes = await key.extractBytes();
+    final StringBuffer hex = StringBuffer();
+    for (final int b in bytes) {
+      hex.write(b.toRadixString(16).padLeft(2, '0'));
+    }
+    return hex.toString();
+  }
+}
+
+/// The platform shell over the signed-in home.
+final class _VBankRoot extends StatelessWidget {
+  /// Assembled startup (identity bytes for onboarding).
+  final _Startup startup;
+
+  /// Creates the root.
+  const _VBankRoot({required this.startup});
 
   @override
   Widget build(BuildContext context) {
-    return AppBootstrap(
-      onDeepLink: _onDeepLink,
-      onNotificationTap: _onNotificationTap,
-      child: VBankTheme.componentThemes(
-      child: ShadcnApp(
-      navigatorKey: _navigatorKey,
+    Future<void> createIdentity() {
+      final String? peerId = startup.peerIdOf();
+      if (peerId == null) {
+        return Future.value();
+      }
+      return Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => OnboardingScreen(
+            peerId: peerId,
+            publicKey: startup.identityPublicKey,
+          ),
+        ),
+      );
+    }
+    final Widget home;
+    if (Platform.isAndroid || Platform.isIOS) {
+      home = MobileHomeScreen(onCreateIdentity: createIdentity);
+    } else if (Platform.isLinux) {
+      home = LinuxHomePage(onCreateIdentity: createIdentity);
+    } else if (Platform.isMacOS) {
+      home = MacosHomePage(onCreateIdentity: createIdentity);
+    } else {
+      home = WindowsHomePage(onCreateIdentity: createIdentity);
+    }
+    return ShadcnApp(
       title: 'vBank',
       debugShowCheckedModeBanner: false,
-      theme: VBankTheme.light(),
-      darkTheme: VBankTheme.dark(),
-      themeMode: ThemeMode.system,
-      // Matches Material's page-transition backdrop and the status-bar icons to
-      // the live theme (see VBankTheme.pageTransitionShim).
-      builder: (context, child) => VBankTheme.pageTransitionShim(context, child ?? const SizedBox.shrink()),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const _BackgroundOnBack(child: WelcomeScreen()),
-        '/create-account': (context) => const CreateAccountScreen(),
-        '/restore-backup': (context) => RestoreBackupScreen(
-              backupId: (ModalRoute.of(context)?.settings.arguments as DeepLinkResult?)?.backupId,
-            ),
-        '/home': (context) => const _BackgroundOnBack(child: HomeScreen()),
-        '/create-group': (context) => const CreateGroupScreen(),
-        '/group-detail': (context) => const GroupDetailScreen(),
-        '/transactions': (context) => const TransactionListScreen(),
-        '/create-transaction': (context) => const CreateTransactionScreen(),
-        '/loans': (context) => const LoanListScreen(),
-        '/request-loan': (context) => const RequestLoanScreen(),
-        '/meetings': (context) => const MeetingListScreen(),
-        '/join-group': (context) => JoinGroupScreen(
-              deepLink:
-                  ModalRoute.of(context)?.settings.arguments as DeepLinkResult?,
-            ),
-        '/invite': (context) => const InviteScreen(),
-        '/group-settings': (context) => const GroupSettingsScreen(),
-        '/group-reports': (context) => const GroupReportsScreen(),
-        '/sync-status': (context) => const SyncStatusScreen(),
-        '/notification-settings': (context) => const NotificationSettingsScreen(),
-        '/identity-backup': (context) => const IdentityBackupScreen(),
-      }.map(_withSheetLayer),
-      ),
-      ),
+      home: home,
     );
   }
 }
 
-/// Back on a root route sends the app to the background instead of quitting.
-///
-/// On Android, finishing the activity tears down the Dart root isolate and with
-/// it the sync node (a worker isolate) — while the user expects the app to keep
-/// syncing like a messenger. `canPop: false` also makes the framework claim the
-/// back event, so predictive back does not finish the activity on its own.
-class _BackgroundOnBack extends StatelessWidget {
-  final Widget child;
-  const _BackgroundOnBack({required this.child});
+/// Startup failed before any UI existed: the message names the step.
+final class _StartupError extends StatelessWidget {
+  /// What failed.
+  final String error;
 
-  static const _platform = MethodChannel('vbank/platform');
+  /// Creates the error screen.
+  const _StartupError({required this.error});
 
   @override
-  Widget build(BuildContext context) {
-    if (!Platform.isAndroid) return child;
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        try {
-          await _platform.invokeMethod<void>('moveToBackground');
-        } catch (_) {
-          await SystemNavigator.pop();
-        }
-      },
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => ShadcnApp(
+        home: Scaffold(
+          child: Center(
+            child: Text('vBank could not start:\n$error'),
+          ),
+        ),
+      );
 }
