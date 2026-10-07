@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:macos_ui/macos_ui.dart';
 
+import '../../domain/core/result.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_page.dart';
 import 'group_detail_page.dart';
+import 'join_group_page.dart';
 
 /// The macOS home: the same auth gate and group list in Macos dress.
 ///
@@ -15,8 +17,15 @@ final class MacosHomePage extends ConsumerWidget {
   /// Called when the signed-out user taps Get started.
   final Future<void> Function()? onCreateIdentity;
 
+  /// Joins a group from a link; null hides the join entries (tests).
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  onJoinGroup;
+
   /// Creates the page.
-  const MacosHomePage({super.key, this.onCreateIdentity});
+  const MacosHomePage({super.key, this.onCreateIdentity, this.onJoinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,7 +76,7 @@ final class MacosHomePage extends ConsumerWidget {
     if (selected != null) {
       return MacosGroupDetailPage(groupId: selected);
     }
-    return const MacosGroupsPage();
+    return MacosGroupsPage(joinGroup: onJoinGroup);
   }
 
   static Widget _loading(BuildContext context, ScrollController _) =>
@@ -76,12 +85,20 @@ final class MacosHomePage extends ConsumerWidget {
 
 /// The group list: loading, empty and roster rows.
 final class MacosGroupsPage extends ConsumerWidget {
+  /// Join callback for entries; null hides them.
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  joinGroup;
+
   /// Creates the page.
-  const MacosGroupsPage({super.key});
+  const MacosGroupsPage({super.key, this.joinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Group>> groups = ref.watch(groupListProvider);
+    final joinGroup = this.joinGroup;
     return MacosScaffold(
       toolBar: ToolBar(
         title: const Text('Groups'),
@@ -98,6 +115,20 @@ final class MacosGroupsPage extends ConsumerWidget {
               ),
             ),
           ),
+          if (joinGroup != null)
+            ToolBarIconButton(
+              key: const ValueKey('join-group-button'),
+              label: 'Join group',
+              icon: const MacosIcon(CupertinoIcons.link),
+              showLabel: false,
+              onPressed: () => Navigator.push(
+                context,
+                CupertinoPageRoute<void>(
+                  builder: (_) =>
+                      MacosJoinGroupPage(onJoin: joinGroup),
+                ),
+              ),
+            ),
         ],
       ),
       children: [
@@ -124,6 +155,21 @@ final class MacosGroupsPage extends ConsumerWidget {
                         ),
                         child: const Text('New group'),
                       ),
+                      if (joinGroup != null) ...[
+                        const SizedBox(height: 12),
+                        PushButton(
+                          controlSize: ControlSize.large,
+                          secondary: true,
+                          onPressed: () => Navigator.push(
+                            context,
+                            CupertinoPageRoute<void>(
+                              builder: (_) =>
+                                  MacosJoinGroupPage(onJoin: joinGroup),
+                            ),
+                          ),
+                          child: const Text('Join group'),
+                        ),
+                      ],
                     ],
                   ),
                 );

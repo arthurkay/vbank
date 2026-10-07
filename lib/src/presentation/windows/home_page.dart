@@ -1,11 +1,13 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/core/result.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_page.dart';
 import 'group_detail_page.dart';
+import 'join_group_page.dart';
 
 /// The Windows home: the same auth gate and group list in Fluent dress.
 ///
@@ -14,8 +16,15 @@ final class WindowsHomePage extends ConsumerWidget {
   /// Called when the signed-out user taps Get started.
   final Future<void> Function()? onCreateIdentity;
 
+  /// Joins a group from a link; null hides the join entries (tests).
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  onJoinGroup;
+
   /// Creates the page.
-  const WindowsHomePage({super.key, this.onCreateIdentity});
+  const WindowsHomePage({super.key, this.onCreateIdentity, this.onJoinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,18 +62,26 @@ final class WindowsHomePage extends ConsumerWidget {
     if (selected != null) {
       return WindowsGroupDetailPage(groupId: selected);
     }
-    return const WindowsGroupsPage();
+    return WindowsGroupsPage(joinGroup: onJoinGroup);
   }
 }
 
 /// The group list: loading, empty and roster rows.
 final class WindowsGroupsPage extends ConsumerWidget {
+  /// Join callback for entries; null hides them.
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  joinGroup;
+
   /// Creates the page.
-  const WindowsGroupsPage({super.key});
+  const WindowsGroupsPage({super.key, this.joinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Group>> groups = ref.watch(groupListProvider);
+    final joinGroup = this.joinGroup;
     return ScaffoldPage(
       header: PageHeader(
         title: const Text('Groups'),
@@ -82,6 +99,19 @@ final class WindowsGroupsPage extends ConsumerWidget {
                 ),
               ),
             ),
+            if (joinGroup != null)
+              CommandBarButton(
+                key: const ValueKey('join-group-button'),
+                icon: const Icon(FluentIcons.link),
+                label: const Text('Join group'),
+                onPressed: () => Navigator.push(
+                  context,
+                  FluentPageRoute<void>(
+                    builder: (_) =>
+                        WindowsJoinGroupPage(onJoin: joinGroup),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -105,6 +135,19 @@ final class WindowsGroupsPage extends ConsumerWidget {
                     ),
                     child: const Text('New group'),
                   ),
+                  if (joinGroup != null) ...[
+                    const SizedBox(height: 12),
+                    Button(
+                      onPressed: () => Navigator.push(
+                        context,
+                        FluentPageRoute<void>(
+                          builder: (_) =>
+                              WindowsJoinGroupPage(onJoin: joinGroup),
+                        ),
+                      ),
+                      child: const Text('Join group'),
+                    ),
+                  ],
                 ],
               ),
             );

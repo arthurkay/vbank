@@ -23,6 +23,34 @@ final class PublishTracker {
   /// Settings key for [groupId]'s published ids.
   static String keyFor(String groupId) => 'published.$groupId';
 
+  /// Settings key for [groupId]'s last snapshotted fingerprint.
+  static String fingerprintKeyFor(String groupId) =>
+      'snapshot.fingerprint.$groupId';
+
+  /// The fingerprint stored at the last snapshot, or null when never.
+  Future<String?> snapshotFingerprint(String groupId) async {
+    final result = await settings.get(fingerprintKeyFor(groupId));
+    if (result.isErr || result.value == null) {
+      return null;
+    }
+    try {
+      return utf8.decode(result.value!);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Records the fingerprint snapshotted for [groupId].
+  Future<void> recordSnapshotFingerprint(
+    String groupId,
+    String fingerprint,
+  ) async {
+    await settings.set(
+      fingerprintKeyFor(groupId),
+      Uint8List.fromList(utf8.encode(fingerprint)),
+    );
+  }
+
   /// True when [recordId] was published (here or applied from a peer).
   Future<bool> isPublished(String groupId, String recordId) async {
     final Set<String> ids = await _load(groupId);

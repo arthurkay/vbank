@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:vbank/src/domain/core/failure.dart';
 import 'package:vbank/src/domain/core/result.dart';
 import 'package:vbank/src/domain/repositories.dart';
+import 'package:vbank/src/sync/sync_node.dart';
 import 'package:vbank/src/sync/transport.dart';
 
 /// Map-backed [SettingsRepository] for sync-layer tests. No database, no
@@ -197,5 +198,96 @@ final class FakeTransport implements SyncTransport {
       );
     }
     return Uint8List(0);
+  }
+}
+
+/// A [SyncNode] over [FakeTransport] with notification fan-out, so
+/// coordinators announce to each other like real nodes.
+final class FakeNode implements SyncNode {
+  /// Block and request handling.
+  final FakeTransport inner;
+
+  /// Peers this node can notify, by id.
+  final Map<String, FakeNode> mesh = {};
+
+  /// Topics subscribed.
+  final List<String> subscribed = [];
+
+  /// Announcements sent `(topic, message)`.
+  final List<(String, String)> published = [];
+
+  /// Notifications received.
+  final StreamController<SyncNotification> _incoming =
+      StreamController<SyncNotification>.broadcast();
+
+  bool _started = false;
+
+  /// Creates the node with [peerId].
+  FakeNode(String peerId) : inner = FakeTransport(peerId);
+
+  @override
+  String? get peerId => inner.peerId;
+
+  @override
+  Future<Set<String>> get connectedPeers => inner.connectedPeers;
+
+  @override
+  bool get isRunning => _started;
+
+  @override
+  Future<void> start() async {
+    _started = true;
+  }
+
+  @override
+  Future<void> connect(
+    String addr, {
+    Duration timeout = const Duration(seconds: 8),
+  }) => inner.connect(addr, timeout: timeout);
+
+  @override
+  Future<Uint8List?> request(String peerId, Uint8List payload) =>
+      inner.request(peerId, payload);
+
+  @override
+  Future<void> subscribe(String topic) async {
+    subscribed.add(topic);
+  }
+
+  @override
+  Future<String> addData(Uint8List bytes) => inner.addData(bytes);
+
+  @override
+  Future<Uint8List?> localBlock(String cid) => inner.localBlock(cid);
+
+  @override
+  Future<Uint8List?> fetchBlock(String cid, List<String> peerIds) =>
+      inner.fetchBlock(cid, peerIds);
+
+  @override
+  Future<void> publish(
+    String topic,
+    String message,
+    List<String> peers,
+  ) async {
+    published.add((topic, message));
+    for (final MapEntry<String, FakeNode> entry in mesh.entries) {
+      if (peers.contains(entry.key)) {
+        entry.value._incoming.add(
+          SyncNotification(topic, message, inner.peerId ?? ''),
+        );
+      }
+    }
+  }
+
+  @override
+  Stream<SyncNotification> get notifications => _incoming.stream;
+
+  @override
+  // ignore: avoid_setters_without_getters (matches SyncTransport)
+  set onRequest(
+    Future<Uint8List> Function(String from, Uint8List payload)? handler,
+  ) {
+    inner.onRequest = handler;
   }
 }

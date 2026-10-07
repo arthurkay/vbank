@@ -8,17 +8,23 @@ import '../crypto/sync_envelope.dart';
 import '../domain/core/failure.dart';
 import '../domain/core/result.dart';
 import '../domain/group.dart';
+import '../crypto/invite_wrap.dart';
+import '../crypto/signing.dart';
+import '../domain/membership.dart';
 import '../domain/repositories.dart';
 import '../sync/engine.dart';
 import '../sync/ledger.dart';
 import '../sync/peer_book.dart';
 import '../sync/relay_directory.dart';
+import '../sync/record_codec.dart';
 import '../sync/sync_node.dart';
 import 'apply_pipeline.dart';
 import 'context.dart';
 import 'governance_service.dart';
 import 'group_service.dart';
+import 'invite_link.dart';
 import 'invite_service.dart';
+import 'signing_payloads.dart';
 import 'key_service.dart';
 import 'loan_service.dart';
 import 'meeting_service.dart';
@@ -330,6 +336,8 @@ final class SyncCoordinator {
     _publish = publish..bindSigningKey(signingKey);
     _reconcile = PublishReconciler(
       groups: groups,
+      inviteService: invites,
+      governanceService: governance,
       transactions: transactionRepository,
       loans: loanRepository,
       meetings: meetingRepository,
@@ -451,6 +459,155 @@ final class SyncCoordinator {
     }
   }
 
+  /// Joins a group from a share link as [displayName]: fetches the
+  /// snapshot the invite was cut against (directly, else the newest the
+  /// relays hold), unwraps the group key with the link secret, applies
+  /// the snapshot and announces the join. Idempotent: members rejoin
+  /// silently. Bootstrap trusts the owner like any snapshot.
+  Future<Result<Unit>> joinWithLink({
+    required String link,
+    required String displayName,
+  }) async {
+    await ensureStarted();
+    final InviteLink? parts = InviteLink.tryParse(link.trim());
+    if (parts == null) {
+      return const Err(ValidationFailure('inviteLinkMalformed'));
+    }
+    if (parts.isExpiredAt(clock())) {
+      return const Err(ValidationFailure('inviteExpired'));
+    }
+    final String? me = ownPeerId();
+    if (me == null) {
+      return const Err(ValidationFailure('syncNotSignedIn'));
+    }
+    if (displayName.trim().isEmpty) {
+      return const Err(ValidationFailure('identityNameEmpty'));
+    }
+    final String groupId = parts.groupId;
+    final Member? existing = await groups.getMember(groupId, me);
+    if (existing != null && existing.status == MemberStatus.active) {
+      return const Ok(unit);
+    }
+    final List<String> relayAddrs = await relayAddresses();
+    final List<String> relayIds = [
+      for (final String a in relayAddrs) PeerBook.peerIdOf(a),
+    ];
+    Uint8List? bytes = await transport.fetchBlock(
+      parts.groupCid,
+      relayIds,
+    );
+    bytes ??= await _fetchNewestSnapshot(groupId, relayIds);
+    if (bytes == null) {
+      return const Err(NetworkFailure());
+    }
+    final SyncEnvelope? header = SyncEnvelope.tryDecode(bytes);
+    final Uint8List? wrapped = header?.wraps[parts.inviteId];
+    if (header == null || wrapped == null) {
+      return Err(NotFoundFailure('invite:${parts.inviteId}'));
+    }
+    final SecretKey? groupKey = await InviteKeyWrap.unwrap(
+      wrapped: wrapped,
+      secret: parts.secret,
+      groupId: groupId,
+      inviteId: parts.inviteId,
+    );
+    if (groupKey == null) {
+      return Err(IntegrityFailure('invite:${parts.inviteId}'));
+    }
+    final Result<Unit> keyed = await keys.setKey(groupId, groupKey);
+    if (keyed.isErr) {
+      return Err(keyed.failure);
+    }
+    final ApplyOutcome outcome = await _applyViaPipeline(
+      groupId,
+      parts.groupCid,
+      bytes,
+    );
+    if (outcome == ApplyOutcome.rejected) {
+      return Err(IntegrityFailure('snapshot:$groupId'));
+    }
+    await ledger.record(groupId, parts.groupCid);
+    final PublishPipeline? publish = _publish;
+    if (publish == null) {
+      return const Err(ValidationFailure('syncNotStarted'));
+    }
+    final SimpleKeyPair identity = await signingKey();
+    final Uint8List publicKey = Uint8List.fromList(
+      await SigningService.extractPublicKeyBytes(identity),
+    );
+    final Signature joinSig = await SigningService.sign(
+      SigningPayloads.memberJoin(
+        groupId: groupId,
+        peerId: me,
+        inviteId: parts.inviteId,
+      ),
+      identity,
+    );
+    final Result<String> cid = await publish.publishRaw(
+      groupId: groupId,
+      type: SyncPayloadType.memberJoin,
+      payloadJson: {
+        'member': RecordCodec.memberToJson(
+          Member(
+            peerId: me,
+            name: displayName.trim(),
+            joinedAt: clock(),
+            publicKey: publicKey,
+          ),
+        ),
+        'addrs': ownAddrs(),
+        'signature': joinSig.bytes,
+        'inviteId': parts.inviteId,
+        'nonce': base64Encode(parts.nonce),
+      },
+    );
+    if (cid.isErr) {
+      return Err(cid.failure);
+    }
+    await _announce(groupId, SyncPayloadType.memberJoin.name, cid.value);
+    return const Ok(unit);
+  }
+
+  /// Fetches the newest snapshot-shaped block the relays hold for
+  /// [groupId]: asks each relay's inventory, opens candidates until one
+  /// decodes as this group's snapshot.
+  Future<Uint8List?> _fetchNewestSnapshot(
+    String groupId,
+    List<String> relayIds,
+  ) async {
+    for (final String relay in relayIds) {
+      List<String>? cids;
+      try {
+        final Uint8List? reply = await transport.request(
+          relay,
+          Uint8List.fromList(
+            utf8.encode(jsonEncode({'op': 'inventory', 'groupId': groupId})),
+          ),
+        );
+        if (reply == null || reply.isEmpty) {
+          continue;
+        }
+        cids = ((jsonDecode(utf8.decode(reply)) as Map)['cids'] as List)
+            .cast<String>();
+      } catch (_) {
+        continue;
+      }
+      for (final String cid in cids.take(5)) {
+        final Uint8List? bytes = await transport.fetchBlock(cid, [relay]);
+        if (bytes == null) {
+          continue;
+        }
+        final SyncEnvelope? header = SyncEnvelope.tryDecode(bytes);
+        if (header != null &&
+            header.groupId == groupId &&
+            header.type == SyncPayloadType.groupSnapshot) {
+          return bytes;
+        }
+      }
+    }
+    return null;
+  }
+
   /// Publishes the group snapshot (roster, invites, governance).
   Future<Result<String>> publishSnapshot(String groupId) async {
     await ensureStarted();
@@ -468,6 +625,18 @@ final class SyncCoordinator {
     );
     if (cid.isErr) {
       return cid;
+    }
+    final PublishReconciler? reconcile = _reconcile;
+    if (reconcile != null) {
+      final Result<Group> group = await groups.getGroup(groupId);
+      if (group.isOk) {
+        final String? fingerprint = await reconcile.fingerprintOf(
+          group.value,
+        );
+        if (fingerprint != null) {
+          await tracker.recordSnapshotFingerprint(groupId, fingerprint);
+        }
+      }
     }
     await _announce(groupId, 'group', cid.value);
     return cid;

@@ -304,6 +304,15 @@ final class _VBankRoot extends StatelessWidget {
         MaterialPageRoute<void>(builder: (_) => screen),
       );
 
+  /// Joins a group from a share link through the sync coordinator.
+  Future<Result<Unit>> _join({
+    required String link,
+    required String displayName,
+  }) => startup.coordinator.joinWithLink(
+    link: link,
+    displayName: displayName,
+  );
+
   @override
   Widget build(BuildContext context) {
     // Each home sits behind a Builder: pushes need a context below the
@@ -322,6 +331,7 @@ final class _VBankRoot extends StatelessWidget {
                 publicKey: startup.identityPublicKey,
               ),
             ),
+            onJoinGroup: _join,
           ),
         ),
       );
@@ -342,6 +352,7 @@ final class _VBankRoot extends StatelessWidget {
                   publicKey: startup.identityPublicKey,
                 ),
               ),
+              onJoinGroup: _join,
             ),
           ),
         ),
@@ -360,6 +371,7 @@ final class _VBankRoot extends StatelessWidget {
                 publicKey: startup.identityPublicKey,
               ),
             ),
+            onJoinGroup: _join,
           ),
         ),
       );
@@ -376,6 +388,7 @@ final class _VBankRoot extends StatelessWidget {
               publicKey: startup.identityPublicKey,
             ),
           ),
+          onJoinGroup: _join,
         ),
       ),
     );

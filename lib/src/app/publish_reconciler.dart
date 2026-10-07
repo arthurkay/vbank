@@ -2,12 +2,17 @@ import 'package:cryptography/cryptography.dart';
 
 import '../crypto/member_keys.dart';
 import '../crypto/sync_envelope.dart';
+import '../domain/core/result.dart';
+import '../domain/governance.dart';
 import '../domain/group.dart';
+import '../domain/invites.dart';
 import '../domain/membership.dart';
 import '../domain/repositories.dart';
 import '../domain/transactions.dart';
 import '../sync/ledger.dart';
+import 'governance_service.dart';
 import 'group_service.dart';
+import 'invite_service.dart';
 import 'publish_pipeline.dart';
 import 'publish_tracker.dart';
 
@@ -26,6 +31,12 @@ import 'publish_tracker.dart';
 final class PublishReconciler {
   /// Groups for roster and writer checks.
   final GroupService groups;
+
+  /// Live invites and governance rows for the snapshot fingerprint.
+  final InviteService inviteService;
+
+  /// Transfers, removals and dissolution for the snapshot fingerprint.
+  final GovernanceService governanceService;
 
   /// Record listings.
   final TransactionRepository transactions;
@@ -54,6 +65,8 @@ final class PublishReconciler {
   /// Creates the reconciler.
   PublishReconciler({
     required this.groups,
+    required this.inviteService,
+    required this.governanceService,
     required this.transactions,
     required this.loans,
     required this.meetings,
@@ -78,14 +91,24 @@ final class PublishReconciler {
     final Group group = groupResult.value;
     final String? me = ownPeerId();
 
-    // Snapshot first: receivers need the roster before the records.
+    // Snapshot first: receivers need the roster before the records. A
+    // snapshot goes out when the group has none, ours never landed, or
+    // anything it carries changed (roster, config, invites, governance).
     final List<String> known = await ledger.cidsFor(groupId);
-    if ((group.cid == null || !known.contains(group.cid)) && me != null) {
+    final String? fingerprint = await fingerprintOf(group);
+    final String? snapshotted = await tracker.snapshotFingerprint(groupId);
+    if ((group.cid == null ||
+            !known.contains(group.cid) ||
+            (fingerprint != null && fingerprint != snapshotted)) &&
+        me != null) {
       final snapshot = await publish.publishSnapshot(
         groupId: groupId,
         publisherPeerId: me,
       );
       if (snapshot.isOk) {
+        if (fingerprint != null) {
+          await tracker.recordSnapshotFingerprint(groupId, fingerprint);
+        }
         fresh.add((snapshot.value, SyncPayloadType.groupSnapshot.name));
       }
     }
@@ -183,5 +206,35 @@ final class PublishReconciler {
       }
     }
     return fresh;
+  }
+
+  /// What the next snapshot for [group] would carry: roster sequence,
+  /// live invite ids and governance counts. Null when unreadable (the
+  /// caller falls back to the CID rule alone).
+  Future<String?> fingerprintOf(Group group) async {
+    final String groupId = group.id;
+    final Result<List<Invite>> live = await inviteService.liveInvites(
+      groupId,
+    );
+    final Result<List<OwnershipTransfer>> transfers = await governanceService
+        .transfersByGroup(groupId);
+    final Result<List<MemberRemoval>> removals = await governanceService
+        .removalsByGroup(groupId);
+    final Result<GroupDissolution?> dissolution = await governanceService
+        .latestDissolution(groupId);
+    if (live.isErr ||
+        transfers.isErr ||
+        removals.isErr ||
+        dissolution.isErr) {
+      return null;
+    }
+    final List<String> inviteIds = [
+      for (final Invite i in live.value) i.id,
+    ]..sort();
+    return '${group.sequenceNumber}|'
+        '${inviteIds.join(',')}|'
+        '${transfers.value.length}|'
+        '${removals.value.length}|'
+        '${dissolution.value?.id ?? '-'}';
   }
 }

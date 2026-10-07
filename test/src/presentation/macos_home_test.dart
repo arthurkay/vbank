@@ -1,6 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macos_ui/macos_ui.dart';
+import 'package:vbank/src/app/invite_link.dart';
+import 'package:vbank/src/domain/core/result.dart';
 import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
 import 'package:flutter/cupertino.dart';
@@ -128,6 +132,66 @@ void main() {
       // The new group is selected and its detail shows its name.
       expect(container.read(selectedGroupIdProvider), isNotNull);
       expect(find.text('Savings'), findsOneWidget);
+    });
+
+    testWidgets('joins a group from a link', (tester) async {
+      final PresentationWorld world = PresentationWorld();
+      late ProviderContainer container;
+      Future<void> createIdentity() => world.signIn(container);
+      String? joinedLink;
+      String? joinedName;
+      Future<Result<Unit>> onJoin({
+        required String link,
+        required String displayName,
+      }) async {
+        joinedLink = link;
+        joinedName = displayName;
+        return const Ok(unit);
+      }
+
+      await tester.pumpWidget(
+        VBankScope(
+          repositories: world.repositories,
+          services: world.services,
+          child: MacosApp(
+            home: MacosHomePage(
+              onCreateIdentity: createIdentity,
+              onJoinGroup: onJoin,
+            ),
+          ),
+        ),
+      );
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(MacosHomePage)),
+      );
+      await settle(tester);
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+
+      await tester.tap(find.text('Join group'));
+      await settle(tester);
+      final String link = InviteLink(
+        groupId: 'g1',
+        groupCid: 'cid-1',
+        groupTopic: 'vbank/group/g1',
+        inviterPeerId: 'owner',
+        inviterName: 'Owner',
+        inviteId: 'id-1',
+        secret: Uint8List.fromList(List.filled(32, 7)),
+        nonce: Uint8List.fromList(List.filled(16, 7)),
+        expiresAt: DateTime.utc(2027, 1, 1),
+      ).encode();
+      await tester.enterText(find.byType(MacosTextField).at(0), link);
+      await tester.enterText(find.byType(MacosTextField).at(1), 'Amina');
+      await tester.tap(find.byKey(const ValueKey('join-submit-button')));
+      await settle(tester);
+
+      // The link and name reached the join callback, the parsed group
+      // is selected and the form popped.
+      expect(joinedLink, link);
+      expect(joinedName, 'Amina');
+      expect(container.read(selectedGroupIdProvider), 'g1');
+      expect(find.text('Invite link'), findsNothing);
     });
   });
 }

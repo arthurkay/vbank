@@ -32,6 +32,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('new-invite-button')));
       await settle(tester);
 
+      // The fresh link shows once, with its secret; back reveals the row.
+      expect(find.textContaining('vbank://join?'), findsOneWidget);
+      await tester.tap(find.byIcon(fluent.FluentIcons.back));
+      await settle(tester);
+      expect(find.textContaining('vbank://join?'), findsNothing);
+
       expect(find.text('No invites yet'), findsNothing);
       expect(find.text('live'), findsOneWidget);
     });

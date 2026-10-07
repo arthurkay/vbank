@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import '../../domain/core/result.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_screen.dart';
 import 'group_detail_screen.dart';
+import 'join_group_screen.dart';
 
 /// The mobile home: an auth gate over the group list.
 ///
@@ -16,8 +18,15 @@ final class MobileHomeScreen extends ConsumerWidget {
   /// Called when the signed-out user taps Get started.
   final Future<void> Function()? onCreateIdentity;
 
+  /// Joins a group from a link; null hides the join entries (tests).
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  onJoinGroup;
+
   /// Called with the captured render for golden-style assertions.
-  const MobileHomeScreen({super.key, this.onCreateIdentity});
+  const MobileHomeScreen({super.key, this.onCreateIdentity, this.onJoinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,6 +61,7 @@ final class MobileHomeScreen extends ConsumerWidget {
     if (selected != null) {
       return MobileGroupDetailScreen(groupId: selected);
     }
+    final onJoinGroup = this.onJoinGroup;
     return Scaffold(
       headers: [
         AppBar(
@@ -67,18 +77,37 @@ final class MobileHomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            if (onJoinGroup != null)
+              IconButton.ghost(
+                key: const ValueKey('join-group-button'),
+                icon: const Icon(LucideIcons.link),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        MobileJoinGroupScreen(onJoin: onJoinGroup),
+                  ),
+                ),
+              ),
           ],
         ),
       ],
-      child: _GroupList(),
+      child: _GroupList(joinGroup: onJoinGroup),
     );
   }
 }
 
 /// The group list: loading, empty and roster rows.
 final class _GroupList extends ConsumerWidget {
+  /// Join callback for the empty state; null hides the join button.
+  final Future<Result<Unit>> Function({
+    required String link,
+    required String displayName,
+  })?
+  joinGroup;
+
   /// Creates the list.
-  const _GroupList();
+  const _GroupList({this.joinGroup});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,6 +117,7 @@ final class _GroupList extends ConsumerWidget {
       error: (Object error, _) => Center(child: Text('Error: $error')),
       data: (List<Group> list) {
         if (list.isEmpty) {
+          final joinGroup = this.joinGroup;
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -103,6 +133,19 @@ final class _GroupList extends ConsumerWidget {
                   ),
                   child: const Text('New group'),
                 ),
+                if (joinGroup != null) ...[
+                  const Gap(12),
+                  OutlineButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            MobileJoinGroupScreen(onJoin: joinGroup),
+                      ),
+                    ),
+                    child: const Text('Join group'),
+                  ),
+                ],
               ],
             ),
           );

@@ -1,6 +1,8 @@
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/invite_link.dart';
+import '../../app/invite_service.dart';
 import '../../domain/core/failure.dart';
 import '../../domain/group.dart';
 import '../../domain/invites.dart';
@@ -8,6 +10,7 @@ import '../../domain/membership.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
 import '../providers/invites.dart';
+import 'invite_share_page.dart';
 
 /// A group's invite tickets on Windows.
 final class WindowsInvitesPage extends ConsumerStatefulWidget {
@@ -154,7 +157,36 @@ final class _WindowsInvitesState extends ConsumerState<WindowsInvitesPage> {
     setState(() => _saving = false);
     if (result.isErr) {
       setState(() => _error = _explain(result.failure));
+      return;
     }
+    // The secret exists only here: show the link at once, because the
+    // stored row can never rebuild it.
+    final CreatedInvite created = result.value;
+    if (created.secret == null || created.invite.inviterName == null) {
+      return;
+    }
+    final String inviterName = created.invite.inviterName!;
+    if (!mounted) {
+      return;
+    }
+    await Navigator.push(
+      context,
+      FluentPageRoute<void>(
+        builder: (_) => WindowsInviteSharePage(
+          link: InviteLink(
+            groupId: g.id,
+            groupCid: g.cid ?? '',
+            groupTopic: 'vbank/group/${g.id}',
+            inviterPeerId: me,
+            inviterName: inviterName,
+            inviteId: created.invite.id,
+            secret: created.secret!,
+            nonce: created.invite.nonce,
+            expiresAt: created.invite.expiresAt,
+          ).encode(),
+        ),
+      ),
+    );
   }
 
   /// Machine failure codes to human words.

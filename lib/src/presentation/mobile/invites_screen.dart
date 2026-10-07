@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import '../../app/invite_link.dart';
+import '../../app/invite_service.dart';
 import '../../domain/core/failure.dart';
 import '../../domain/group.dart';
 import '../../domain/invites.dart';
@@ -8,6 +10,7 @@ import '../../domain/membership.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
 import '../providers/invites.dart';
+import 'invite_share_screen.dart';
 
 /// A group's invite tickets: list plus creation. The code shown is the
 /// invite id; the link (with secret) is assembled by the share layer.
@@ -137,6 +140,8 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
       setState(() => _error = 'Not allowed (notWriter).');
       return;
     }
+    // Captured before the first await: promotion does not survive it.
+    final String inviterName = inviter.name;
     final key = await ref.read(appServicesProvider).keys.getKey(g.id);
     if (key == null) {
       setState(() => _error = 'Enter the group passphrase first.');
@@ -152,7 +157,7 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
               groupCid: g.cid ?? '',
               groupTopic: 'vbank/group/${g.id}',
               inviterPeerId: me,
-              inviterName: inviter.name,
+              inviterName: inviterName,
               groupKey: key,
             );
     if (!mounted) {
@@ -161,7 +166,35 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     setState(() => _saving = false);
     if (result.isErr) {
       setState(() => _error = _explain(result.failure));
+      return;
     }
+    // The secret exists only here: show the link at once, because the
+    // stored row can never rebuild it.
+    final CreatedInvite created = result.value;
+    if (created.secret == null) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => MobileInviteShareScreen(
+          link: InviteLink(
+            groupId: g.id,
+            groupCid: g.cid ?? '',
+            groupTopic: 'vbank/group/${g.id}',
+            inviterPeerId: me,
+            inviterName: inviterName,
+            inviteId: created.invite.id,
+            secret: created.secret!,
+            nonce: created.invite.nonce,
+            expiresAt: created.invite.expiresAt,
+          ).encode(),
+        ),
+      ),
+    );
   }
 
   /// Machine failure codes to human words.
