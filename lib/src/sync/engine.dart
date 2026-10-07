@@ -55,6 +55,9 @@ final class SyncReport {
   /// Fetched blocks the applier accepted.
   final int applied;
 
+  /// Accepted blocks as `(groupId, cid)` pairs, for change listeners.
+  final List<(String, String)> appliedCids;
+
   /// Blocks pushed to relays.
   final int pushed;
 
@@ -68,6 +71,7 @@ final class SyncReport {
   const SyncReport({
     required this.fetched,
     required this.applied,
+    this.appliedCids = const [],
     required this.pushed,
     required this.contacted,
     required this.unreachable,
@@ -85,12 +89,25 @@ final class SyncReport {
   static bool _sameSets(Set<String> a, Set<String> b) =>
       a.length == b.length && a.containsAll(b);
 
+  static bool _sameCids(List<(String, String)> a, List<(String, String)> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SyncReport &&
           fetched == other.fetched &&
           applied == other.applied &&
+          _sameCids(appliedCids, other.appliedCids) &&
           pushed == other.pushed &&
           _sameSets(contacted, other.contacted) &&
           _sameSets(unreachable, other.unreachable);
@@ -99,6 +116,7 @@ final class SyncReport {
   int get hashCode => Object.hash(
         fetched,
         applied,
+        Object.hashAll(appliedCids),
         pushed,
         Object.hashAll(contacted.toList()..sort()),
         Object.hashAll(unreachable.toList()..sort()),
@@ -202,6 +220,7 @@ final class SyncEngine {
   }) async {
     int fetched = 0;
     int applied = 0;
+    final List<(String, String)> appliedCids = [];
     int pushed = 0;
     final Set<String> contacted = {};
     final Set<String> unreachable = {};
@@ -231,16 +250,20 @@ final class SyncEngine {
         }
       }
       for (final MapEntry<String, List<String>> entry in inventories.entries) {
-        final ({int fetched, int applied}) caughtUp =
+        final ({int fetched, int applied, List<String> cids}) caughtUp =
             await _catchUp(groupId, entry.key, entry.value);
         fetched += caughtUp.fetched;
         applied += caughtUp.applied;
+        for (final String cid in caughtUp.cids) {
+          appliedCids.add((groupId, cid));
+        }
       }
       pushed += await _pushToRelays(groupId, inventories, relayIds);
     }
     return SyncReport(
       fetched: fetched,
       applied: applied,
+      appliedCids: appliedCids,
       pushed: pushed,
       contacted: contacted,
       unreachable: unreachable,
@@ -299,8 +322,9 @@ final class SyncEngine {
 
   /// Fetches CIDs in [theirs] that are missing locally, oldest first (their
   /// list is newest first; snapshots must land before the records that
-  /// depend on them). Returns how many were fetched and applied.
-  Future<({int fetched, int applied})> _catchUp(
+  /// depend on them). Returns how many were fetched and applied, with the
+  /// applied CIDs.
+  Future<({int fetched, int applied, List<String> cids})> _catchUp(
     String groupId,
     String peer,
     List<String> theirs,
@@ -311,6 +335,7 @@ final class SyncEngine {
         .take(maxCatchUpPerRound);
     var fetched = 0;
     var applied = 0;
+    final List<String> cids = [];
     for (final String cid in missing) {
       final Uint8List? bytes = await transport.fetchBlock(cid, [peer]);
       if (bytes == null) {
@@ -323,11 +348,12 @@ final class SyncEngine {
         await ledgerRecord(groupId, cid);
         mine.add(cid);
         applied++;
+        cids.add(cid);
       } else if (outcome == ApplyOutcome.rejected) {
         failedCids.add(cid);
       }
     }
-    return (fetched: fetched, applied: applied);
+    return (fetched: fetched, applied: applied, cids: cids);
   }
 
   /// Pushes local blocks the relays lack (members pull for themselves).
@@ -393,6 +419,27 @@ final class SyncEngine {
   /// PubSub topic for a group. The id is random, so the name reveals
   /// nothing about the group.
   static String topicFor(String groupId) => 'vbank/group/$groupId';
+
+  /// Hands one local block to every relay that will take it (immediate
+  /// announce path; rounds reconcile the rest). Returns relays stored.
+  Future<int> pushToRelays({
+    required String groupId,
+    required String cid,
+    required List<String> relayAddrs,
+  }) async {
+    var stored = 0;
+    for (final String addr in relayAddrs) {
+      final String peer = PeerBook.peerIdOf(addr);
+      final Uint8List? bytes = await localBlock(cid);
+      if (bytes == null) {
+        continue;
+      }
+      if (await _put(peer, groupId, cid, bytes)) {
+        stored++;
+      }
+    }
+    return stored;
+  }
 
   bool _peerInBackoff(String peer) {
     final DateTime? until = _peerBackoffUntil[peer];

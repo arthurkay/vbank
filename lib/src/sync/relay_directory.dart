@@ -5,6 +5,9 @@ import 'dart:typed_data';
 
 import '../domain/repositories.dart';
 
+/// Hostnames every copy of vBank checks for a relay, before user-added ones.
+const List<String> kBuiltInRelayHosts = <String>['vbank.localhost.co.zm'];
+
 /// The relays every copy of vBank knows about.
 ///
 /// Only hostnames ship in the app. Each relay's peer id — the `/p2p/…` part
