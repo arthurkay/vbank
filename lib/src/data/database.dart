@@ -55,11 +55,20 @@ abstract final class VBankDatabase {
     if (!RegExp(r'^[0-9a-fA-F]+$').hasMatch(password)) {
       throw ArgumentError.value(password, 'password', 'must be hex');
     }
+    try {
+      // Desktop sqlite3 bundles SQLCipher but starts in plaintext mode:
+      // select the cipher before anything else. Mobile builds (already
+      // SQLCipher) reject the unknown pragma — ignored, the version
+      // check below is the real gate either way.
+      await db.execute("PRAGMA cipher = 'sqlcipher'");
+    } catch (_) {}
     final List<Map<String, Object?>> cipher =
         await db.rawQuery('PRAGMA cipher_version');
     if (cipher.isEmpty) {
       throw StateError(
-        'SQLCipher unavailable: refusing to touch a plaintext database',
+        'SQLCipher unavailable: refusing to touch a plaintext database '
+        '(on a Linux desktop this means the sqlite3 build has no cipher '
+        'compiled in — phones ship their own through sqflite_sqlcipher)',
       );
     }
     await db.execute('PRAGMA key = "x\'$password\'"');
