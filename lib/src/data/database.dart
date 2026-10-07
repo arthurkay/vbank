@@ -56,25 +56,45 @@ abstract final class VBankDatabase {
       throw ArgumentError.value(password, 'password', 'must be hex');
     }
     try {
-      // Desktop sqlite3 bundles SQLCipher but starts in plaintext mode:
-      // select the cipher before anything else. Mobile builds (already
-      // SQLCipher) reject the unknown pragma — ignored, the version
-      // check below is the real gate either way.
+      // Desktop builds bundle SQLite3MultipleCiphers, which starts with no
+      // provider selected: pick the SQLCipher provider with SQLCipher-4
+      // defaults, matching what the mobile builds get from sqflite_sqlcipher.
+      // Real SQLCipher (phones) treats the first as a no-op and ignores the
+      // unknown second pragma — either failure is swallowed, the gate below
+      // is the real check either way.
       await db.execute("PRAGMA cipher = 'sqlcipher'");
+      await db.execute('PRAGMA legacy = 4');
     } catch (_) {}
-    final List<Map<String, Object?>> cipher =
-        await db.rawQuery('PRAGMA cipher_version');
-    if (cipher.isEmpty) {
+    // `cipher_version` answers on SQLCipher but stays silent on
+    // SQLite3MultipleCiphers even while encrypting; there the selected
+    // provider name is the proof. Both silent means plaintext SQLite.
+    final List<Map<String, Object?>> version =
+        await _pragmaOrEmpty(db, 'PRAGMA cipher_version');
+    final List<Map<String, Object?>> provider =
+        await _pragmaOrEmpty(db, 'PRAGMA cipher');
+    if (version.isEmpty && provider.isEmpty) {
       throw StateError(
-        'SQLCipher unavailable: refusing to touch a plaintext database '
-        '(on a Linux desktop this means the sqlite3 build has no cipher '
-        'compiled in — phones ship their own through sqflite_sqlcipher)',
+        'SQLCipher unavailable: refusing to touch a plaintext database',
       );
     }
     await db.execute('PRAGMA key = "x\'$password\'"');
     // A wrong key only fails on first read: probe now.
     await db.rawQuery('SELECT count(*) FROM sqlite_master');
     await db.execute('PRAGMA foreign_keys = ON');
+  }
+
+  /// Reads a pragma, or nothing when the build does not know it (plain
+  /// SQLite answers every unknown pragma with zero rows; some builds
+  /// throw instead — both mean "not available").
+  static Future<List<Map<String, Object?>>> _pragmaOrEmpty(
+    Database db,
+    String sql,
+  ) async {
+    try {
+      return await db.rawQuery(sql);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Opens (creating when absent) the database at [path] with [password].
@@ -108,7 +128,13 @@ abstract final class VBankDatabase {
         await db.setVersion(VBankSchema.version);
       }
 
-      if (!File(path).existsSync()) {
+      final File file = File(path);
+      if (!file.existsSync() || await file.length() == 0) {
+        // A zero-byte file holds nothing: an earlier failed open created it
+        // and opening it keyed would only fail. Start fresh.
+        if (await file.exists()) {
+          await file.delete();
+        }
         final Database db = await factory.openDatabase(
           path,
           options: options(),
@@ -116,17 +142,27 @@ abstract final class VBankDatabase {
         await createSchema(db);
         return Ok(OpenResult(database: db, outcome: OpenOutcome.ready));
       }
-      final Database db = await factory.openDatabase(
-        path,
-        options: options(),
-      );
-      if (await _isCurrentSchema(db)) {
-        return Ok(OpenResult(database: db, outcome: OpenOutcome.ready));
+      // Anything unreadable — legacy layout, corrupt file, or a key that no
+      // longer fits — is set aside (never deleted) and rebuilt empty.
+      // Records re-arrive from other members and the relay ledger.
+      Database? db;
+      try {
+        db = await factory.openDatabase(path, options: options());
+        if (await _isCurrentSchema(db)) {
+          return Ok(OpenResult(database: db, outcome: OpenOutcome.ready));
+        }
+      } catch (_) {
+        // Fall through to the rebuild below.
+      }
+      final Database? opened = db;
+      if (opened != null) {
+        try {
+          await opened.close();
+        } catch (_) {}
       }
       final String backupPath =
           '$path.legacy-${DateTime.now().millisecondsSinceEpoch}.bak';
-      await db.close();
-      await File(path).rename(backupPath);
+      await file.rename(backupPath);
       final Database rebuilt = await factory.openDatabase(
         path,
         options: options(),

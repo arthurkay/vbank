@@ -5,20 +5,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:vbank/src/data/database.dart';
 import 'package:vbank/src/data/schema.dart';
-import 'package:vbank/src/domain/core/failure.dart';
 
-/// Whether this host's sqlite3 has SQLCipher. The pubspec hook bundles
+/// Whether this host's sqlite3 can encrypt. The pubspec hook bundles
 /// sqlite3mc for app builds; `flutter test` hosts may only have plaintext.
+/// Mirrors the [VBankDatabase] gate: SQLCipher answers `cipher_version`,
+/// SQLite3MultipleCiphers names its selected provider instead.
 Future<bool> hasSqlCipher() async {
   sqfliteFfiInit();
   final Database db = await databaseFactoryFfi.openDatabase(
     inMemoryDatabasePath,
   );
-  final List<Map<String, Object?>> rows = await db.rawQuery(
-    'PRAGMA cipher_version',
-  );
+  try {
+    await db.execute("PRAGMA cipher = 'sqlcipher'");
+  } catch (_) {}
+  List<Map<String, Object?>> rows = const [];
+  try {
+    rows = await db.rawQuery('PRAGMA cipher_version');
+  } catch (_) {}
+  var has = rows.isNotEmpty;
+  if (!has) {
+    try {
+      rows = await db.rawQuery('PRAGMA cipher');
+      has = rows.isNotEmpty;
+    } catch (_) {}
+  }
   await db.close();
-  return rows.isNotEmpty;
+  return has;
 }
 
 void main() {
@@ -123,7 +135,58 @@ void main() {
       await backup.close();
     });
 
-    test('a wrong password fails closed', () async {
+    test('encrypts at rest and reopens with the key', () async {
+      if (!await hasSqlCipher()) {
+        markTestSkipped('host sqlite3 has no SQLCipher build');
+        return;
+      }
+      final String path = '${dir.path}/secret.db';
+      final OpenResult first = (await VBankDatabase.open(
+        factory: databaseFactoryFfi,
+        path: path,
+        password: key,
+      ))
+          .value;
+      await first.database.insert('groups', {
+        'id': 'g1',
+        'name': 'Hidden Group',
+        'created_at': 0,
+        'owner_signature': Uint8List(0),
+        'contribution_amount': 100.0,
+      });
+      await first.database.close();
+
+      // No plaintext leaks into the file.
+      final Uint8List raw = await File(path).readAsBytes();
+      final List<int> needle = 'Hidden Group'.codeUnits;
+      var found = false;
+      for (var i = 0; i + needle.length <= raw.length && !found; i++) {
+        found = true;
+        for (var j = 0; j < needle.length; j++) {
+          if (raw[i + j] != needle[j]) {
+            found = false;
+            break;
+          }
+        }
+      }
+      expect(found, isFalse);
+
+      final OpenResult again = (await VBankDatabase.open(
+        factory: databaseFactoryFfi,
+        path: path,
+        password: key,
+      ))
+          .value;
+      expect(again.outcome, OpenOutcome.ready);
+      final List<Map<String, Object?>> rows = await again.database.query(
+        'groups',
+      );
+      expect(rows, hasLength(1));
+      expect(rows.first['name'], 'Hidden Group');
+      await again.database.close();
+    });
+
+    test('an unreadable database is set aside and rebuilt', () async {
       if (!await hasSqlCipher()) {
         markTestSkipped('host sqlite3 has no SQLCipher build');
         return;
@@ -137,15 +200,25 @@ void main() {
           .value;
       await first.database.close();
 
-      final result = await VBankDatabase.open(
+      // A password that no longer fits (lost device secret, foreign file):
+      // the old file is preserved but the app keeps working — records
+      // re-arrive from other members and the relay ledger.
+      final OpenResult result = (await VBankDatabase.open(
         factory: databaseFactoryFfi,
         path: path,
         password:
             'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-      );
+      ))
+          .value;
 
-      expect(result.isErr, isTrue);
-      expect(result.failure, isA<StorageFailure>());
+      expect(result.outcome, OpenOutcome.rebuilt);
+      expect(result.backupPath, isNotNull);
+      expect(File(result.backupPath!).existsSync(), isTrue);
+      final List<Map<String, Object?>> rows = await result.database.query(
+        'groups',
+      );
+      expect(rows, isEmpty);
+      await result.database.close();
     });
   });
 }

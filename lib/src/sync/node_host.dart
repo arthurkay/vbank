@@ -11,14 +11,14 @@ import 'package:path/path.dart' as p;
 
 import 'raw_cid.dart';
 
-/// The IPFS node itself. Lives inside the worker isolate (see `ipfs_worker.dart`)
-/// so that libp2p handshakes, DHT chatter, bitswap and block fetches never run
-/// on the UI isolate; `IpfsService` is the main-isolate proxy with the same
-/// surface.
+/// The IPFS node itself, over the patched vendored `dart_ipfs`.
 ///
-/// Everything here is plain Dart (`dart_ipfs`, `dart:io`) — no Flutter plugins,
-/// which is what makes it safe to run in a background isolate.
-class IpfsNodeHost {
+/// Everything here is plain Dart (`dart_ipfs`, `dart:io`) — no Flutter
+/// plugins, so the host can move to a background isolate later without
+/// changes. Today it runs wherever its owner (`IpfsTransport`, the relay)
+/// runs.
+final class IpfsNodeHost {
+  /// Creates the host; call [start] to listen.
   IpfsNodeHost({
     required this.ipfsDir,
     required this.onState,
@@ -73,12 +73,16 @@ class IpfsNodeHost {
   List<String> _localIPv4s = const [];
   StreamSubscription<PubSubMessage>? _nodePubSubSub;
 
-  /// Peers known to run vBank: everyone we dialed from a peer book and everyone
-  /// who has notified us. Public IPFS peers (bootstrap, DHT) never speak our
-  /// protocol, and each attempt at them costs a 15 s stream-negotiation timeout.
+  /// Peers known to run vBank: everyone we dialed from a peer book and
+  /// everyone who has notified us. Public IPFS peers (bootstrap, DHT)
+  /// never speak our protocol, and each attempt at them costs a 15 s
+  /// stream-negotiation timeout.
   final _vbankPeers = <String>{};
 
+  /// True while listening.
   bool get isRunning => _running;
+
+  /// Our peer id, or null before [start].
   String? get peerId => _peerId;
 
   void _dbg(String message) {
@@ -86,15 +90,27 @@ class IpfsNodeHost {
     if (debugLog) print('[ipfs_host] $message');
   }
 
+  /// The working directory before [start] moved it; restored by [stop].
+  /// dart_ipfs only reads it for unconfigurable relative paths, so leaving
+  /// it changed would surprise the owner (and tests that clean up).
+  Directory? _previousCwd;
+
+  /// Starts the node, retrying the listen up to five times. Idempotent.
   Future<void> start() async {
-    if (_running) return;
+    if (_running) {
+      return;
+    }
     onState('starting', null);
     try {
+      // The directory may not exist on first launch (the app only creates
+      // its support folder); the host owns everything below [ipfsDir].
+      await Directory(ipfsDir).create(recursive: true);
       // dart_ipfs resolves several paths relative to the process working
       // directory ('./ipfs_data', './ipfs_keystore' and its own
       // 'ipfs_<pid>.log'). On Android the CWD is '/', which is read-only, so
       // every write fails. Point the CWD at a writable, app-private folder
       // and pass absolute paths for everything that is configurable.
+      _previousCwd = Directory.current;
       Directory.current = Directory(ipfsDir);
       Libp2pRouter.debugLog = debugLog;
 
@@ -133,12 +149,17 @@ class IpfsNodeHost {
           node = await IPFSNode.create(config);
           await node.start();
           if (await _isListening()) break;
-          _dbg('node started but port $listenPort is not accepting connections (attempt $attempt)');
+          _dbg(
+            'node started but port $listenPort is not accepting '
+            'connections (attempt $attempt)',
+          );
           try {
             await node.stop();
           } catch (_) {}
           node = null;
-          if (attempt >= 5) throw StateError('Could not listen on TCP port $listenPort');
+          if (attempt >= 5) {
+            throw StateError('Could not listen on TCP port $listenPort');
+          }
         } catch (e) {
           if (attempt >= 5) rethrow;
           _dbg('node start failed (attempt $attempt): $e — retrying');
@@ -163,7 +184,11 @@ class IpfsNodeHost {
   /// True when something accepts TCP connections on [listenPort] locally.
   Future<bool> _isListening() async {
     try {
-      final socket = await Socket.connect(InternetAddress.loopbackIPv4, listenPort, timeout: const Duration(seconds: 2));
+      final socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        listenPort,
+        timeout: const Duration(seconds: 2),
+      );
       socket.destroy();
       return true;
     } catch (_) {
@@ -171,9 +196,10 @@ class IpfsNodeHost {
     }
   }
 
-  /// A random 32-byte seed created once and kept beside the datastore, so this
-  /// node keeps the same peer id across restarts. Without it every start mints a
-  /// new identity and every address other members hold for us goes stale.
+  /// A random 32-byte seed created once and kept beside the datastore, so
+  /// this node keeps the same peer id across restarts. Without it every
+  /// start mints a new identity and every address other members hold for
+  /// us goes stale.
   Future<Uint8List> _identitySeed() async {
     final injected = identitySeed;
     if (injected != null && injected.length == 32) return injected;
@@ -183,15 +209,20 @@ class IpfsNodeHost {
       if (bytes.length == 32) return bytes;
     }
     final rng = Random.secure();
-    final seed = Uint8List.fromList(List<int>.generate(32, (_) => rng.nextInt(256)));
+    final seed = Uint8List.fromList(
+      List<int>.generate(32, (_) => rng.nextInt(256)),
+    );
     await file.writeAsBytes(seed, flush: true);
     if (!Platform.isWindows) await Process.run('chmod', ['600', file.path]);
     return seed;
   }
 
+  /// Stops the node and restores the working directory. Idempotent.
   Future<void> stop() async {
     final node = _node;
-    if (!_running || node == null) return;
+    if (!_running || node == null) {
+      return;
+    }
     onState('stopping', _peerId);
     try {
       await _nodePubSubSub?.cancel();
@@ -201,6 +232,13 @@ class IpfsNodeHost {
       _node = null;
       _peerId = null;
       _running = false;
+      final Directory? previous = _previousCwd;
+      _previousCwd = null;
+      if (previous != null) {
+        try {
+          Directory.current = previous;
+        } catch (_) {}
+      }
       onState('stopped', null);
       onAddresses(const []);
     }
@@ -212,8 +250,10 @@ class IpfsNodeHost {
     return node;
   }
 
+  /// Stores bytes and returns their CID.
   Future<String> addData(Uint8List data) => _require().addFile(data);
 
+  /// Fetches a block by CID, from peers or the network.
   Future<Uint8List?> getData(String cid) => _require().get(cid);
 
   /// Reads a block from the local store only — never the network.
@@ -258,7 +298,10 @@ class IpfsNodeHost {
 
   Future<void> _refreshLocalAddresses() async {
     try {
-      final ifaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
+      final ifaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
       _localIPv4s = [
         for (final i in ifaces)
           for (final a in i.addresses)
@@ -269,9 +312,12 @@ class IpfsNodeHost {
     }
   }
 
+  /// Live connection peer ids, or nothing when stopped.
   Future<List<String>> connectedPeers() async {
     final node = _node;
-    if (node == null) return const [];
+    if (node == null) {
+      return const [];
+    }
     try {
       return await node.connectedPeers;
     } catch (_) {
@@ -279,32 +325,49 @@ class IpfsNodeHost {
     }
   }
 
+  /// Dials a full multiaddr and remembers vBank peers for announcements.
   Future<void> connectToPeer(String multiaddr) async {
     await _require().connectToPeer(await resolveMultiaddr(multiaddr));
-    if (multiaddr.contains('/p2p/')) _vbankPeers.add(multiaddr.split('/p2p/').last);
+    if (multiaddr.contains('/p2p/')) {
+      _vbankPeers.add(multiaddr.split('/p2p/').last);
+    }
   }
 
   static final _dnsAddr = RegExp(r'^/dns4?/([^/]+)/(tcp/\d+.*)$');
 
   /// `/dns4/relay.example.com/tcp/4001/p2p/Qm…` → `/ip4/203.0.113.7/tcp/4001/p2p/Qm…`.
   ///
-  /// The libp2p stack dials IP addresses only; a relay is better named by a
-  /// hostname (it survives an IP change and can sit behind a CNAME), so the
-  /// lookup happens here, right before the dial. Non-DNS addresses pass through.
+  /// The libp2p stack dials IP addresses only; a relay is better named by
+  /// a hostname (it survives an IP change and can sit behind a CNAME), so
+  /// the lookup happens here, right before the dial. Non-DNS addresses
+  /// pass through.
   static Future<String> resolveMultiaddr(String multiaddr) async {
     final m = _dnsAddr.firstMatch(multiaddr.trim());
     if (m == null) return multiaddr;
     final host = m.group(1)!;
     final rest = m.group(2)!;
-    final v4 = await InternetAddress.lookup(host, type: InternetAddressType.IPv4);
+    final v4 = await InternetAddress.lookup(
+      host,
+      type: InternetAddressType.IPv4,
+    );
     if (v4.isEmpty) throw SocketException('No IPv4 address for $host');
     return '/ip4/${v4.first.address}/$rest';
   }
 
-  Future<List<String>> findProviders(String cid) => _require().findProviders(cid);
+  /// Asks the network who holds a CID.
+  Future<List<String>> findProviders(String cid) =>
+      _require().findProviders(cid);
+
+  /// Pins a block against garbage collection.
   Future<void> pin(String cid) => _require().pin(cid);
+
+  /// Releases a pin.
   Future<void> unpin(String cid) async => _require().unpin(cid);
+
+  /// Subscribes to a PubSub topic.
   Future<void> subscribe(String topic) => _require().subscribe(topic);
+
+  /// Leaves a PubSub topic.
   Future<void> unsubscribe(String topic) => _require().unsubscribe(topic);
 
   /// Publishes [message] on [topic] to every known vBank peer.
@@ -335,20 +398,27 @@ class IpfsNodeHost {
       _dbg('notify $topic: node has no router');
       return 0;
     }
-    final bytes = Uint8List.fromList(utf8.encode(jsonEncode({'topic': topic, 'content': message})));
-    final targets = {...peers, ...router.connectedPeers.where(_vbankPeers.contains)}..remove(_peerId);
+    final bytes = Uint8List.fromList(
+      utf8.encode(jsonEncode({'topic': topic, 'content': message})),
+    );
+    final targets = {
+      ...peers,
+      ...router.connectedPeers.where(_vbankPeers.contains),
+    }..remove(_peerId);
     _vbankPeers.addAll(peers);
     _dbg('notify $topic → ${targets.length} target(s): $targets');
     var delivered = 0;
-    await Future.wait(targets.map((peer) async {
-      try {
-        await router.sendMessage(peer, bytes, protocolId: notifyProtocol);
-        delivered++;
-      } catch (e) {
-        // Not reachable right now; the next sync round redials.
-        _dbg('notify to $peer failed: $e');
-      }
-    }));
+    await Future.wait(
+      targets.map((peer) async {
+        try {
+          await router.sendMessage(peer, bytes, protocolId: notifyProtocol);
+          delivered++;
+        } catch (e) {
+          // Not reachable right now; the next sync round redials.
+          _dbg('notify to $peer failed: $e');
+        }
+      }),
+    );
     return delivered;
   }
 
@@ -359,13 +429,19 @@ class IpfsNodeHost {
   /// list goes stale (see [publish]); a fresh stream to a known peer works
   /// whenever the peer is reachable at all. Records are small (a few KB), so a
   /// direct ask is also faster than the wantlist round trip.
-  Future<Uint8List?> fetchFromPeers(String cid, List<String> peers, Duration timeout) async {
+  Future<Uint8List?> fetchFromPeers(
+    String cid,
+    List<String> peers,
+    Duration timeout,
+  ) async {
     final router = _node?.router;
     if (router == null) return null;
     final request = Uint8List.fromList(utf8.encode(jsonEncode({'cid': cid})));
     for (final peer in {...peers}..remove(_peerId)) {
       try {
-        final response = await router.sendRequest(peer, fetchProtocol, request).timeout(timeout);
+        final response = await router
+            .sendRequest(peer, fetchProtocol, request)
+            .timeout(timeout);
         if (response == null || response.isEmpty) continue;
         if (rawCidOf(response) != cid) continue; // not what we asked for
         _vbankPeers.add(peer);
@@ -380,11 +456,17 @@ class IpfsNodeHost {
 
   /// Sends [payload] to [peer] over [syncProtocol] and returns its reply, or
   /// null when the peer is unreachable or silent.
-  Future<Uint8List?> request(String peer, Uint8List payload, Duration timeout) async {
+  Future<Uint8List?> request(
+    String peer,
+    Uint8List payload,
+    Duration timeout,
+  ) async {
     final router = _node?.router;
     if (router == null) return null;
     try {
-      final reply = await router.sendRequest(peer, syncProtocol, payload).timeout(timeout);
+      final reply = await router
+          .sendRequest(peer, syncProtocol, payload)
+          .timeout(timeout);
       if (reply != null) _vbankPeers.add(peer);
       return reply;
     } catch (e) {
@@ -405,7 +487,8 @@ class IpfsNodeHost {
     });
     node.router?.registerProtocolHandler(fetchProtocol, (packet) async {
       try {
-        final m = jsonDecode(utf8.decode(packet.datagram)) as Map<String, dynamic>;
+        final m =
+            jsonDecode(utf8.decode(packet.datagram)) as Map<String, dynamic>;
         final cid = m['cid'] as String?;
         _vbankPeers.add(packet.srcPeerId);
         final bytes = cid == null ? null : await getDataLocal(cid);
@@ -416,7 +499,8 @@ class IpfsNodeHost {
     });
     node.router?.registerProtocolHandler(notifyProtocol, (packet) {
       try {
-        final m = jsonDecode(utf8.decode(packet.datagram)) as Map<String, dynamic>;
+        final m =
+            jsonDecode(utf8.decode(packet.datagram)) as Map<String, dynamic>;
         final topic = m['topic'] as String?;
         final content = m['content'] as String?;
         if (topic == null || content == null) return;

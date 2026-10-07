@@ -6,6 +6,7 @@ import 'package:vbank/src/sync/relay_node.dart';
 void main() {
   group('RelayNode', () {
     test('starts, answers inventory and stops on loopback', () async {
+      final Directory before = Directory.current;
       final Directory dir =
           await Directory.systemTemp.createTemp('vbank-relay-test-');
       final RelayNode relay = RelayNode(
@@ -29,7 +30,9 @@ void main() {
         File('${dir.path}/relay_ledger.json').existsSync(),
         isTrue,
       );
+      expect(Directory.current.path, before.path);
       await dir.delete(recursive: true);
+      expect(dir.existsSync(), isFalse);
     }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }
