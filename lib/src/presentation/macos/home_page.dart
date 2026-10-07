@@ -5,6 +5,8 @@ import 'package:macos_ui/macos_ui.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
+import 'create_group_page.dart';
+import 'group_detail_page.dart';
 
 /// The macOS home: the same auth gate and group list in Macos dress.
 ///
@@ -61,6 +63,10 @@ final class MacosHomePage extends ConsumerWidget {
         ),
       );
     }
+    final String? selected = ref.watch(selectedGroupIdProvider);
+    if (selected != null) {
+      return MacosGroupDetailPage(groupId: selected);
+    }
     return const MacosGroupsPage();
   }
 
@@ -77,7 +83,23 @@ final class MacosGroupsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Group>> groups = ref.watch(groupListProvider);
     return MacosScaffold(
-      toolBar: const ToolBar(title: Text('Groups')),
+      toolBar: ToolBar(
+        title: const Text('Groups'),
+        actions: [
+          ToolBarIconButton(
+            key: const ValueKey('create-group-button'),
+            label: 'New group',
+            icon: const MacosIcon(CupertinoIcons.add),
+            showLabel: false,
+            onPressed: () => Navigator.push(
+              context,
+              CupertinoPageRoute<void>(
+                builder: (_) => const MacosCreateGroupPage(),
+              ),
+            ),
+          ),
+        ],
+      ),
       children: [
         ContentArea(
           builder: (BuildContext context, ScrollController controller) =>
@@ -86,8 +108,24 @@ final class MacosGroupsPage extends ConsumerWidget {
             error: (Object error, _) => Center(child: Text('Error: $error')),
             data: (List<Group> list) {
               if (list.isEmpty) {
-                return const Center(
-                  child: Text('No groups yet'),
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('No groups yet'),
+                      const SizedBox(height: 12),
+                      PushButton(
+                        controlSize: ControlSize.large,
+                        onPressed: () => Navigator.push(
+                          context,
+                          CupertinoPageRoute<void>(
+                            builder: (_) => const MacosCreateGroupPage(),
+                          ),
+                        ),
+                        child: const Text('New group'),
+                      ),
+                    ],
+                  ),
                 );
               }
               return ListView.builder(

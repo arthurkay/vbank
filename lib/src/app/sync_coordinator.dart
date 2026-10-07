@@ -23,6 +23,8 @@ import 'key_service.dart';
 import 'loan_service.dart';
 import 'meeting_service.dart';
 import 'publish_pipeline.dart';
+import 'publish_reconciler.dart';
+import 'publish_tracker.dart';
 import 'transaction_service.dart';
 
 /// Sync engine state for screens.
@@ -138,6 +140,15 @@ final class SyncCoordinator {
   /// Application services for pipeline construction: invites.
   final InviteService invites;
 
+  /// Record listings for the publish reconciler.
+  final TransactionRepository transactionRepository;
+
+  /// Loan listings for the publish reconciler.
+  final LoanRepository loanRepository;
+
+  /// Meeting listings for the publish reconciler.
+  final MeetingRepository meetingRepository;
+
   /// Group keys.
   final GroupKeyService keys;
 
@@ -180,6 +191,13 @@ final class SyncCoordinator {
   /// Pipelines (built in [ensureStarted]).
   ApplyPipeline? _apply;
   PublishPipeline? _publish;
+
+  /// Already-published record ids, shared by the apply pipeline (marks)
+  /// and the reconciler (skips).
+  late final PublishTracker tracker = PublishTracker(settings);
+
+  /// Publishes local records the ledger does not know yet.
+  PublishReconciler? _reconcile;
 
   /// Subscribed topics.
   final Set<String> _subscribed = {};
@@ -227,6 +245,9 @@ final class SyncCoordinator {
     required this.meetings,
     required this.governance,
     required this.invites,
+    required this.transactionRepository,
+    required this.loanRepository,
+    required this.meetingRepository,
     required this.keys,
     required this.peers,
     required this.ledger,
@@ -290,6 +311,7 @@ final class SyncCoordinator {
       rememberAddrs: peers.remember,
       lastPublishedAt: _lastSnapshotAt,
       recordPublishedAt: _recordSnapshotAt,
+      recordPublished: tracker.markPublished,
       ownPeerId: ownPeerId() ?? '',
       memberKeyPair: memberKeyPair,
       clock: clock,
@@ -306,6 +328,17 @@ final class SyncCoordinator {
       clock: clock,
     );
     _publish = publish..bindSigningKey(signingKey);
+    _reconcile = PublishReconciler(
+      groups: groups,
+      transactions: transactionRepository,
+      loans: loanRepository,
+      meetings: meetingRepository,
+      publish: publish,
+      tracker: tracker,
+      ledger: ledger,
+      memberKeyPair: memberKeyPair,
+      ownPeerId: ownPeerId,
+    );
     final StreamSubscription<SyncNotification>? oldSub = _notifySub;
     _notifySub = null;
     await oldSub?.cancel();
@@ -328,6 +361,18 @@ final class SyncCoordinator {
     _setState(SyncState.syncing);
     try {
       final List<String> groupIds = await _keyedGroups();
+      // Publish what the ledger does not know yet, so the round carries
+      // local records to relays and the announcements pull peers.
+      final PublishReconciler? reconcile = _reconcile;
+      if (reconcile != null) {
+        for (final String groupId in groupIds) {
+          final List<(String, String)> fresh =
+              await reconcile.publishMissing(groupId);
+          for (final (String, String) announced in fresh) {
+            await _announce(groupId, announced.$2, announced.$1);
+          }
+        }
+      }
       final List<String> relayAddrs = await relayAddresses();
       await _dialRelays(relayAddrs);
       final SyncReport report = await engine.synchronize(
@@ -393,7 +438,14 @@ final class SyncCoordinator {
             ));
     _publishing = next.then((_) {});
     try {
-      return Ok(await next);
+      final String cid = await next;
+      // The reconciler would seal a duplicate next round; claim the id
+      // now so each record is published exactly once.
+      final Object? id = payloadJson['id'];
+      if (id is String) {
+        await tracker.markPublished(groupId, id);
+      }
+      return Ok(cid);
     } catch (e) {
       return Err(StorageFailure(e));
     }

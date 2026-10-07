@@ -4,6 +4,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
+import 'create_group_screen.dart';
+import 'group_detail_screen.dart';
 
 /// The mobile home: an auth gate over the group list.
 ///
@@ -46,8 +48,28 @@ final class MobileHomeScreen extends ConsumerWidget {
         ),
       );
     }
-    return const Scaffold(
-      headers: [AppBar(title: Text('Groups'))],
+    final String? selected = ref.watch(selectedGroupIdProvider);
+    if (selected != null) {
+      return MobileGroupDetailScreen(groupId: selected);
+    }
+    return Scaffold(
+      headers: [
+        AppBar(
+          title: const Text('Groups'),
+          trailing: [
+            IconButton.ghost(
+              key: const ValueKey('create-group-button'),
+              icon: const Icon(LucideIcons.plus),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const MobileCreateGroupScreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
       child: _GroupList(),
     );
   }
@@ -66,8 +88,23 @@ final class _GroupList extends ConsumerWidget {
       error: (Object error, _) => Center(child: Text('Error: $error')),
       data: (List<Group> list) {
         if (list.isEmpty) {
-          return const Center(
-            child: Text('No groups yet'),
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('No groups yet'),
+                const Gap(12),
+                PrimaryButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const MobileCreateGroupScreen(),
+                    ),
+                  ),
+                  child: const Text('New group'),
+                ),
+              ],
+            ),
           );
         }
         return ListView.builder(

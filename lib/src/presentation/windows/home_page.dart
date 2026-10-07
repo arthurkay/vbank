@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
+import 'create_group_page.dart';
+import 'group_detail_page.dart';
 
 /// The Windows home: the same auth gate and group list in Fluent dress.
 ///
@@ -47,6 +49,10 @@ final class WindowsHomePage extends ConsumerWidget {
         ),
       );
     }
+    final String? selected = ref.watch(selectedGroupIdProvider);
+    if (selected != null) {
+      return WindowsGroupDetailPage(groupId: selected);
+    }
     return const WindowsGroupsPage();
   }
 }
@@ -60,14 +66,47 @@ final class WindowsGroupsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<Group>> groups = ref.watch(groupListProvider);
     return ScaffoldPage(
-      header: const PageHeader(title: Text('Groups')),
+      header: PageHeader(
+        title: const Text('Groups'),
+        commandBar: CommandBar(
+          mainAxisAlignment: MainAxisAlignment.end,
+          primaryItems: [
+            CommandBarButton(
+              key: const ValueKey('create-group-button'),
+              icon: const Icon(FluentIcons.add),
+              label: const Text('New group'),
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => const WindowsCreateGroupPage(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       content: groups.when(
         loading: () => const Center(child: ProgressRing()),
         error: (Object error, _) => Center(child: Text('Error: $error')),
         data: (List<Group> list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Text('No groups yet'),
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('No groups yet'),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      FluentPageRoute<void>(
+                        builder: (_) => const WindowsCreateGroupPage(),
+                      ),
+                    ),
+                    child: const Text('New group'),
+                  ),
+                ],
+              ),
             );
           }
           return ListView.builder(

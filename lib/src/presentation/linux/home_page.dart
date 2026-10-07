@@ -5,6 +5,8 @@ import 'package:yaru/yaru.dart';
 import '../../domain/group.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
+import 'create_group_page.dart';
+import 'group_detail_page.dart';
 
 /// The Linux home: the same auth gate and group list in Yaru dress.
 ///
@@ -48,8 +50,27 @@ final class LinuxHomePage extends ConsumerWidget {
         ),
       );
     }
+    final String? selected = ref.watch(selectedGroupIdProvider);
+    if (selected != null) {
+      return LinuxGroupDetailPage(groupId: selected);
+    }
     return YaruDetailPage(
-      appBar: AppBar(title: const Text('Groups')),
+      appBar: AppBar(
+        title: const Text('Groups'),
+        actions: [
+          IconButton(
+            key: const ValueKey('create-group-button'),
+            tooltip: 'New group',
+            icon: const Icon(YaruIcons.plus),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const LinuxCreateGroupPage(),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: const _GroupList(),
     );
   }
@@ -68,8 +89,23 @@ final class _GroupList extends ConsumerWidget {
       error: (Object error, _) => Center(child: Text('Error: $error')),
       data: (List<Group> list) {
         if (list.isEmpty) {
-          return const Center(
-            child: Text('No groups yet'),
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('No groups yet'),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LinuxCreateGroupPage(),
+                    ),
+                  ),
+                  child: const Text('New group'),
+                ),
+              ],
+            ),
           );
         }
         return ListView.builder(

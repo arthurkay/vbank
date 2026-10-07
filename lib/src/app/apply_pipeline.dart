@@ -67,6 +67,12 @@ final class ApplyPipeline {
   final Future<void> Function(String groupId, DateTime at)
       recordPublishedAt;
 
+  /// Marks an applied record published, so the reconciler never
+  /// republishes what arrived over sync. Snapshots skip this: their
+  /// staleness rides the group row, not the tracker.
+  final Future<void> Function(String groupId, String recordId)
+      recordPublished;
+
   /// This device's peer id (rekey and countersign flows).
   final String ownPeerId;
 
@@ -89,6 +95,7 @@ final class ApplyPipeline {
     required this.rememberAddrs,
     required this.lastPublishedAt,
     required this.recordPublishedAt,
+    required this.recordPublished,
     required this.ownPeerId,
     required this.memberKeyPair,
     required this.clock,
@@ -209,6 +216,7 @@ final class ApplyPipeline {
         tx.loanId != null) {
       await loans.applyRemoteRepayment(tx.loanId!, tx.amount);
     }
+    await recordPublished(groupId, tx.id);
     return ApplyOutcome.applied;
   }
 
@@ -557,7 +565,11 @@ final class ApplyPipeline {
       }
     }
     final Result<Unit> stored = await loans.importRemote(loan);
-    return stored.isOk ? ApplyOutcome.applied : ApplyOutcome.rejected;
+    if (stored.isErr) {
+      return ApplyOutcome.rejected;
+    }
+    await recordPublished(groupId, loan.id);
+    return ApplyOutcome.applied;
   }
 
   Future<ApplyOutcome> _applyMeeting(
@@ -598,7 +610,11 @@ final class ApplyPipeline {
       return ApplyOutcome.rejected;
     }
     final Result<Unit> stored = await meetings.importRemote(meeting);
-    return stored.isOk ? ApplyOutcome.applied : ApplyOutcome.rejected;
+    if (stored.isErr) {
+      return ApplyOutcome.rejected;
+    }
+    await recordPublished(groupId, meeting.id);
+    return ApplyOutcome.applied;
   }
 
   Future<ApplyOutcome> _applyReversal(
@@ -615,7 +631,11 @@ final class ApplyPipeline {
       return ApplyOutcome.rejected;
     }
     final Result<Unit> stored = await governance.importRemote(reversal);
-    return stored.isOk ? ApplyOutcome.applied : ApplyOutcome.rejected;
+    if (stored.isErr) {
+      return ApplyOutcome.rejected;
+    }
+    await recordPublished(groupId, reversal.id);
+    return ApplyOutcome.applied;
   }
 
   Future<ApplyOutcome> _applyMemberKey(
@@ -659,6 +679,10 @@ final class ApplyPipeline {
       peerId,
       Uint8List.fromList(encKey),
     );
-    return stored.isOk ? ApplyOutcome.applied : ApplyOutcome.rejected;
+    if (stored.isErr) {
+      return ApplyOutcome.rejected;
+    }
+    await recordPublished(groupId, 'memberkey:$peerId');
+    return ApplyOutcome.applied;
   }
 }

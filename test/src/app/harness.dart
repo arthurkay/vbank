@@ -26,6 +26,7 @@ import 'package:vbank/src/data/repositories/settings_repository.dart';
 import 'package:vbank/src/data/repositories/transaction_repository.dart';
 import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
+import 'package:vbank/src/domain/repositories.dart';
 import 'package:vbank/src/domain/membership.dart';
 import 'package:vbank/src/domain/transactions.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
@@ -99,6 +100,15 @@ final class AppHarness {
 
   /// Settings (sync ledger, peer book, key store share it).
   SqlSettingsRepository get settings => _settingsRepo;
+
+  /// Record listings for sync coordinator tests.
+  TransactionRepository get transactionRepo => _txRepo;
+
+  /// Loan listings for sync coordinator tests.
+  LoanRepository get loanRepo => _loanRepo;
+
+  /// Meeting listings for sync coordinator tests.
+  MeetingRepository get meetingRepo => _meetingRepo;
 
   /// Backups and identity rows.
   SqlBackupRepository get backups => _backupRepo;
@@ -286,6 +296,9 @@ final class AppHarness {
       recordPublishedAt: (String groupId, DateTime at) async {
         harness.publishedAt[groupId] = at;
       },
+      recordPublished: (String groupId, String recordId) async {
+        (harness.marked[groupId] ??= []).add(recordId);
+      },
       ownPeerId: peer,
       memberKeyPair: memberKeyPair ?? () async => null,
       clock: () => now,
@@ -356,6 +369,9 @@ final class PipelineHarness {
 
   /// Snapshot times per group.
   final Map<String, DateTime> publishedAt = {};
+
+  /// Record ids marked published, per group.
+  final Map<String, List<String>> marked = {};
 
   /// The pipeline under test.
   late final ApplyPipeline pipeline;

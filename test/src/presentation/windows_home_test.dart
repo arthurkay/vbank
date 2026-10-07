@@ -5,6 +5,7 @@ import 'package:vbank/src/domain/group.dart';
 import 'package:vbank/src/domain/meeting_time.dart';
 import 'package:flutter/material.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
+import 'package:vbank/src/presentation/providers/groups.dart';
 import 'package:vbank/src/presentation/windows/home_page.dart';
 import 'package:vbank/src/presentation/windows/onboarding_page.dart';
 
@@ -93,6 +94,40 @@ void main() {
       await settle(tester);
 
       expect(find.text('No groups yet'), findsOneWidget);
+    });
+
+    testWidgets('creates a group from the empty home', (tester) async {
+      final PresentationWorld world = PresentationWorld();
+      late ProviderContainer container;
+      Future<void> createIdentity() => world.signIn(container);
+      await tester.pumpWidget(
+        VBankScope(
+          repositories: world.repositories,
+          services: world.services,
+          child: fluent.FluentApp(
+            home: WindowsHomePage(onCreateIdentity: createIdentity),
+          ),
+        ),
+      );
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(WindowsHomePage)),
+      );
+      await settle(tester);
+
+      await tester.tap(find.text('Get started'));
+      await settle(tester);
+      expect(find.text('No groups yet'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('create-group-button')));
+      await settle(tester);
+      await tester.enterText(find.byType(fluent.TextBox).at(0), 'Savings');
+      await tester.enterText(find.byType(fluent.TextBox).at(1), '200');
+      await tester.tap(find.text('Create group'));
+      await settle(tester);
+
+      // The new group is selected and its detail shows its name.
+      expect(container.read(selectedGroupIdProvider), isNotNull);
+      expect(find.text('Savings'), findsWidgets);
     });
   });
 }
