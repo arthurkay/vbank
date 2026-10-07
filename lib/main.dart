@@ -67,6 +67,7 @@ Future<void> main() async {
       VBankScope(
         repositories: startup.repositories,
         services: startup.services,
+        coordinator: startup.coordinator,
         child: _VBankRoot(startup: startup),
       ),
     );
@@ -110,6 +111,17 @@ final class _Startup {
       factory: factory,
       path: dbPath,
       password: dbPassword,
+      // Only the desktop FFI builds need the cipher re-selected; real
+      // SQLCipher (phones) must not have its provider touched.
+      selectCipher: Platform.isLinux || Platform.isWindows,
+      // Phones key natively: the plugin applies the key during open.
+      // Manual PRAGMA keying cannot reopen an encrypted file there —
+      // the native open rejects it before any statement runs. This
+      // rebuilds once (old files used the other keying); per-device
+      // files never move between platforms, so formats may differ.
+      nativePassword: Platform.isAndroid || Platform.isIOS
+          ? dbPassword
+          : null,
     );
     if (openedResult.isErr) {
       throw StateError('database: ${openedResult.failure}');
@@ -322,6 +334,9 @@ final class _VBankRoot extends StatelessWidget {
       return ShadcnApp(
         title: 'vBank',
         debugShowCheckedModeBanner: false,
+        theme: const ThemeData(),
+        darkTheme: const ThemeData.dark(),
+        themeMode: ThemeMode.system,
         home: Builder(
           builder: (context) => MobileHomeScreen(
             onCreateIdentity: () => _push(
@@ -399,13 +414,18 @@ final class _VBankRoot extends StatelessWidget {
 ///
 /// Shows a friendly message with the technical details in an expandable
 /// section, plus a retry button. The raw error is never shown as the
-/// primary message — it goes in the details section instead.
+/// primary message — it goes in the details section instead, with the
+/// database key redacted (SQL failures echo their statement).
 final class _StartupError extends StatelessWidget {
   /// What failed (raw exception text).
   final String error;
 
   /// Creates the error screen.
   const _StartupError({required this.error});
+
+  /// The error with any hex key material redacted.
+  String get safeError =>
+      error.replaceAll(RegExp("x'[0-9a-fA-F]{32,}'"), "x'***'");
 
   /// User-friendly title based on the error type.
   String get _title => error.contains('database')
@@ -429,6 +449,9 @@ final class _StartupError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ShadcnApp(
+        theme: const ThemeData(),
+        darkTheme: const ThemeData.dark(),
+        themeMode: ThemeMode.system,
         home: Scaffold(
           child: Center(
             child: SingleChildScrollView(
@@ -461,7 +484,7 @@ final class _StartupError extends StatelessWidget {
                     children: [
                       const Text('Technical details').small,
                       const Gap(8),
-                      SelectableText(error).muted.xSmall,
+                      SelectableText(safeError).muted.xSmall,
                     ],
                   ),
                 ],

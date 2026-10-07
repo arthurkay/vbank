@@ -3,6 +3,8 @@ import 'package:flutter/widgets.dart';
 
 import '../app/governance_service.dart';
 import '../app/group_service.dart';
+import '../app/sync_coordinator.dart';
+import 'providers/sync.dart';
 import '../app/invite_service.dart';
 import '../app/key_service.dart';
 import '../app/loan_service.dart';
@@ -115,6 +117,9 @@ final class VBankScope extends StatelessWidget {
   /// Service set wired to [repositories].
   final AppServices services;
 
+  /// Sync coordinator, or null where no node runs (widget tests).
+  final SyncCoordinator? coordinator;
+
   /// The app below.
   final Widget child;
 
@@ -124,6 +129,7 @@ final class VBankScope extends StatelessWidget {
     required this.repositories,
     required this.services,
     required this.child,
+    this.coordinator,
   });
 
   @override
@@ -131,6 +137,7 @@ final class VBankScope extends StatelessWidget {
         overrides: [
           appRepositoriesProvider.overrideWithValue(repositories),
           appServicesProvider.overrideWithValue(services),
+          syncCoordinatorProvider.overrideWithValue(coordinator),
         ],
         child: child,
       );

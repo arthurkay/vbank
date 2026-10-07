@@ -5,6 +5,7 @@ import 'package:macos_ui/macos_ui.dart';
 import '../../app/invite_link.dart';
 import '../../domain/core/failure.dart';
 import '../../domain/core/result.dart';
+import '../providers/auth.dart';
 import '../providers/groups.dart';
 
 /// Joins a group from a share link in Macos dress: paste the link,
@@ -32,6 +33,14 @@ final class _MacosJoinGroupPageState
   final TextEditingController _name = TextEditingController();
   String? _error;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The device already knows this person from onboarding: pre-fill,
+    // still editable for groups that know them differently.
+    _name.text = ref.read(authProvider).identity?.displayName ?? '';
+  }
 
   @override
   void dispose() {

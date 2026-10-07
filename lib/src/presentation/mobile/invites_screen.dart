@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import 'dart:async';
+
 import '../../app/invite_link.dart';
 import '../../app/invite_service.dart';
 import '../../domain/core/failure.dart';
@@ -10,6 +12,7 @@ import '../../domain/membership.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
 import '../providers/invites.dart';
+import '../providers/sync.dart';
 import 'invite_share_screen.dart';
 
 /// A group's invite tickets: list plus creation. The code shown is the
@@ -171,6 +174,13 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     if (result.isErr) {
       setState(() => _error = _explain(result.failure));
       return;
+    }
+    // Push the fresh snapshot (with this invite's wrap) to the relays
+    // now, so the link works as soon as it is shared — without waiting
+    // for the next periodic round. Best effort: failures surface there.
+    final sync = ref.read(syncCoordinatorProvider);
+    if (sync != null) {
+      unawaited(sync.synchronizeNow().then((_) {}, onError: (_) {}));
     }
     // The secret exists only here: show the link at once, and keep a
     // copy for re-sharing while the ticket is live.

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 import '../domain/core/failure.dart';
@@ -51,20 +52,33 @@ abstract final class VBankDatabase {
   /// SQLite builds and wrong keys loudly instead of corrupting data.
   ///
   /// Public for tests and tools that open databases outside [open].
-  static Future<void> keyConnection(Database db, String password) async {
+  static Future<void> keyConnection(
+    Database db,
+    String password, {
+    void Function(String step)? onStep,
+    bool selectCipher = true,
+    bool applyKey = true,
+  }) async {
     if (!RegExp(r'^[0-9a-fA-F]+$').hasMatch(password)) {
       throw ArgumentError.value(password, 'password', 'must be hex');
     }
-    try {
-      // Desktop builds bundle SQLite3MultipleCiphers, which starts with no
-      // provider selected: pick the SQLCipher provider with SQLCipher-4
-      // defaults, matching what the mobile builds get from sqflite_sqlcipher.
-      // Real SQLCipher (phones) treats the first as a no-op and ignores the
-      // unknown second pragma — either failure is swallowed, the gate below
-      // is the real check either way.
-      await db.execute("PRAGMA cipher = 'sqlcipher'");
-      await db.execute('PRAGMA legacy = 4');
-    } catch (_) {}
+    onStep?.call('select-start');
+    // Desktop builds bundle SQLite3MultipleCiphers, which starts with no
+    // provider selected: pick the SQLCipher provider with SQLCipher-4
+    // defaults, matching what the mobile builds get from sqflite_sqlcipher.
+    // Real SQLCipher is never asked: re-selecting the provider on an
+    // already-keyed build risks its connection state, so mobile skips
+    // this entirely (selectCipher false).
+    if (selectCipher) {
+      try {
+        await db.execute("PRAGMA cipher = 'sqlcipher'");
+        onStep?.call('cipher-ok');
+        await db.execute('PRAGMA legacy = 4');
+        onStep?.call('legacy-ok');
+      } catch (_) {
+        onStep?.call('select-failed');
+      }
+    }
     // `cipher_version` answers on SQLCipher but stays silent on
     // SQLite3MultipleCiphers even while encrypting; there the selected
     // provider name is the proof. Both silent means plaintext SQLite.
@@ -78,10 +92,15 @@ abstract final class VBankDatabase {
       );
     }
     // PRAGMA key returns a result set on some builds (Android sqflite),
-    // so it must go through rawQuery — execute() throws there.
-    await db.rawQuery('PRAGMA key = "x\'$password\'"');
+    // so it must go through rawQuery — execute() throws there. Skipped
+    // when the native open already keyed the connection (password:).
+    if (applyKey) {
+      await db.rawQuery('PRAGMA key = "x\'$password\'"');
+      onStep?.call('keyed');
+    }
     // A wrong key only fails on first read: probe now.
     await db.rawQuery('SELECT count(*) FROM sqlite_master');
+    onStep?.call('probed');
     await db.execute('PRAGMA foreign_keys = ON');
   }
 
@@ -109,20 +128,37 @@ abstract final class VBankDatabase {
     required String path,
     required String password,
     bool encrypted = true,
+    bool selectCipher = true,
+    String? nativePassword,
   }) async {
     try {
       // No `version:` here on purpose: legacy files carry version 0 and
       // sqflite throws on a version mismatch without an onUpgrade. We
       // inspect the layout ourselves and stamp the version when we create.
-      OpenDatabaseOptions options() => OpenDatabaseOptions(
-            onConfigure: (Database db) async {
-              if (encrypted) {
-                await keyConnection(db, password);
-              } else {
-                await db.execute('PRAGMA foreign_keys = ON');
-              }
-            },
+      Future<void> configure(Database db) async {
+        if (encrypted) {
+          await keyConnection(
+            db,
+            password,
+            selectCipher: selectCipher,
+            applyKey: nativePassword == null,
+            onStep: (step) => debugPrint('vBank: db $step'),
           );
+        } else {
+          await db.execute('PRAGMA foreign_keys = ON');
+        }
+      }
+
+      // Native password keying (mobile): the key is applied during the
+      // native open, before any page is read — manual PRAGMA keying cannot
+      // reopen an encrypted file there, because the native open rejects
+      // it first. Desktop FFI opens raw files and keys afterwards.
+      OpenDatabaseOptions options() => nativePassword == null
+          ? OpenDatabaseOptions(onConfigure: configure)
+          : SqlCipherOpenDatabaseOptions(
+              password: nativePassword,
+              onConfigure: configure,
+            );
       Future<void> createSchema(Database db) async {
         for (final String ddl in VBankSchema.createStatements) {
           await db.execute(ddl);
@@ -142,6 +178,7 @@ abstract final class VBankDatabase {
           options: options(),
         );
         await createSchema(db);
+        debugPrint('vBank: database ready (fresh file)');
         return Ok(OpenResult(database: db, outcome: OpenOutcome.ready));
       }
       // Anything unreadable — legacy layout, corrupt file, or a key that no
@@ -151,10 +188,19 @@ abstract final class VBankDatabase {
       try {
         db = await factory.openDatabase(path, options: options());
         if (await _isCurrentSchema(db)) {
+          debugPrint('vBank: database ready');
           return Ok(OpenResult(database: db, outcome: OpenOutcome.ready));
         }
-      } catch (_) {
-        // Fall through to the rebuild below.
+        debugPrint('vBank: database schema outdated, rebuilding');
+      } catch (e) {
+        // Fall through to the rebuild below. The message is safe to log:
+        // any embedded key is redacted (SQL failures echo the statement,
+        // which carries the database key).
+        final String safe = '$e'.replaceAll(
+          RegExp("x'[0-9a-fA-F]{32,}'"),
+          "x'***'",
+        );
+        debugPrint('vBank: database unopenable ($safe), rebuilding');
       }
       final Database? opened = db;
       if (opened != null) {

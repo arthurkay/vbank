@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +12,7 @@ import '../../domain/membership.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
 import '../providers/invites.dart';
+import '../providers/sync.dart';
 import 'invite_share_page.dart';
 
 /// A group's invite tickets on Windows.
@@ -159,6 +162,13 @@ final class _WindowsInvitesState extends ConsumerState<WindowsInvitesPage> {
     if (result.isErr) {
       setState(() => _error = _explain(result.failure));
       return;
+    }
+    // Push the fresh snapshot (with this invite's wrap) to the relays
+    // now, so the link works as soon as it is shared — without waiting
+    // for the next periodic round. Best effort: failures surface there.
+    final sync = ref.read(syncCoordinatorProvider);
+    if (sync != null) {
+      unawaited(sync.synchronizeNow().then((_) {}, onError: (_) {}));
     }
     // The secret exists only here: show the link at once, and keep a
     // copy for re-sharing while the ticket is live.

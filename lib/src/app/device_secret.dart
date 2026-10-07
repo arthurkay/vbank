@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -45,6 +46,7 @@ class DeviceSecret {
     // file, the next run got a prompt keyring answer of "nothing here",
     // minted a second secret and could no longer open its own database.)
     String? stored = await _readFallback();
+    final bool fromFallback = stored != null;
     var keyringUsable = true;
     if (stored == null) {
       try {
@@ -61,6 +63,12 @@ class DeviceSecret {
     if (stored != null) {
       final bytes = Uint8List.fromList(base64Decode(stored));
       _cached = bytes;
+      // Source plus a one-way fingerprint (never the value): shows which
+      // store anchored this install and whether it changes relaunches.
+      debugPrint(
+        'vBank: device secret from ${fromFallback ? 'file' : 'keyring'} '
+        '${await _fingerprint(bytes)}',
+      );
       return bytes;
     }
 
@@ -82,7 +90,23 @@ class DeviceSecret {
     }
     if (!keyringUsable) await _writeFallback(encoded);
     _cached = bytes;
+    debugPrint(
+      'vBank: device secret minted '
+      '(${keyringUsable ? 'keyring' : 'file'}) '
+      '${await _fingerprint(bytes)}',
+    );
     return bytes;
+  }
+
+  /// SHA-256 hex of the secret: identifies changes across launches
+  /// without revealing anything (preimage resistant).
+  static Future<String> _fingerprint(Uint8List bytes) async {
+    final Hash digest = await Sha256().hash(bytes);
+    final StringBuffer hex = StringBuffer();
+    for (final int b in digest.bytes) {
+      hex.write(b.toRadixString(16).padLeft(2, '0'));
+    }
+    return hex.toString().substring(0, 16);
   }
 
   static Future<File> _fallbackFile() async {
