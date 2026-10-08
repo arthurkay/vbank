@@ -76,7 +76,16 @@ final class _MobileInviteShareScreenState
         ).small.muted,
         const Gap(16),
         Center(
-          child: QrImageView(data: widget.link, size: 220),
+          // White behind and around the code: the light modules vanish
+          // on dark pages otherwise, and scanners need the quiet zone.
+          child: ColoredBox(
+            color: Colors.white,
+            child: QrImageView(
+              data: widget.link,
+              size: 220,
+              backgroundColor: Colors.white,
+            ),
+          ),
         ),
         const Gap(16),
         SelectableText(widget.link).small,

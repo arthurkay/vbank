@@ -78,7 +78,17 @@ final class _MacosInviteSharePageState
               ),
               const SizedBox(height: 16),
               Center(
-                child: QrImageView(data: widget.link, size: 220),
+                // White behind and around the code: the light modules
+                // vanish on dark pages otherwise, and scanners need the
+                // quiet zone.
+                child: ColoredBox(
+                  color: const Color(0xFFFFFFFF),
+                  child: QrImageView(
+                    data: widget.link,
+                    size: 220,
+                    backgroundColor: const Color(0xFFFFFFFF),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               SelectableText(widget.link),
