@@ -16,6 +16,7 @@ import 'member_detail_screen.dart';
 import 'report_screen.dart';
 import 'meetings_screen.dart';
 import 'record_screen.dart';
+import 'sync_status_screen.dart';
 import 'transaction_detail_screen.dart';
 
 /// One group's books: fund stats, balances, members and ledger, plus a
@@ -128,6 +129,17 @@ final class _MobileGroupDetailState
               ),
             ),
             child: const Text('Reports'),
+          ),
+          const Gap(8),
+          OutlineButton(
+            key: const ValueKey('sync-button'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const MobileSyncStatusScreen(),
+              ),
+            ),
+            child: const Text('Sync'),
           ),
         ],
       ),

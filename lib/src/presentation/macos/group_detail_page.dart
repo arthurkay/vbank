@@ -14,6 +14,7 @@ import '../providers/ledger.dart';
 import 'invites_page.dart';
 import 'member_detail_page.dart';
 import 'report_page.dart';
+import 'sync_status_page.dart';
 import 'transaction_detail_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
@@ -139,6 +140,19 @@ final class _MacosGroupDetailState
                   ),
                 ),
                 child: const Text('Reports'),
+              ),
+              const SizedBox(height: 8),
+              PushButton(
+                key: const ValueKey('sync-button'),
+                controlSize: ControlSize.large,
+                secondary: true,
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) => const MacosSyncStatusPage(),
+                  ),
+                ),
+                child: const Text('Sync'),
               ),
             ],
           ),

@@ -14,6 +14,7 @@ import 'invites_page.dart';
 import 'member_detail_page.dart';
 import 'transaction_detail_page.dart';
 import 'report_page.dart';
+import 'sync_status_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
 import 'record_page.dart';
@@ -130,6 +131,17 @@ final class _WindowsGroupDetailState
                 ),
               ),
               child: const Text('Reports'),
+            ),
+            const SizedBox(height: 8),
+            Button(
+              key: const ValueKey('sync-button'),
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => const WindowsSyncStatusPage(),
+                ),
+              ),
+              child: const Text('Sync'),
             ),
           ],
         ),
