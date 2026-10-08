@@ -27,7 +27,7 @@ dependencies:
 
   # Notifications
   flutter_local_notifications: ^18.0.0
-  flutter_timezone: ^2.1.0
+  flutter_timezone: ^3.0.0
   timezone: ^0.9.4
 
   # QR & Sharing
