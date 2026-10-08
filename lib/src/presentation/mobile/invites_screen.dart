@@ -207,7 +207,10 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => MobileInviteShareScreen(link: link),
+        builder: (_) => MobileInviteShareScreen(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }
@@ -235,7 +238,10 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => MobileInviteShareScreen(link: link),
+        builder: (_) => MobileInviteShareScreen(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }

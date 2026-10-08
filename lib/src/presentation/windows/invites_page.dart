@@ -196,7 +196,10 @@ final class _WindowsInvitesState extends ConsumerState<WindowsInvitesPage> {
     await Navigator.push(
       context,
       FluentPageRoute<void>(
-        builder: (_) => WindowsInviteSharePage(link: link),
+        builder: (_) => WindowsInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }
@@ -224,7 +227,10 @@ final class _WindowsInvitesState extends ConsumerState<WindowsInvitesPage> {
     await Navigator.push(
       context,
       FluentPageRoute<void>(
-        builder: (_) => WindowsInviteSharePage(link: link),
+        builder: (_) => WindowsInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }

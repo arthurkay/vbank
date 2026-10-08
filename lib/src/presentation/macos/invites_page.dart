@@ -196,7 +196,10 @@ final class _MacosInvitesState extends ConsumerState<MacosInvitesPage> {
     await Navigator.push(
       context,
       CupertinoPageRoute<void>(
-        builder: (_) => MacosInviteSharePage(link: link),
+        builder: (_) => MacosInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }
@@ -224,7 +227,10 @@ final class _MacosInvitesState extends ConsumerState<MacosInvitesPage> {
     await Navigator.push(
       context,
       CupertinoPageRoute<void>(
-        builder: (_) => MacosInviteSharePage(link: link),
+        builder: (_) => MacosInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }

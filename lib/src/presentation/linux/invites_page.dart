@@ -190,7 +190,10 @@ final class _LinuxInvitesState extends ConsumerState<LinuxInvitesPage> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => LinuxInviteSharePage(link: link),
+        builder: (_) => LinuxInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }
@@ -218,7 +221,10 @@ final class _LinuxInvitesState extends ConsumerState<LinuxInvitesPage> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => LinuxInviteSharePage(link: link),
+        builder: (_) => LinuxInviteSharePage(
+          link: link,
+          groupId: widget.groupId,
+        ),
       ),
     );
   }

@@ -509,15 +509,25 @@ final class SyncCoordinator {
     final List<String> relayIds = [
       for (final String a in relayAddrs) PeerBook.peerIdOf(a),
     ];
-    Uint8List? bytes = await transport.fetchBlock(
-      parts.groupCid,
-      relayIds,
-    );
-    debugPrint(
-      'vBank: join fetch ${bytes == null ? 'miss' : 'hit'} '
-      'cid=${parts.groupCid} relays=${relayIds.length}',
-    );
-    bytes ??= await _fetchNewestSnapshot(groupId, relayIds);
+    // The inviter's round may still be in flight when the joiner taps:
+    // retry for a minute before giving up, so normal sync lag heals
+    // instead of failing.
+    Uint8List? bytes;
+    for (var attempt = 0; attempt < 3 && bytes == null; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(seconds: 15));
+      }
+      bytes = await transport.fetchBlock(
+        parts.groupCid,
+        relayIds,
+      );
+      bytes ??= await _fetchNewestSnapshot(groupId, relayIds);
+      debugPrint(
+        'vBank: join fetch ${bytes == null ? 'miss' : 'hit'} '
+        'cid=${parts.groupCid} relays=${relayIds.length} '
+        'attempt=${attempt + 1}',
+      );
+    }
     if (bytes == null) {
       return const Err(ValidationFailure('snapshotUnreachable'));
     }
