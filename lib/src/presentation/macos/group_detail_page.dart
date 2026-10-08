@@ -11,6 +11,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
 import 'record_page.dart';
@@ -117,6 +118,20 @@ final class _MacosGroupDetailState
                   ),
                 ),
                 child: const Text('Invites'),
+              ),
+              const SizedBox(height: 8),
+              PushButton(
+                key: const ValueKey('reports-button'),
+                controlSize: ControlSize.large,
+                secondary: true,
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) =>
+                        MacosReportPage(groupId: widget.groupId),
+                  ),
+                ),
+                child: const Text('Reports'),
               ),
             ],
           ),

@@ -11,6 +11,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
 import 'record_page.dart';
@@ -103,6 +104,17 @@ final class _LinuxGroupDetailState
               ),
             ),
             child: const Text('Invites'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            key: const ValueKey('reports-button'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => LinuxReportPage(groupId: widget.groupId),
+              ),
+            ),
+            child: const Text('Reports'),
           ),
         ],
       ),

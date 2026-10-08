@@ -10,6 +10,7 @@ import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_screen.dart';
 import 'loans_screen.dart';
+import 'report_screen.dart';
 import 'meetings_screen.dart';
 import 'record_screen.dart';
 
@@ -108,6 +109,17 @@ final class _MobileGroupDetailState
               ),
             ),
             child: const Text('Invites'),
+          ),
+          const Gap(8),
+          OutlineButton(
+            key: const ValueKey('reports-button'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => MobileReportScreen(groupId: widget.groupId),
+              ),
+            ),
+            child: const Text('Reports'),
           ),
         ],
       ),

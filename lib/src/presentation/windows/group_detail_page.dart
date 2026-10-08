@@ -10,6 +10,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
 import 'record_page.dart';
@@ -110,6 +111,17 @@ final class _WindowsGroupDetailState
                 ),
               ),
               child: const Text('Invites'),
+            ),
+            const SizedBox(height: 8),
+            Button(
+              key: const ValueKey('reports-button'),
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => WindowsReportPage(groupId: widget.groupId),
+                ),
+              ),
+              child: const Text('Reports'),
             ),
           ],
         ),

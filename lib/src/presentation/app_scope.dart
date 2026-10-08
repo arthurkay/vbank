@@ -120,6 +120,9 @@ final class VBankScope extends StatelessWidget {
   /// Sync coordinator, or null where no node runs (widget tests).
   final SyncCoordinator? coordinator;
 
+  /// Extra overrides for tests (pinned clocks and the like).
+  final List<Override> extraOverrides;
+
   /// The app below.
   final Widget child;
 
@@ -130,6 +133,7 @@ final class VBankScope extends StatelessWidget {
     required this.services,
     required this.child,
     this.coordinator,
+    this.extraOverrides = const [],
   });
 
   @override
@@ -138,6 +142,7 @@ final class VBankScope extends StatelessWidget {
           appRepositoriesProvider.overrideWithValue(repositories),
           appServicesProvider.overrideWithValue(services),
           syncCoordinatorProvider.overrideWithValue(coordinator),
+          ...extraOverrides,
         ],
         child: child,
       );
