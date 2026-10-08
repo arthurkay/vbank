@@ -16,6 +16,8 @@ import '../sync/engine.dart';
 import '../sync/ledger.dart';
 import '../sync/peer_book.dart';
 import '../sync/relay_directory.dart';
+import '../notifications/reminder_scheduler.dart';
+import '../notifications/reminder_sink.dart';
 import '../sync/record_codec.dart';
 import '../sync/sync_node.dart';
 import 'apply_pipeline.dart';
@@ -170,6 +172,9 @@ final class SyncCoordinator {
   /// Opaque settings (relay list, toggles, pending queue, snapshots).
   final SettingsRepository settings;
 
+  /// Dated reminders, refreshed after every round. Null in tests.
+  final ReminderSink? reminders;
+
   /// Device signer for countersigning.
   final SignPayload sign;
 
@@ -266,6 +271,7 @@ final class SyncCoordinator {
     required this.signingKey,
     required this.clock,
     this.interval = const Duration(minutes: 2),
+    this.reminders,
   });
 
   /// Current state.
@@ -396,6 +402,21 @@ final class SyncCoordinator {
         'pushed=${report.pushed} relays=${relayAddrs.length} '
         'unreachable=${report.unreachable.length}',
       );
+      final ReminderSink? reminders = this.reminders;
+      if (reminders != null) {
+        for (final String groupId in groupIds) {
+          try {
+            await scheduleGroupReminders(
+              groups: groups,
+              loans: loanRepository,
+              meetings: meetingRepository,
+              sink: reminders,
+              groupId: groupId,
+              now: clock().toUtc(),
+            );
+          } catch (_) {}
+        }
+      }
       for (final (String, String) applied in report.appliedCids) {
         _changes.add(
           SyncChange(

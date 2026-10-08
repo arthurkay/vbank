@@ -5,6 +5,10 @@ import 'package:cryptography/cryptography.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' as m;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaru/yaru.dart';
@@ -29,6 +33,10 @@ import 'src/crypto/signing.dart';
 import 'src/data/database.dart';
 import 'src/data/repositories/backup_repository.dart';
 import 'src/data/repositories/balance_repository.dart';
+import 'src/notifications/local_notifier.dart';
+import 'src/notifications/notifier.dart';
+import 'src/notifications/reminder_sink.dart';
+import 'src/notifications/sync_notifications.dart';
 import 'src/data/repositories/governance_repository.dart';
 import 'src/data/repositories/group_repository.dart';
 import 'src/data/repositories/invite_repository.dart';
@@ -219,6 +227,17 @@ final class _Startup {
       ipfsDir: p.join(support.path, 'ipfs'),
       identitySeed: secret,
     );
+    // Device zone for reminder alarms. Best effort: without it,
+    // scheduled reminders fall back to UTC offsets that may be off.
+    try {
+      tzdata.initializeTimeZones();
+      tz.setLocalLocation(
+        tz.getLocation(await FlutterTimezone.getLocalTimezone()),
+      );
+    } catch (_) {}
+    final PluginReminderSink reminderSink = PluginReminderSink(
+      FlutterLocalNotificationsPlugin(),
+    );
     final SyncCoordinator coordinator = SyncCoordinator(
       transport: transport,
       groups: groups,
@@ -241,6 +260,7 @@ final class _Startup {
       ownAddrs: () => transport.dialableAddresses,
       signingKey: () async => identityKey,
       clock: clock,
+      reminders: reminderSink,
     );
     // Best effort: the app works offline, and every round re-runs
     // ensureStarted, so a node that failed here (port busy, no network)
@@ -251,6 +271,26 @@ final class _Startup {
       debugPrint('vBank: sync node failed to start: $e');
     }
     coordinator.startPeriodic(every: const Duration(minutes: 15));
+    // Sync events become system notifications. Best effort throughout:
+    // a phone that refuses notifications still syncs and runs.
+    final LocalNotifier localNotifier = LocalNotifier();
+    await localNotifier.initialize();
+    final Notifier notifier = localNotifier;
+    coordinator.changes.listen((change) async {
+      try {
+        await notifySyncChange(
+          change,
+          groups: groups,
+          transactions: repositories.transactions,
+          loans: repositories.loans,
+          meetings: repositories.meetings,
+          notifier: notifier,
+          selfPeerId: transport.peerId,
+        );
+      } catch (e) {
+        debugPrint('vBank: notification failed: $e');
+      }
+    });
     return _Startup._(
       repositories: repositories,
       services: services,
