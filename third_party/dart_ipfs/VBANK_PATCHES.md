@@ -36,3 +36,11 @@ Vendored copy of `dart_ipfs` 1.11.7 from pub.dev (MIT), used via
    failed request redialed instantly, so one unreachable peer (a relay blip)
    turned a sync round into a ~20-dial burst that hammers the remote and
    trips firewall rate limits.
+
+## 6. Chunked inbound stream reads (`libp2p_router.dart`)
+
+`_readLengthPrefixedMessage` read the body one byte per `stream.read(1)`
+call (~0.3ms each). A 16KB block took 5.5s and 64KB blew past the 15s
+request timeout — so pushes and fetches of real snapshots failed while
+tiny inventory messages worked. The body now reads in chunks, with an
+8 MiB cap against corrupt/hostile length prefixes.

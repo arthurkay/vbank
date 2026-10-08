@@ -853,6 +853,10 @@ class Libp2pRouter implements RouterInterface {
     return Uint8List.fromList(result);
   }
 
+  /// vBank: cap on one inbound framed message (8 MiB — snapshots are
+  /// kilobytes; anything bigger is corruption, not data).
+  static const int _maxInboundMessageBytes = 8 * 1024 * 1024;
+
   Future<Uint8List?> _readLengthPrefixedMessage(
     libp2p.P2PStream<dynamic> stream,
   ) async {
@@ -869,20 +873,42 @@ class Libp2pRouter implements RouterInterface {
       final length = _decodeVarint(Uint8List.fromList(lengthBytes));
       if (length == 0) return Uint8List(0);
 
-      // Read message body
-      final result = <int>[];
-      for (var i = 0; i < length; i++) {
-        final byte = await _readByte(stream);
-        if (byte == null) {
+      // vBank: refuse absurd lengths before allocating (a corrupt or
+      // hostile prefix could otherwise OOM us).
+      if (length > _maxInboundMessageBytes) {
+        _logger.warning(
+          'Inbound message of $length bytes exceeds '
+          '$_maxInboundMessageBytes cap',
+        );
+        return null;
+      }
+
+      // vBank: read the body in chunks, not byte by byte. One
+      // stream.read(1) per byte costs ~0.3ms each, so a 16KB block took
+      // 5.5s and anything bigger blew past every request timeout —
+      // which is why pushes and fetches of real snapshots failed while
+      // tiny inventory messages worked.
+      final result = BytesBuilder(copy: false);
+      var remaining = length;
+      while (remaining > 0) {
+        Uint8List chunk;
+        try {
+          chunk = await stream.read(remaining);
+        } catch (e) {
+          _logger.warning('Stream read failed with $remaining bytes left: $e');
+          return null;
+        }
+        if (chunk.isEmpty) {
           _logger.warning(
             'Stream closed prematurely while reading message body',
           );
           return null;
         }
-        result.add(byte);
+        result.add(chunk);
+        remaining -= chunk.length;
       }
 
-      return Uint8List.fromList(result);
+      return result.toBytes();
     } catch (e) {
       _logger.error('Error reading length-prefixed message', e);
       return null;

@@ -1,6 +1,7 @@
 # vBank relay node — see deploy/relay/README.md
 # Image: ghcr.io/arthurkay/vbank-relay (built by .github/workflows/relay-image.yml)
-# The relay lives in the app package (it reuses lib/core/ipfs), whose pubspec
+# The relay lives in the app package (lib/src/sync over the vendored
+# third_party/dart_ipfs), whose pubspec
 # depends on the Flutter SDK, so the build stage needs Flutter's Dart — same
 # version as the app (see FLUTTER_VERSION in .github/workflows/release.yml).
 FROM ghcr.io/cirruslabs/flutter:3.41.6 AS build
