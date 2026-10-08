@@ -54,3 +54,14 @@ final scheduleProvider =
       .loans.schedule(loanId)
       .then((r) => r.value),
 );
+
+/// A group's correction requests, newest first. Invalidated after
+/// request/decide calls.
+final reversalsProvider =
+    FutureProvider.family<List<TransactionReversal>, String>(
+  (ref, groupId) => ref
+      .watch(appServicesProvider)
+      .governance
+      .reversalsForGroup(groupId)
+      .then((r) => r.isOk ? r.value : const <TransactionReversal>[]),
+);

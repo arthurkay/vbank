@@ -14,6 +14,7 @@ import '../providers/ledger.dart';
 import 'invites_page.dart';
 import 'member_detail_page.dart';
 import 'report_page.dart';
+import 'transaction_detail_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
 import 'record_page.dart';
@@ -308,6 +309,15 @@ final class _TransactionSection extends ConsumerWidget {
           if (list.isEmpty) const Text('No transactions yet'),
           for (final Transaction t in list)
             MacosListTile(
+              onClick: () => Navigator.push(
+                context,
+                CupertinoPageRoute<void>(
+                  builder: (_) => MacosTransactionDetailPage(
+                    groupId: groupId,
+                    transactionId: t.id,
+                  ),
+                ),
+              ),
               title: Text('${t.type.name} · ${t.amount}'),
               subtitle: Text(t.status.name),
             ),

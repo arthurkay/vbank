@@ -12,6 +12,7 @@ import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
 import 'member_detail_page.dart';
+import 'transaction_detail_page.dart';
 import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
@@ -314,6 +315,15 @@ final class _TransactionSection extends ConsumerWidget {
             ListTile(
               title: Text('${t.type.name} · ${t.amount}'),
               trailing: Text(t.status.name),
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => WindowsTransactionDetailPage(
+                    groupId: groupId,
+                    transactionId: t.id,
+                  ),
+                ),
+              ),
             ),
         ],
       ),

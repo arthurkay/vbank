@@ -12,6 +12,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'transaction_detail_page.dart';
 import 'member_detail_page.dart';
 import 'report_page.dart';
 import 'loans_page.dart';
@@ -297,6 +298,15 @@ final class _TransactionSection extends ConsumerWidget {
             const Text('No transactions yet'),
           for (final Transaction t in list)
             YaruListTile(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => LinuxTransactionDetailPage(
+                    groupId: groupId,
+                    transactionId: t.id,
+                  ),
+                ),
+              ),
               title: Text('${t.type.name} · ${t.amount}'),
               trailing: Text(t.status.name),
             ),

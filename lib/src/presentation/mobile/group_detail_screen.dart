@@ -16,6 +16,7 @@ import 'member_detail_screen.dart';
 import 'report_screen.dart';
 import 'meetings_screen.dart';
 import 'record_screen.dart';
+import 'transaction_detail_screen.dart';
 
 /// One group's books: fund stats, balances, members and ledger, plus a
 /// record button for treasurers. Opening selects the group; the back
@@ -308,11 +309,23 @@ final class _TransactionSection extends ConsumerWidget {
           for (final Transaction t in list)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(child: Text('${t.type.name} · ${t.amount}')),
-                  Text(t.status.name).xSmall.muted,
-                ],
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => MobileTransactionDetailScreen(
+                      groupId: groupId,
+                      transactionId: t.id,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('${t.type.name} · ${t.amount}')),
+                    Text(t.status.name).xSmall.muted,
+                  ],
+                ),
               ),
             ),
         ],
