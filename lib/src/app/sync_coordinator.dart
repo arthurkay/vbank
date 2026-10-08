@@ -502,6 +502,10 @@ final class SyncCoordinator {
     if (relayAddrs.isEmpty) {
       return const Err(ValidationFailure('noRelays'));
     }
+    // Dial first: requests and fetches address relays through the
+    // peerstore, which is empty until a dial lands. Rounds do this in
+    // _dialRelays; joins must too, or every fetch misses.
+    await _dialRelays(relayAddrs);
     final List<String> relayIds = [
       for (final String a in relayAddrs) PeerBook.peerIdOf(a),
     ];
