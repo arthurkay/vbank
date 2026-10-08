@@ -29,33 +29,26 @@ final class WindowsJoinGroupPage extends ConsumerStatefulWidget {
 final class _WindowsJoinGroupPageState
     extends ConsumerState<WindowsJoinGroupPage> {
   final TextEditingController _link = TextEditingController();
-  final TextEditingController _name = TextEditingController();
   String? _error;
   bool _saving = false;
 
   @override
-  void initState() {
-    super.initState();
-    // The device already knows this person from onboarding: pre-fill,
-    // still editable for groups that know them differently.
-    _name.text = ref.read(authProvider).identity?.displayName ?? '';
-  }
-
-  @override
   void dispose() {
     _link.dispose();
-    _name.dispose();
     super.dispose();
   }
 
-  /// Validates locally, joins through the callback, opens the detail.
+  /// Validates locally, joins as the signed-in identity through the
+  /// callback, opens the detail.
   Future<void> _save() async {
     if (_link.text.trim().isEmpty) {
       setState(() => _error = 'Paste the invite link first.');
       return;
     }
-    if (_name.text.trim().isEmpty) {
-      setState(() => _error = 'Enter the name your group knows you by.');
+    final String? displayName =
+        ref.read(authProvider).identity?.displayName;
+    if (displayName == null || displayName.trim().isEmpty) {
+      setState(() => _error = 'Sign in first.');
       return;
     }
     setState(() {
@@ -64,7 +57,7 @@ final class _WindowsJoinGroupPageState
     });
     final Result<Unit> result = await widget.onJoin(
       link: _link.text.trim(),
-      displayName: _name.text,
+      displayName: displayName,
     );
     if (!mounted) {
       return;
@@ -121,13 +114,6 @@ final class _WindowsJoinGroupPageState
           TextBox(
             controller: _link,
             placeholder: 'vbank://join?…',
-          ),
-          const SizedBox(height: 12),
-          const Text('Your name'),
-          const SizedBox(height: 6),
-          TextBox(
-            controller: _name,
-            placeholder: 'Your name',
           ),
           const SizedBox(height: 20),
           if (_error != null) ...[

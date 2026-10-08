@@ -6,9 +6,7 @@ import 'package:vbank/src/app/invite_link.dart';
 InviteLink _link() => InviteLink(
   groupId: 'g1',
   groupCid: 'cid-1',
-  groupTopic: 'vbank/group/g1',
   inviterPeerId: 'owner',
-  inviterName: 'Owner',
   inviteId: 'id-1',
   secret: Uint8List.fromList(List<int>.generate(32, (i) => i)),
   nonce: Uint8List.fromList(List<int>.generate(16, (i) => 255 - i)),
@@ -27,7 +25,6 @@ void main() {
       expect(parsed.groupCid, 'cid-1');
       expect(parsed.groupTopic, 'vbank/group/g1');
       expect(parsed.inviterPeerId, 'owner');
-      expect(parsed.inviterName, 'Owner');
       expect(parsed.inviteId, 'id-1');
       expect(parsed.secret, original.secret);
       expect(parsed.nonce, original.nonce);

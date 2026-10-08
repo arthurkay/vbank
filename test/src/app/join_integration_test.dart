@@ -129,9 +129,7 @@ void main() {
       final String link = InviteLink(
         groupId: gid,
         groupCid: groupA.cid!,
-        groupTopic: 'vbank/group/$gid',
         inviterPeerId: 'owner',
-        inviterName: 'Owner',
         inviteId: created.invite.id,
         secret: created.secret!,
         nonce: created.invite.nonce,
@@ -193,9 +191,7 @@ void main() {
       final String expired = InviteLink(
         groupId: 'g',
         groupCid: 'c',
-        groupTopic: 'vbank/group/g',
         inviterPeerId: 'owner',
-        inviterName: 'Owner',
         inviteId: 'id-1',
         secret: filler,
         nonce: filler,

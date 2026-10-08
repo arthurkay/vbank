@@ -147,8 +147,7 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
       setState(() => _error = 'Not allowed (notWriter).');
       return;
     }
-    // Captured before the first await: promotion does not survive it.
-    final String inviterName = inviter.name;
+
     final key = await ref.read(appServicesProvider).keys.getKey(g.id);
     if (key == null) {
       setState(() => _error = 'Enter the group passphrase first.');
@@ -164,7 +163,7 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
               groupCid: g.cid ?? '',
               groupTopic: 'vbank/group/${g.id}',
               inviterPeerId: me,
-              inviterName: inviterName,
+              inviterName: inviter.name,
               groupKey: key,
             );
     if (!mounted) {
@@ -191,9 +190,7 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     final String link = InviteLink(
       groupId: g.id,
       groupCid: g.cid ?? '',
-      groupTopic: 'vbank/group/${g.id}',
       inviterPeerId: me,
-      inviterName: inviterName,
       inviteId: created.invite.id,
       secret: created.secret!,
       nonce: created.invite.nonce,

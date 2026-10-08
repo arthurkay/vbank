@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectableText;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:macos_ui/macos_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -74,6 +75,10 @@ final class _MacosInviteSharePageState
               const Text(
                 'It carries the key to your group — anyone with it can '
                 'join until it expires or is used.',
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: QrImageView(data: widget.link, size: 220),
               ),
               const SizedBox(height: 16),
               SelectableText(widget.link),

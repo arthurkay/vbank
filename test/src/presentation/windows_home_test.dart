@@ -173,23 +173,20 @@ void main() {
       final String link = InviteLink(
         groupId: 'g1',
         groupCid: 'cid-1',
-        groupTopic: 'vbank/group/g1',
         inviterPeerId: 'owner',
-        inviterName: 'Owner',
         inviteId: 'id-1',
         secret: Uint8List.fromList(List.filled(32, 7)),
         nonce: Uint8List.fromList(List.filled(16, 7)),
         expiresAt: DateTime.utc(2027, 1, 1),
       ).encode();
       await tester.enterText(find.byType(fluent.TextBox).at(0), link);
-      await tester.enterText(find.byType(fluent.TextBox).at(1), 'Amina');
-      await tester.tap(find.byKey(const ValueKey('join-submit-button')));
+            await tester.tap(find.byKey(const ValueKey('join-submit-button')));
       await settle(tester);
 
-      // The link and name reached the join callback, the parsed group
-      // is selected and the form popped.
+      // The link reached the join callback under the signed-in name, the
+      // parsed group is selected and the form popped.
       expect(joinedLink, link);
-      expect(joinedName, 'Amina');
+      expect(joinedName, 'owner');
       expect(container.read(selectedGroupIdProvider), 'g1');
       expect(find.text('Invite link'), findsNothing);
     });

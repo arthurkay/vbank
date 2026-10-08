@@ -173,15 +173,13 @@ final class _WindowsInvitesState extends ConsumerState<WindowsInvitesPage> {
     // The secret exists only here: show the link at once, and keep a
     // copy for re-sharing while the ticket is live.
     final CreatedInvite created = result.value;
-    if (created.secret == null || created.invite.inviterName == null) {
+    if (created.secret == null) {
       return;
     }
     final String link = InviteLink(
       groupId: g.id,
       groupCid: g.cid ?? '',
-      groupTopic: 'vbank/group/${g.id}',
       inviterPeerId: me,
-      inviterName: created.invite.inviterName!,
       inviteId: created.invite.id,
       secret: created.secret!,
       nonce: created.invite.nonce,

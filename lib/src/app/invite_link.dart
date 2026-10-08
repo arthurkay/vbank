@@ -25,14 +25,8 @@ final class InviteLink {
   /// Snapshot CID the invite was cut against (stale but openable).
   final String groupCid;
 
-  /// PubSub topic for announcements.
-  final String groupTopic;
-
   /// Peer id of the inviter.
   final String inviterPeerId;
-
-  /// Name the group knows the inviter by.
-  final String inviterName;
 
   /// Ticket id (spends on first join).
   final String inviteId;
@@ -50,14 +44,15 @@ final class InviteLink {
   const InviteLink({
     required this.groupId,
     required this.groupCid,
-    required this.groupTopic,
     required this.inviterPeerId,
-    required this.inviterName,
     required this.inviteId,
     required this.secret,
     required this.nonce,
     required this.expiresAt,
   });
+
+  /// PubSub topic, derived from the group id (never on the wire).
+  String get groupTopic => 'vbank/group/$groupId';
 
   /// True past [at] (default now).
   bool isExpiredAt(DateTime at) => !expiresAt.isAfter(at);
@@ -68,9 +63,7 @@ final class InviteLink {
       'v': version,
       'groupId': groupId,
       'groupCid': groupCid,
-      'groupTopic': groupTopic,
       'inviterPeerId': inviterPeerId,
-      'inviterName': inviterName,
       'inviteId': inviteId,
       'secret': secret,
       'nonce': nonce,
@@ -164,12 +157,11 @@ final class InviteLink {
       if (expires is! int) {
         return null;
       }
+      // Older links may carry groupTopic/inviterName; both are ignored.
       return InviteLink(
         groupId: str('groupId'),
         groupCid: str('groupCid'),
-        groupTopic: str('groupTopic'),
         inviterPeerId: str('inviterPeerId'),
-        inviterName: str('inviterName'),
         inviteId: str('inviteId'),
         secret: raw('secret'),
         nonce: raw('nonce'),

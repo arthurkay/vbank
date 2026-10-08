@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -73,6 +74,10 @@ final class _MobileInviteShareScreenState
           'It carries the key to your group — anyone with it can join '
           'until it expires or is used.',
         ).small.muted,
+        const Gap(16),
+        Center(
+          child: QrImageView(data: widget.link, size: 220),
+        ),
         const Gap(16),
         SelectableText(widget.link).small,
         const Gap(16),

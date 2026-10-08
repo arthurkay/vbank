@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:vbank/src/presentation/app_scope.dart';
 import 'package:vbank/src/presentation/mobile/invites_screen.dart';
@@ -34,8 +35,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('new-invite-button')));
       await settle(tester);
 
-      // The fresh link shows once, with its secret; back reveals the row.
+      // The fresh link shows once, with its secret, as text and QR.
       expect(find.textContaining('vbank://join?'), findsOneWidget);
+      expect(find.byType(QrImageView), findsOneWidget);
       await tester.tap(find.byIcon(LucideIcons.arrowLeft));
       await settle(tester);
       expect(find.textContaining('vbank://join?'), findsNothing);

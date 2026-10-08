@@ -6,6 +6,7 @@ import '../../domain/core/failure.dart';
 import '../../domain/core/result.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
+import 'scan_screen.dart';
 
 /// Joins a group from a share link in shadcn dress: paste the link,
 /// confirm the name, join. On success selects the group and pops — the
@@ -29,33 +30,26 @@ final class MobileJoinGroupScreen extends ConsumerStatefulWidget {
 final class _MobileJoinGroupScreenState
     extends ConsumerState<MobileJoinGroupScreen> {
   final TextEditingController _link = TextEditingController();
-  final TextEditingController _name = TextEditingController();
   String? _error;
   bool _saving = false;
 
   @override
-  void initState() {
-    super.initState();
-    // The device already knows this person from onboarding: pre-fill,
-    // still editable for groups that know them differently.
-    _name.text = ref.read(authProvider).identity?.displayName ?? '';
-  }
-
-  @override
   void dispose() {
     _link.dispose();
-    _name.dispose();
     super.dispose();
   }
 
-  /// Validates locally, joins through the callback, opens the detail.
+  /// Validates locally, joins as the signed-in identity through the
+  /// callback, opens the detail.
   Future<void> _save() async {
     if (_link.text.trim().isEmpty) {
       setState(() => _error = 'Paste the invite link first.');
       return;
     }
-    if (_name.text.trim().isEmpty) {
-      setState(() => _error = 'Enter the name your group knows you by.');
+    final String? displayName =
+        ref.read(authProvider).identity?.displayName;
+    if (displayName == null || displayName.trim().isEmpty) {
+      setState(() => _error = 'Sign in first.');
       return;
     }
     setState(() {
@@ -64,7 +58,7 @@ final class _MobileJoinGroupScreenState
     });
     final Result<Unit> result = await widget.onJoin(
       link: _link.text.trim(),
-      displayName: _name.text,
+      displayName: displayName,
     );
     if (!mounted) {
       return;
@@ -119,19 +113,37 @@ final class _MobileJoinGroupScreenState
     child: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Invite link').small.semiBold.muted,
+        Row(
+          children: [
+            Text('Invite link').small.semiBold.muted,
+            const Spacer(),
+            OutlineButton(
+              onPressed: () async {
+                final String? scanned = await Navigator.push<String>(
+                  context,
+                  MaterialPageRoute<String>(
+                    builder: (_) => const MobileScanScreen(),
+                  ),
+                );
+                if (scanned != null && mounted) {
+                  setState(() => _link.text = scanned);
+                }
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.scanLine, size: 16),
+                  Gap(6),
+                  Text('Scan'),
+                ],
+              ),
+            ),
+          ],
+        ),
         const Gap(8),
         TextField(
           controller: _link,
           placeholder: const Text('vbank://join?…'),
-        ),
-        const Gap(16),
-        Text('Your name').small.semiBold.muted,
-        const Gap(8),
-        TextField(
-          controller: _name,
-          placeholder: const Text('Your name'),
-          onSubmitted: (_) => _save(),
         ),
         const Gap(20),
         if (_error != null) ...[
