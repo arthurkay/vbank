@@ -87,6 +87,10 @@ final class _WindowsJoinGroupPageState
       'inviteExpired' => 'That invite expired — ask for a new link.',
       'syncNotSignedIn' => 'Restart the app and try again.',
       'identityNameEmpty' => 'Enter the name your group knows you by.',
+      'noRelays' => 'No relay reachable — check connection and settings.',
+      'snapshotUnreachable' =>
+          'The inviter has not synced yet — ask them to open the app, '
+          'then retry.',
       _ => 'Check the form ($reason).',
     },
     NotFoundFailure(:final subject) => 'Missing $subject.',

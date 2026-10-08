@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vbank/src/app/invite_link.dart';
 import 'package:vbank/src/app/sync_coordinator.dart';
+import 'package:vbank/src/domain/core/failure.dart';
 import 'package:vbank/src/crypto/sync_envelope.dart';
 import 'package:vbank/src/sync/engine.dart';
 import 'package:vbank/src/sync/ledger.dart';
@@ -202,6 +204,33 @@ void main() {
       expect(await coordinator.builtInRelayEnabled(), isTrue);
       await coordinator.setBuiltInRelayEnabled(false);
       expect(await coordinator.builtInRelayEnabled(), isFalse);
+      await coordinator.dispose();
+    });
+
+    test('join without relays names the missing relay', () async {
+      final AppHarness h = AppHarness();
+      await h.init();
+      final _QuietNode node = _QuietNode();
+      final SyncCoordinator coordinator = _coordinator(h, node, 'owner');
+      await coordinator.setBuiltInRelayEnabled(false);
+      final String link = InviteLink(
+        groupId: 'g1',
+        groupCid: 'cid-1',
+        inviterPeerId: 'owner',
+        inviteId: 'id-1',
+        secret: Uint8List.fromList(List.filled(32, 7)),
+        nonce: Uint8List.fromList(List.filled(16, 7)),
+        expiresAt: DateTime.utc(2027, 1, 1),
+      ).encode();
+      final result = await coordinator.joinWithLink(
+        link: link,
+        displayName: 'Owner',
+      );
+      expect(result.isErr, isTrue);
+      expect(
+        (result.failure as ValidationFailure).reason,
+        'noRelays',
+      );
       await coordinator.dispose();
     });
 

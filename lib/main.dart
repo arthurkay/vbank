@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:macos_ui/macos_ui.dart';
 import 'package:path/path.dart' as p;
@@ -338,15 +338,17 @@ final class _VBankRoot extends StatelessWidget {
         darkTheme: const ThemeData.dark(),
         themeMode: ThemeMode.system,
         home: Builder(
-          builder: (context) => MobileHomeScreen(
-            onCreateIdentity: () => _push(
-              context,
-              OnboardingScreen(
-                peerIdOf: startup.peerIdOf,
-                publicKey: startup.identityPublicKey,
+          builder: (context) => _SystemChromeHost(
+            child: MobileHomeScreen(
+              onCreateIdentity: () => _push(
+                context,
+                OnboardingScreen(
+                  peerIdOf: startup.peerIdOf,
+                  publicKey: startup.identityPublicKey,
+                ),
               ),
+              onJoinGroup: _join,
             ),
-            onJoinGroup: _join,
           ),
         ),
       );
@@ -408,6 +410,54 @@ final class _VBankRoot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Keeps the Android status and navigation bars readable: light icons
+/// on dark theme, dark icons on light theme, following the system.
+/// shadcn never sets the overlay style itself, so without this the
+/// status icons vanish on light screens. Global (not per route), so
+/// every pushed screen inherits it.
+final class _SystemChromeHost extends StatefulWidget {
+  /// The app below.
+  final Widget child;
+
+  /// Creates the host.
+  const _SystemChromeHost({required this.child});
+
+  @override
+  State<_SystemChromeHost> createState() => _SystemChromeHostState();
+}
+
+final class _SystemChromeHostState extends State<_SystemChromeHost>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _apply();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() => _apply();
+
+  /// Applies the overlay matching the current system brightness.
+  void _apply() {
+    final Brightness brightness = MediaQuery.platformBrightnessOf(context);
+    SystemChrome.setSystemUIOverlayStyle(
+      brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Startup failed before any UI existed.

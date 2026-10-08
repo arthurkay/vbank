@@ -489,6 +489,9 @@ final class SyncCoordinator {
       return const Ok(unit);
     }
     final List<String> relayAddrs = await relayAddresses();
+    if (relayAddrs.isEmpty) {
+      return const Err(ValidationFailure('noRelays'));
+    }
     final List<String> relayIds = [
       for (final String a in relayAddrs) PeerBook.peerIdOf(a),
     ];
@@ -498,7 +501,7 @@ final class SyncCoordinator {
     );
     bytes ??= await _fetchNewestSnapshot(groupId, relayIds);
     if (bytes == null) {
-      return const Err(NetworkFailure());
+      return const Err(ValidationFailure('snapshotUnreachable'));
     }
     final SyncEnvelope? header = SyncEnvelope.tryDecode(bytes);
     final Uint8List? wrapped = header?.wraps[parts.inviteId];
