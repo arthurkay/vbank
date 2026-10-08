@@ -434,13 +434,20 @@ final class _SystemChromeHostState extends State<_SystemChromeHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _apply();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Inherited widgets (MediaQuery) are only readable here, not in
+    // initState. Runs on first build and on dependency changes.
+    _apply();
   }
 
   @override
