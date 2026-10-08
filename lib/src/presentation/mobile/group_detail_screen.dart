@@ -6,10 +6,13 @@ import '../../domain/group.dart';
 import '../../domain/loans.dart';
 import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
+import '../member/member_actions.dart';
+import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_screen.dart';
 import 'loans_screen.dart';
+import 'member_detail_screen.dart';
 import 'report_screen.dart';
 import 'meetings_screen.dart';
 import 'record_screen.dart';
@@ -56,17 +59,21 @@ final class _MobileGroupDetailState
           ],
           title: Text(group.valueOrNull?.name ?? 'Group'),
           trailing: [
-            IconButton.ghost(
-              key: const ValueKey('record-button'),
-              icon: const Icon(LucideIcons.plus),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      MobileRecordScreen(groupId: widget.groupId),
+            if (canRecord(
+              group.valueOrNull,
+              ref.watch(authProvider).identity?.peerId,
+            ))
+              IconButton.ghost(
+                key: const ValueKey('record-button'),
+                icon: const Icon(LucideIcons.plus),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        MobileRecordScreen(groupId: widget.groupId),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ],
@@ -252,11 +259,23 @@ final class _MemberSection extends ConsumerWidget {
         for (final Member m in g.members)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(child: Text(m.name)),
-                Text(m.role.name).xSmall.muted,
-              ],
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => MobileMemberDetailScreen(
+                    groupId: g.id,
+                    peerId: m.peerId,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: Text(m.name)),
+                  Text(m.role.name).xSmall.muted,
+                ],
+              ),
             ),
           ),
       ],

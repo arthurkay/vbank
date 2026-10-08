@@ -7,10 +7,12 @@ import '../../domain/group.dart';
 import '../../domain/loans.dart';
 import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
+import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'member_detail_page.dart';
 import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
@@ -52,18 +54,22 @@ final class _MacosGroupDetailState
         ),
         title: Text(group.valueOrNull?.name ?? 'Group'),
         actions: [
-          ToolBarIconButton(
-            key: const ValueKey('record-button'),
-            label: 'Record transaction',
-            icon: const MacosIcon(CupertinoIcons.add),
-            showLabel: false,
-            onPressed: () => Navigator.push(
-              context,
-              CupertinoPageRoute<void>(
-                builder: (_) => MacosRecordPage(groupId: widget.groupId),
+          if (canRecord(
+            group.valueOrNull,
+            ref.watch(authProvider).identity?.peerId,
+          ))
+            ToolBarIconButton(
+              key: const ValueKey('record-button'),
+              label: 'Record transaction',
+              icon: const MacosIcon(CupertinoIcons.add),
+              showLabel: false,
+              onPressed: () => Navigator.push(
+                context,
+                CupertinoPageRoute<void>(
+                  builder: (_) => MacosRecordPage(groupId: widget.groupId),
+                ),
               ),
             ),
-          ),
         ],
       ),
       children: [
@@ -261,6 +267,15 @@ final class _MemberSection extends ConsumerWidget {
         const Text('Members'),
         for (final Member m in group.members)
           MacosListTile(
+            onClick: () => Navigator.push(
+              context,
+              CupertinoPageRoute<void>(
+                builder: (_) => MacosMemberDetailPage(
+                  groupId: group.id,
+                  peerId: m.peerId,
+                ),
+              ),
+            ),
             leading: const MacosIcon(CupertinoIcons.person_crop_circle),
             title: Text(m.name),
             subtitle: Text(m.role.name),

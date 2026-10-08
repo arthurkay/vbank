@@ -6,10 +6,12 @@ import '../../domain/group.dart';
 import '../../domain/loans.dart';
 import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
+import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'member_detail_page.dart';
 import 'report_page.dart';
 import 'loans_page.dart';
 import 'meetings_page.dart';
@@ -58,16 +60,21 @@ final class _WindowsGroupDetailState
           commandBar: CommandBar(
             mainAxisAlignment: MainAxisAlignment.end,
             primaryItems: [
-              CommandBarButton(
-                key: const ValueKey('record-button'),
-                icon: const Icon(FluentIcons.add),
-                label: const Text('Record'),
-                onPressed: () => Navigator.push(
-                  context,
-                  FluentPageRoute<void>(
-                    builder: (_) => WindowsRecordPage(groupId: widget.groupId),
+              if (canRecord(
+                group.valueOrNull,
+                ref.watch(authProvider).identity?.peerId,
+              ))
+                CommandBarButton(
+                  key: const ValueKey('record-button'),
+                  icon: const Icon(FluentIcons.add),
+                  label: const Text('Record'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    FluentPageRoute<void>(
+                      builder: (_) =>
+                          WindowsRecordPage(groupId: widget.groupId),
+                    ),
                   ),
-                ),
               ),
             ],
           ),
@@ -264,6 +271,15 @@ final class _MemberSection extends ConsumerWidget {
             leading: const Icon(FluentIcons.contact, size: 18),
             title: Text(m.name),
             trailing: Text(m.role.name),
+            onPressed: () => Navigator.push(
+              context,
+              FluentPageRoute<void>(
+                builder: (_) => WindowsMemberDetailPage(
+                  groupId: group.id,
+                  peerId: m.peerId,
+                ),
+              ),
+            ),
           ),
       ],
     );

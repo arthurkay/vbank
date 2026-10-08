@@ -6,6 +6,8 @@ import '../../domain/group.dart';
 import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
 import '../app_scope.dart';
+import '../member/member_actions.dart';
+import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'group_detail_page.dart' show authorOf;
 
@@ -58,6 +60,15 @@ final class _WindowsRecordState extends ConsumerState<WindowsRecordPage> {
   @override
   Widget build(BuildContext context) {
     final Group? group = ref.watch(selectedGroupProvider).valueOrNull;
+    if (!canRecord(group, ref.watch(authProvider).identity?.peerId)) {
+      return NavigationView(
+        content: const ScaffoldPage(
+          content: Center(
+            child: Text('Only owners and admins record transactions.'),
+          ),
+        ),
+      );
+    }
     final List<Member> members = [
       for (final Member m in group?.members ?? const <Member>[])
         if (m.status == MemberStatus.active) m,

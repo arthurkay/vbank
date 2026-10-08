@@ -6,6 +6,7 @@ import '../../domain/group.dart';
 import '../../domain/membership.dart';
 import '../../domain/transactions.dart';
 import '../app_scope.dart';
+import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 
@@ -62,6 +63,24 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
   Widget build(BuildContext context) {
     final AsyncValue<Group?> group = ref.watch(selectedGroupProvider);
     final Group? g = group.valueOrNull;
+    if (!canRecord(g, ref.watch(authProvider).identity?.peerId)) {
+      return Scaffold(
+        headers: [
+          AppBar(
+            leading: [
+              IconButton.ghost(
+                icon: const Icon(LucideIcons.arrowLeft),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+            title: const Text('Record transaction'),
+          ),
+        ],
+        child: const Center(
+          child: Text('Only owners and admins record transactions.'),
+        ),
+      );
+    }
     final List<Member> members = [
       for (final Member m in g?.members ?? const <Member>[])
         if (m.status == MemberStatus.active) m,

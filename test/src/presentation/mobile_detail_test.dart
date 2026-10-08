@@ -74,13 +74,14 @@ void main() {
       await settle(tester);
       expect(find.text('Enter an amount above zero.'), findsOneWidget);
 
-      // Plain members are refused with an explanation.
+      // Plain members never reach the form: writers-only notice instead.
       await world.signIn(container, peer: 'member');
       await settle(tester);
-      await tester.enterText(find.byType(TextField).first, '10');
-      await tester.tap(find.text('Save'));
-      await settle(tester);
-      expect(find.text('Not allowed (notWriter).'), findsOneWidget);
+      expect(
+        find.text('Only owners and admins record transactions.'),
+        findsOneWidget,
+      );
+      expect(find.text('Save'), findsNothing);
     });
   });
 }
