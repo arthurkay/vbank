@@ -11,6 +11,7 @@ import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'group_settings_page.dart';
 import 'invites_page.dart';
 import 'transaction_detail_page.dart';
 import 'member_detail_page.dart';
@@ -134,6 +135,29 @@ final class _LinuxGroupDetailState
               ),
             ),
             child: const Text('Sync'),
+          ),
+          const SizedBox(height: 8),
+          Consumer(
+            builder: (BuildContext context, WidgetRef ref, _) {
+              final Group? g = ref.watch(selectedGroupProvider).valueOrNull;
+              final String? me =
+                  ref.watch(authProvider).identity?.peerId;
+              if (g == null || myRole(g, me) != MemberRole.owner) {
+                return const SizedBox.shrink();
+              }
+              return OutlinedButton(
+                key: const ValueKey('settings-button'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => LinuxGroupSettingsPage(
+                      groupId: widget.groupId,
+                    ),
+                  ),
+                ),
+                child: const Text('Settings'),
+              );
+            },
           ),
         ],
       ),

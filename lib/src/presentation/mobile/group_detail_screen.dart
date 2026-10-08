@@ -10,6 +10,7 @@ import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'group_settings_screen.dart';
 import 'invites_screen.dart';
 import 'loans_screen.dart';
 import 'member_detail_screen.dart';
@@ -140,6 +141,29 @@ final class _MobileGroupDetailState
               ),
             ),
             child: const Text('Sync'),
+          ),
+          const Gap(8),
+          Consumer(
+            builder: (BuildContext context, WidgetRef ref, _) {
+              final Group? g = ref.watch(selectedGroupProvider).valueOrNull;
+              final String? me =
+                  ref.watch(authProvider).identity?.peerId;
+              if (g == null || myRole(g, me) != MemberRole.owner) {
+                return const SizedBox.shrink();
+              }
+              return OutlineButton(
+                key: const ValueKey('settings-button'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => MobileGroupSettingsScreen(
+                      groupId: widget.groupId,
+                    ),
+                  ),
+                ),
+                child: const Text('Settings'),
+              );
+            },
           ),
         ],
       ),

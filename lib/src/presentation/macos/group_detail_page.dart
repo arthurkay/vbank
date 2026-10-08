@@ -12,6 +12,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
 import 'invites_page.dart';
+import 'group_settings_page.dart';
 import 'member_detail_page.dart';
 import 'report_page.dart';
 import 'sync_status_page.dart';
@@ -153,6 +154,32 @@ final class _MacosGroupDetailState
                   ),
                 ),
                 child: const Text('Sync'),
+              ),
+              const SizedBox(height: 8),
+              Consumer(
+                builder: (BuildContext context, WidgetRef ref, _) {
+                  final Group? g =
+                      ref.watch(selectedGroupProvider).valueOrNull;
+                  final String? me =
+                      ref.watch(authProvider).identity?.peerId;
+                  if (g == null || myRole(g, me) != MemberRole.owner) {
+                    return const SizedBox.shrink();
+                  }
+                  return PushButton(
+                    key: const ValueKey('settings-button'),
+                    controlSize: ControlSize.large,
+                    secondary: true,
+                    onPressed: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute<void>(
+                        builder: (_) => MacosGroupSettingsPage(
+                          groupId: widget.groupId,
+                        ),
+                      ),
+                    ),
+                    child: const Text('Settings'),
+                  );
+                },
               ),
             ],
           ),
