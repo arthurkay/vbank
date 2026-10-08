@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 
 import '../crypto/sync_envelope.dart';
 import '../domain/core/failure.dart';
@@ -371,11 +371,13 @@ final class SyncCoordinator {
       final List<String> groupIds = await _keyedGroups();
       // Publish what the ledger does not know yet, so the round carries
       // local records to relays and the announcements pull peers.
+      var published = 0;
       final PublishReconciler? reconcile = _reconcile;
       if (reconcile != null) {
         for (final String groupId in groupIds) {
           final List<(String, String)> fresh =
               await reconcile.publishMissing(groupId);
+          published += fresh.length;
           for (final (String, String) announced in fresh) {
             await _announce(groupId, announced.$2, announced.$1);
           }
@@ -386,6 +388,13 @@ final class SyncCoordinator {
       final SyncReport report = await engine.synchronize(
         groupIds: groupIds,
         relayAddrs: relayAddrs,
+      );
+      debugPrint(
+        'vBank: sync round done '
+        'groups=${groupIds.length} published=$published '
+        'fetched=${report.fetched} applied=${report.applied} '
+        'pushed=${report.pushed} relays=${relayAddrs.length} '
+        'unreachable=${report.unreachable.length}',
       );
       for (final (String, String) applied in report.appliedCids) {
         _changes.add(
@@ -405,6 +414,7 @@ final class SyncCoordinator {
     } catch (e) {
       _setState(SyncState.error);
       _emit(SyncEventType.error, 'Round failed: $e');
+      debugPrint('vBank: sync round failed: $e');
       rethrow;
     }
   }
@@ -498,6 +508,10 @@ final class SyncCoordinator {
     Uint8List? bytes = await transport.fetchBlock(
       parts.groupCid,
       relayIds,
+    );
+    debugPrint(
+      'vBank: join fetch ${bytes == null ? 'miss' : 'hit'} '
+      'cid=${parts.groupCid} relays=${relayIds.length}',
     );
     bytes ??= await _fetchNewestSnapshot(groupId, relayIds);
     if (bytes == null) {
