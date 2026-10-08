@@ -1,8 +1,12 @@
 import 'dart:convert';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'peer_book.dart';
 import 'transport.dart';
+
+/// First characters of a CID for logs. CIDs are opaque content names.
+String _short(String cid) => cid.length <= 12 ? cid : cid.substring(0, 12);
 
 /// Provides the group symmetric key, or null for unknown groups. Phase 5
 /// implements this with the real key service; the engine only gates serving
@@ -376,10 +380,13 @@ final class SyncEngine {
         }
         final Uint8List? bytes = await localBlock(cid);
         if (bytes == null) {
+          debugPrint('vBank: push skip local-miss ${_short(cid)}');
           continue;
         }
         if (await _put(entry.key, groupId, cid, bytes)) {
           pushed++;
+        } else {
+          debugPrint('vBank: push refused ${_short(cid)}');
         }
       }
     }
@@ -432,10 +439,13 @@ final class SyncEngine {
       final String peer = PeerBook.peerIdOf(addr);
       final Uint8List? bytes = await localBlock(cid);
       if (bytes == null) {
+        debugPrint('vBank: announce skip local-miss ${_short(cid)}');
         continue;
       }
       if (await _put(peer, groupId, cid, bytes)) {
         stored++;
+      } else {
+        debugPrint('vBank: announce refused ${_short(cid)}');
       }
     }
     return stored;
