@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vbank/src/app/signing_payloads.dart';
 import 'package:vbank/src/crypto/member_keys.dart';
@@ -124,6 +125,44 @@ void main() {
         await harness.pipeline.apply(gid, 'cid-x', sealed),
         ApplyOutcome.rejected,
       );
+    });
+
+    test('rejections log type and key version', () async {
+      final List<String> logs = [];
+      final originalPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) {
+          logs.add(message);
+        }
+      };
+      addTearDown(() {
+        debugPrint = originalPrint;
+      });
+      final String gid = await world.seedGroup();
+      final PipelineHarness harness = world.pipelineFor('member');
+
+      expect(
+        await harness.pipeline.apply(
+          gid,
+          'cid-garbage-000',
+          Uint8List.fromList(const [1]),
+        ),
+        ApplyOutcome.rejected,
+      );
+      expect(logs.any((line) => line.contains('type=undecoded')), isTrue);
+      expect(logs.any((line) => line.contains('cid-garbage')), isTrue);
+
+      final Uint8List sealed = await sealFor(
+        type: SyncPayloadType.transaction,
+        groupId: gid,
+        payload: const {},
+        key: SecretKey(List.filled(32, 9)),
+      );
+      expect(
+        await harness.pipeline.apply(gid, 'cid-wrongkey-0', sealed),
+        ApplyOutcome.rejected,
+      );
+      expect(logs.any((line) => line.contains('type=transaction')), isTrue);
     });
   });
 
@@ -950,14 +989,15 @@ void main() {
         encKey,
       );
 
-      // Unknown members and forgeries reject.
+      // Unknown members defer (their join/snapshot is still in flight);
+      // forgeries reject.
       expect(
         await harness.pipeline.apply(
           gid,
           'cid-k2',
           await wrap({...good, 'peerId': 'ghost'}),
         ),
-        ApplyOutcome.rejected,
+        ApplyOutcome.deferred,
       );
       expect(
         await harness.pipeline.apply(

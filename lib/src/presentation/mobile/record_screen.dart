@@ -86,6 +86,12 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
         if (m.status == MemberStatus.active) m,
     ];
     _memberId ??= members.isNotEmpty ? members.first.peerId : null;
+    Member? selected;
+    for (final Member m in members) {
+      if (m.peerId == _memberId) {
+        selected = m;
+      }
+    }
     return Scaffold(
       headers: [
         AppBar(
@@ -101,6 +107,16 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          Text(
+            _direction(_type, selected?.name ?? 'a member'),
+          ).small.semiBold.muted,
+          const Gap(4),
+          if (_type == TransactionType.contribution && g != null)
+            Text(
+              'Expected ${g.config.contributionAmount} '
+              '${g.config.currency} ${g.config.frequency.name}.',
+            ).small.muted,
+          const Gap(12),
           Text('Kind').small.semiBold.muted,
           const Gap(8),
           Wrap(
@@ -143,9 +159,7 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
           const Gap(8),
           TextField(
             controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             placeholder: const Text('0.00'),
           ),
           const Gap(16),
@@ -153,10 +167,7 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
           const Gap(8),
           TextField(controller: _note, placeholder: const Text('Memo')),
           const Gap(20),
-          if (_error != null) ...[
-            Text(_error!).small,
-            const Gap(12),
-          ],
+          if (_error != null) ...[Text(_error!).small, const Gap(12)],
           PrimaryButton(
             onPressed: _saving ? null : () => _save(g),
             child: Text(_saving ? 'Saving…' : 'Save'),
@@ -165,6 +176,15 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
       ),
     );
   }
+
+  /// Who pays whom for the current kind and member, in plain words.
+  static String _direction(TransactionType type, String name) => switch (type) {
+    TransactionType.contribution => '$name pays into the group fund',
+    TransactionType.withdrawal => 'Group fund pays out to $name',
+    TransactionType.penalty => '$name owes a penalty to the fund',
+    TransactionType.fee => '$name pays a group fee',
+    _ => '$name ↔ group fund',
+  };
 
   /// Validates locally, records through the service, closes on success.
   Future<void> _save(Group? group) async {
@@ -186,15 +206,15 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
     final bool out = _type == TransactionType.withdrawal;
     final transactions = ref.read(appServicesProvider).transactions;
     final result = await transactions.createTransaction(
-          groupId: group.id,
-          authorPeerId: identity,
-          fromPeerId: out ? 'group' : memberId,
-          toPeerId: out ? memberId : 'group',
-          type: _type,
-          amount: amount,
-          currency: group.config.currency,
-          note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-        );
+      groupId: group.id,
+      authorPeerId: identity,
+      fromPeerId: out ? 'group' : memberId,
+      toPeerId: out ? memberId : 'group',
+      type: _type,
+      amount: amount,
+      currency: group.config.currency,
+      note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+    );
     if (!mounted) {
       return;
     }
@@ -210,12 +230,12 @@ final class _MobileRecordState extends ConsumerState<MobileRecordScreen> {
 
   /// Machine failure codes to human words.
   static String _explain(Failure failure) => switch (failure) {
-        PermissionFailure(:final action) => 'Not allowed ($action).',
-        ValidationFailure(:final reason) => 'Check the form ($reason).',
-        NotFoundFailure(:final subject) => 'Missing $subject.',
-        ConflictFailure(:final subject) => 'Conflict on $subject.',
-        NetworkFailure() => 'No connection.',
-        IntegrityFailure(:final subject) => 'Rejected $subject.',
-        StorageFailure() => 'Storage failed.',
-      };
+    PermissionFailure(:final action) => 'Not allowed ($action).',
+    ValidationFailure(:final reason) => 'Check the form ($reason).',
+    NotFoundFailure(:final subject) => 'Missing $subject.',
+    ConflictFailure(:final subject) => 'Conflict on $subject.',
+    NetworkFailure() => 'No connection.',
+    IntegrityFailure(:final subject) => 'Rejected $subject.',
+    StorageFailure() => 'Storage failed.',
+  };
 }

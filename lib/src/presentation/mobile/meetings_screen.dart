@@ -2,10 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 import '../../domain/core/failure.dart';
+import '../../domain/group.dart';
 import '../../domain/meetings.dart';
+import '../../domain/membership.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
+import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'format.dart';
+import 'vbank_theme.dart';
 
 /// A group's meetings with scheduling and attendance flows.
 final class MobileMeetingsScreen extends ConsumerWidget {
@@ -17,8 +22,6 @@ final class MobileMeetingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<Meeting>> meetings =
-        ref.watch(meetingListProvider(groupId));
     return Scaffold(
       headers: [
         AppBar(
@@ -43,49 +46,91 @@ final class MobileMeetingsScreen extends ConsumerWidget {
           ],
         ),
       ],
-      child: meetings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, _) => Center(child: Text('Error: $error')),
-        data: (List<Meeting> list) {
-          if (list.isEmpty) {
-            return const Center(child: Text('No meetings yet'));
-          }
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (BuildContext context, int i) {
-              final Meeting meeting = list[i];
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.push(
+      child: MobileMeetingList(groupId: groupId),
+    );
+  }
+}
+
+/// A group's meeting rows, shared by the meetings screen and the detail
+/// Meetings tab. Rows open the meeting detail; scheduling stays with
+/// the hosts.
+final class MobileMeetingList extends ConsumerWidget {
+  /// The group meeting.
+  final String groupId;
+
+  /// Creates the list.
+  const MobileMeetingList({super.key, required this.groupId});
+
+  /// Why this meeting matters now: countdown, attendance or outcome.
+  static String _summary(Meeting meeting) {
+    final int present = meeting.presentCount;
+    switch (meeting.status) {
+      case MeetingStatus.scheduled:
+        return '${formatCountdown(meeting.scheduledAt)} · $present attending';
+      case MeetingStatus.inProgress:
+        return '$present attending now';
+      case MeetingStatus.completed:
+        return 'Collected ${meeting.totalCollected.toStringAsFixed(2)} · '
+            '$present attended';
+      case MeetingStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Meeting>> meetings = ref.watch(
+      meetingListProvider(groupId),
+    );
+    return meetings.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, _) => Center(child: Text('Error: $error')),
+      data: (List<Meeting> list) {
+        if (list.isEmpty) {
+          return const Center(child: Text('No meetings yet'));
+        }
+        return ListView.builder(
+          itemCount: list.length,
+          itemBuilder: (BuildContext context, int i) {
+            final Meeting meeting = list[i];
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.push(
+                context,
+                VBankTheme.pageRoute<void>(
                   context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => MobileMeetingDetailScreen(
-                      groupId: groupId,
-                      meetingId: meeting.id,
-                    ),
+                  MobileMeetingDetailScreen(
+                    groupId: groupId,
+                    meetingId: meeting.id,
                   ),
                 ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${meeting.scheduledAt} · ${meeting.status.name}',
-                        ).medium,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${meeting.scheduledAt} · ${meeting.status.name}',
+                          ).medium,
+                          Text(_summary(meeting)).small.muted,
+                        ],
                       ),
-                      const Icon(LucideIcons.chevronRight, size: 16),
-                    ],
-                  ),
+                    ),
+                    const Icon(LucideIcons.chevronRight, size: 16),
+                  ],
                 ),
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -99,12 +144,10 @@ final class MobileScheduleScreen extends ConsumerStatefulWidget {
   const MobileScheduleScreen({super.key, required this.groupId});
 
   @override
-  ConsumerState<MobileScheduleScreen> createState() =>
-      _MobileScheduleState();
+  ConsumerState<MobileScheduleScreen> createState() => _MobileScheduleState();
 }
 
-final class _MobileScheduleState
-    extends ConsumerState<MobileScheduleScreen> {
+final class _MobileScheduleState extends ConsumerState<MobileScheduleScreen> {
   /// Days from now input.
   final TextEditingController _days = TextEditingController(text: '7');
 
@@ -122,39 +165,36 @@ final class _MobileScheduleState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        headers: [
-          AppBar(
-            leading: [
-              IconButton.ghost(
-                icon: const Icon(LucideIcons.arrowLeft),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-            title: const Text('Schedule meeting'),
+    headers: [
+      AppBar(
+        leading: [
+          IconButton.ghost(
+            icon: const Icon(LucideIcons.arrowLeft),
+            onPressed: () => Navigator.pop(context),
           ),
         ],
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text('Days from now').small.semiBold.muted,
-            const Gap(8),
-            TextField(
-              controller: _days,
-              keyboardType: TextInputType.number,
-              placeholder: const Text('7'),
-            ),
-            const Gap(20),
-            if (_error != null) ...[
-              Text(_error!).small,
-              const Gap(12),
-            ],
-            PrimaryButton(
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Saving…' : 'Schedule'),
-            ),
-          ],
+        title: const Text('Schedule meeting'),
+      ),
+    ],
+    child: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Days from now').small.semiBold.muted,
+        const Gap(8),
+        TextField(
+          controller: _days,
+          keyboardType: TextInputType.number,
+          placeholder: const Text('7'),
         ),
-      );
+        const Gap(20),
+        if (_error != null) ...[Text(_error!).small, const Gap(12)],
+        PrimaryButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Saving…' : 'Schedule'),
+        ),
+      ],
+    ),
+  );
 
   /// Validates locally, schedules through the service, closes on success.
   Future<void> _save() async {
@@ -172,13 +212,14 @@ final class _MobileScheduleState
       _saving = true;
       _error = null;
     });
-    final result =
-        await ref.read(appServicesProvider).meetings.createMeeting(
-              groupId: widget.groupId,
-              actingPeerId: me,
-              scheduledAt:
-                  DateTime.now().toUtc().add(Duration(days: days)),
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .meetings
+        .createMeeting(
+          groupId: widget.groupId,
+          actingPeerId: me,
+          scheduledAt: DateTime.now().toUtc().add(Duration(days: days)),
+        );
     if (!mounted) {
       return;
     }
@@ -194,14 +235,14 @@ final class _MobileScheduleState
 
   /// Machine failure codes to human words.
   static String _explain(Failure failure) => switch (failure) {
-        PermissionFailure(:final action) => 'Not allowed ($action).',
-        ValidationFailure(:final reason) => 'Check the form ($reason).',
-        NotFoundFailure(:final subject) => 'Missing $subject.',
-        ConflictFailure(:final subject) => 'Conflict on $subject.',
-        NetworkFailure() => 'No connection.',
-        IntegrityFailure(:final subject) => 'Rejected $subject.',
-        StorageFailure() => 'Storage failed.',
-      };
+    PermissionFailure(:final action) => 'Not allowed ($action).',
+    ValidationFailure(:final reason) => 'Check the form ($reason).',
+    NotFoundFailure(:final subject) => 'Missing $subject.',
+    ConflictFailure(:final subject) => 'Conflict on $subject.',
+    NetworkFailure() => 'No connection.',
+    IntegrityFailure(:final subject) => 'Rejected $subject.',
+    StorageFailure() => 'Storage failed.',
+  };
 }
 
 /// One meeting: attendance toggles and closing.
@@ -240,8 +281,10 @@ final class _MobileMeetingDetailState
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<Meeting>> meetings =
-        ref.watch(meetingListProvider(widget.groupId));
+    final AsyncValue<List<Meeting>> meetings = ref.watch(
+      meetingListProvider(widget.groupId),
+    );
+    final AsyncValue<Group?> group = ref.watch(selectedGroupProvider);
     final Meeting? meeting = meetings.valueOrNull
         ?.where((Meeting m) => m.id == widget.meetingId)
         .firstOrNull;
@@ -282,16 +325,17 @@ final class _MobileMeetingDetailState
           const Gap(8),
           Text('${meeting.presentCount} present').large,
           const Gap(16),
-          if (_error != null) ...[
-            Text(_error!).small,
-            const Gap(12),
-          ],
+          if (_error != null) ...[Text(_error!).small, const Gap(12)],
           for (final Attendance a in meeting.attendance)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Expanded(child: Text(a.peerId).medium),
+                  Expanded(
+                    child: Text(
+                      _memberName(group.valueOrNull, a.peerId),
+                    ).medium,
+                  ),
                   if (open)
                     OutlineButton(
                       onPressed: () => _attend(
@@ -332,6 +376,18 @@ final class _MobileMeetingDetailState
     );
   }
 
+  /// Roster name for an attendee, or the raw peer id.
+  static String _memberName(Group? group, String peerId) {
+    if (group != null) {
+      for (final Member m in group.members) {
+        if (m.peerId == peerId) {
+          return m.name;
+        }
+      }
+    }
+    return peerId;
+  }
+
   /// Flips one attendance record through the service.
   Future<void> _attend(
     Meeting meeting,
@@ -365,13 +421,15 @@ final class _MobileMeetingDetailState
       setState(() => _error = 'Sign in first.');
       return;
     }
-    final result =
-        await ref.read(appServicesProvider).meetings.completeMeeting(
-              groupId: widget.groupId,
-              actingPeerId: me,
-              meetingId: meeting.id,
-              totalCollected: collected,
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .meetings
+        .completeMeeting(
+          groupId: widget.groupId,
+          actingPeerId: me,
+          meetingId: meeting.id,
+          totalCollected: collected,
+        );
     if (!mounted) {
       return;
     }

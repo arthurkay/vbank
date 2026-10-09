@@ -8,6 +8,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_page.dart';
 import 'group_detail_page.dart';
+import 'identity_page.dart';
 import 'join_group_page.dart';
 
 /// The Linux home: the same auth gate and group list in Yaru dress.
@@ -92,6 +93,17 @@ final class LinuxHomePage extends ConsumerWidget {
                 ),
               ),
             ),
+          IconButton(
+            key: const ValueKey('identity-button'),
+            tooltip: 'Identity',
+            icon: const Icon(YaruIcons.user),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const LinuxIdentityPage(),
+              ),
+            ),
+          ),
         ],
       ),
       body: _GroupList(joinGroup: onJoinGroup),

@@ -6,6 +6,7 @@ import '../../domain/loans.dart';
 import '../app_scope.dart';
 import '../providers/auth.dart';
 import '../providers/ledger.dart';
+import 'vbank_theme.dart';
 
 /// A group's loans with request and detail flows.
 final class MobileLoansScreen extends ConsumerWidget {
@@ -17,8 +18,6 @@ final class MobileLoansScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<LoanRequest>> loans =
-        ref.watch(loanListProvider(groupId));
     return Scaffold(
       headers: [
         AppBar(
@@ -43,50 +42,117 @@ final class MobileLoansScreen extends ConsumerWidget {
           ],
         ),
       ],
-      child: loans.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, _) => Center(child: Text('Error: $error')),
-        data: (List<LoanRequest> list) {
-          if (list.isEmpty) {
-            return const Center(child: Text('No loans yet'));
-          }
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (BuildContext context, int i) {
-              final LoanRequest loan = list[i];
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => MobileLoanDetailScreen(
-                      groupId: groupId,
-                      loanId: loan.id,
+      child: MobileLoanList(groupId: groupId),
+    );
+  }
+}
+
+/// A group's loan rows, shared by the loans screen and the detail Loans
+/// tab. Rows open the loan detail; requesting stays with the hosts.
+final class MobileLoanList extends ConsumerWidget {
+  /// The group lending.
+  final String groupId;
+
+  /// Creates the list.
+  const MobileLoanList({super.key, required this.groupId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<LoanRequest>> loans = ref.watch(
+      loanListProvider(groupId),
+    );
+    return loans.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, _) => Center(child: Text('Error: $error')),
+      data: (List<LoanRequest> list) {
+        if (list.isEmpty) {
+          return const Center(child: Text('No loans yet'));
+        }
+        return ListView.builder(
+          itemCount: list.length,
+          itemBuilder: (BuildContext context, int i) {
+            final LoanRequest loan = list[i];
+            return _LoanRow(groupId: groupId, loan: loan);
+          },
+        );
+      },
+    );
+  }
+}
+
+/// One loan row: amount and status plus where repayment stands, so the
+/// list answers "how far along" without opening each loan.
+final class _LoanRow extends ConsumerWidget {
+  /// The group lending.
+  final String groupId;
+
+  /// The loan shown.
+  final LoanRequest loan;
+
+  /// Creates the row.
+  const _LoanRow({required this.groupId, required this.loan});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<RepaymentSchedule>> schedule = ref.watch(
+      scheduleProvider(loan.id),
+    );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.push(
+        context,
+        VBankTheme.pageRoute<void>(
+          context,
+          MobileLoanDetailScreen(groupId: groupId, loanId: loan.id),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${loan.requestedAmount} · ${loan.status.name}').medium,
+                  Text(
+                    schedule.when(
+                      loading: () => loan.status.name,
+                      error: (_, _) => loan.status.name,
+                      data: (List<RepaymentSchedule> list) =>
+                          _progress(loan, list),
                     ),
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${loan.requestedAmount} · ${loan.status.name}',
-                        ).medium,
-                      ),
-                      const Icon(LucideIcons.chevronRight, size: 16),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                  ).small.muted,
+                ],
+              ),
+            ),
+            const Icon(LucideIcons.chevronRight, size: 16),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Repayment standing in one line: repaid-of-expected plus overdue.
+  static String _progress(LoanRequest loan, List<RepaymentSchedule> list) {
+    if (list.isEmpty) {
+      return loan.status == LoanStatus.pending
+          ? 'Awaiting admin review'
+          : loan.status.name;
+    }
+    var expected = 0.0;
+    var paid = 0.0;
+    var overdue = 0;
+    for (final RepaymentSchedule s in list) {
+      expected += s.expectedAmount;
+      paid += s.paidAmount;
+      if (s.isOverdue || s.status == RepaymentStatus.overdue) {
+        overdue++;
+      }
+    }
+    final String base =
+        'Repaid ${paid.toStringAsFixed(2)} of ${expected.toStringAsFixed(2)}';
+    return overdue == 0 ? base : '$base · $overdue overdue';
   }
 }
 
@@ -130,56 +196,51 @@ final class _MobileRequestLoanState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        headers: [
-          AppBar(
-            leading: [
-              IconButton.ghost(
-                icon: const Icon(LucideIcons.arrowLeft),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-            title: const Text('Request loan'),
+    headers: [
+      AppBar(
+        leading: [
+          IconButton.ghost(
+            icon: const Icon(LucideIcons.arrowLeft),
+            onPressed: () => Navigator.pop(context),
           ),
         ],
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text('Amount').small.semiBold.muted,
-            const Gap(8),
-            TextField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              placeholder: const Text('0.00'),
-            ),
-            const Gap(16),
-            Text('Term (weeks)').small.semiBold.muted,
-            const Gap(8),
-            TextField(
-              controller: _term,
-              keyboardType: TextInputType.number,
-              placeholder: const Text('4'),
-            ),
-            const Gap(16),
-            Text('Reason (optional)').small.semiBold.muted,
-            const Gap(8),
-            TextField(
-              controller: _reason,
-              placeholder: const Text('Why the money is needed'),
-            ),
-            const Gap(20),
-            if (_error != null) ...[
-              Text(_error!).small,
-              const Gap(12),
-            ],
-            PrimaryButton(
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Sending…' : 'Send request'),
-            ),
-          ],
+        title: const Text('Request loan'),
+      ),
+    ],
+    child: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Amount').small.semiBold.muted,
+        const Gap(8),
+        TextField(
+          controller: _amount,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          placeholder: const Text('0.00'),
         ),
-      );
+        const Gap(16),
+        Text('Term (weeks)').small.semiBold.muted,
+        const Gap(8),
+        TextField(
+          controller: _term,
+          keyboardType: TextInputType.number,
+          placeholder: const Text('4'),
+        ),
+        const Gap(16),
+        Text('Reason (optional)').small.semiBold.muted,
+        const Gap(8),
+        TextField(
+          controller: _reason,
+          placeholder: const Text('Why the money is needed'),
+        ),
+        const Gap(20),
+        if (_error != null) ...[Text(_error!).small, const Gap(12)],
+        PrimaryButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Sending…' : 'Send request'),
+        ),
+      ],
+    ),
+  );
 
   /// Validates locally, requests through the service, closes on success.
   Future<void> _save() async {
@@ -202,16 +263,16 @@ final class _MobileRequestLoanState
       _saving = true;
       _error = null;
     });
-    final result =
-        await ref.read(appServicesProvider).loans.requestLoan(
-              groupId: widget.groupId,
-              borrowerPeerId: borrower,
-              requestedAmount: amount,
-              termWeeks: term,
-              reason: _reason.text.trim().isEmpty
-                  ? null
-                  : _reason.text.trim(),
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .loans
+        .requestLoan(
+          groupId: widget.groupId,
+          borrowerPeerId: borrower,
+          requestedAmount: amount,
+          termWeeks: term,
+          reason: _reason.text.trim().isEmpty ? null : _reason.text.trim(),
+        );
     if (!mounted) {
       return;
     }
@@ -227,14 +288,14 @@ final class _MobileRequestLoanState
 
   /// Machine failure codes to human words.
   static String _explain(Failure failure) => switch (failure) {
-        PermissionFailure(:final action) => 'Not allowed ($action).',
-        ValidationFailure(:final reason) => 'Check the form ($reason).',
-        NotFoundFailure(:final subject) => 'Missing $subject.',
-        ConflictFailure(:final subject) => 'Conflict on $subject.',
-        NetworkFailure() => 'No connection.',
-        IntegrityFailure(:final subject) => 'Rejected $subject.',
-        StorageFailure() => 'Storage failed.',
-      };
+    PermissionFailure(:final action) => 'Not allowed ($action).',
+    ValidationFailure(:final reason) => 'Check the form ($reason).',
+    NotFoundFailure(:final subject) => 'Missing $subject.',
+    ConflictFailure(:final subject) => 'Conflict on $subject.',
+    NetworkFailure() => 'No connection.',
+    IntegrityFailure(:final subject) => 'Rejected $subject.',
+    StorageFailure() => 'Storage failed.',
+  };
 }
 
 /// One loan: amounts, schedule and lifecycle actions.
@@ -296,8 +357,9 @@ final class _MobileLoanDetailState
       );
     }
     final String? me = ref.watch(authProvider).identity?.peerId;
-    final AsyncValue<List<RepaymentSchedule>> schedule =
-        ref.watch(scheduleProvider(loan.id));
+    final AsyncValue<List<RepaymentSchedule>> schedule = ref.watch(
+      scheduleProvider(loan.id),
+    );
     return Scaffold(
       headers: [
         AppBar(
@@ -317,10 +379,7 @@ final class _MobileLoanDetailState
           const Gap(8),
           Text('Due ${loan.totalWithInterest.toStringAsFixed(2)}').large,
           const Gap(16),
-          if (_error != null) ...[
-            Text(_error!).small,
-            const Gap(12),
-          ],
+          if (_error != null) ...[Text(_error!).small, const Gap(12)],
           if (loan.isPending && me != null && me != loan.borrowerPeerId) ...[
             PrimaryButton(
               key: const ValueKey('approve-button'),
@@ -401,10 +460,7 @@ final class _MobileLoanDetailState
             approvedAmount: loan.requestedAmount,
             approverPeerId: me,
           )
-        : await services.rejectLoan(
-            loanId: loan.id,
-            approverPeerId: me,
-          );
+        : await services.rejectLoan(loanId: loan.id, approverPeerId: me);
     if (!mounted) {
       return;
     }
@@ -419,11 +475,10 @@ final class _MobileLoanDetailState
     LoanRequest loan,
     String me,
   ) async {
-    final result =
-        await ref.read(appServicesProvider).loans.disburseLoan(
-              loanId: loan.id,
-              adminPeerId: me,
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .loans
+        .disburseLoan(loanId: loan.id, adminPeerId: me);
     if (!mounted) {
       return;
     }
@@ -443,12 +498,10 @@ final class _MobileLoanDetailState
       setState(() => _error = 'Enter an amount above zero.');
       return;
     }
-    final result =
-        await ref.read(appServicesProvider).loans.recordRepayment(
-              loanId: loan.id,
-              adminPeerId: me,
-              amount: amount,
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .loans
+        .recordRepayment(loanId: loan.id, adminPeerId: me, amount: amount);
     if (!mounted) {
       return;
     }

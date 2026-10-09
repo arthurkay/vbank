@@ -37,17 +37,19 @@ void main() {
       container.read(selectedGroupIdProvider.notifier).state = group.id;
       await settle(tester);
 
+      await tester.tap(find.byKey(const ValueKey('tab-more')));
+      await settle(tester);
       await tester.scrollUntilVisible(find.text('Settings'), 100);
       await settle(tester);
       await tester.tap(find.text('Settings'));
       await settle(tester);
 
-      // Pick the admin, confirm twice, roles flip.
+      // Pick the admin, confirm in the sheet, roles flip.
       await tester.tap(find.text('Member').last);
       await settle(tester);
       await tester.tap(find.byKey(const ValueKey('transfer-button')));
       await settle(tester);
-      await tester.tap(find.byKey(const ValueKey('transfer-button')));
+      await tester.tap(find.text('Transfer'));
       await settle(tester);
 
       final updated =

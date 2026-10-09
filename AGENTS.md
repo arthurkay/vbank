@@ -804,13 +804,18 @@ class MemberStatement {
 
 | Token | Light | Dark | Usage |
 |-------|-------|------|-------|
-| primary | #10B981 (emerald) | #34D399 | CTAs, active states, balance positive |
-| destructive | #EF4444 (red) | #EF4444 | Delete, negative balance, errors |
+| primary | #18181B (neutral) | #FAFAFA | CTAs, active states |
+| destructive | #EF4444 (red) | #F87171 | Delete, negative balance, errors |
 | warning | #F59E0B (amber) | #FBBF24 | Pending transactions |
-| muted | #F4F4F5 | #27272A | Backgrounds, secondary surfaces |
-| border | #E4E4E7 | #27272A | Dividers, card borders |
+| background | #FAFAFA (paper) | #0B0B0C (matte black) | Page background |
+| card | #FFFFFF | #171717 | Card surfaces |
+| muted | #F4F4F5 | #141414 | Backgrounds, secondary surfaces |
+| border | #E4E4E7 | #262626 | Dividers, card borders |
 | foreground | #09090B | #FAFAFA | Primary text |
 | mutedForeground | #71717A | #A1A1AA | Secondary text, labels |
+
+Color is reserved for semantics (amber/red); brand actions are monochrome.
+Tokens live in `lib/src/presentation/mobile/vbank_theme.dart` (`VBankTheme`).
 
 ### Typography Scale
 

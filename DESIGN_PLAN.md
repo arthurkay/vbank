@@ -2061,6 +2061,7 @@ Status of record as of 2026-08-25. See `planning/PLAN_GAP_ANALYSIS.md` for the a
 - `pending_transactions` table removed; `group_keys` table added; `author_peer_id`, `loan_id`, sync columns added to `transactions`.
 
 **Not done**
-- Wi-Fi-only sync gating; background execution when the app is killed (would need WorkManager/foreground service).
+- Background execution when the app is killed (would need WorkManager/foreground service).
 - `_vbank._tcp` mDNS advertisement.
 - Multi-language, PDF export, savings-target progress, IPNS (§35).
+- Wi-Fi-only sync gating: out of scope (sync runs on any connection).

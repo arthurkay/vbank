@@ -51,7 +51,9 @@ import 'src/presentation/linux/onboarding_page.dart';
 import 'src/presentation/macos/home_page.dart';
 import 'src/presentation/macos/onboarding_page.dart';
 import 'src/presentation/mobile/home_screen.dart';
+import 'src/presentation/mobile/vbank_theme.dart';
 import 'src/presentation/onboarding/onboarding_screen.dart';
+import 'src/presentation/sync_on_resume.dart';
 import 'src/presentation/windows/onboarding_page.dart';
 import 'src/presentation/windows/home_page.dart';
 import 'src/sync/ipfs_transport.dart';
@@ -104,8 +106,9 @@ final class _Startup {
   /// Builds everything, in order. Throws with the failing step.
   static Future<_Startup> assemble() async {
     final Uint8List secret = await DeviceSecret.get();
-    final SimpleKeyPair identityKey =
-        await SigningService.keyPairFromSeed(secret);
+    final SimpleKeyPair identityKey = await SigningService.keyPairFromSeed(
+      secret,
+    );
     final Uint8List identityPublicKey = Uint8List.fromList(
       await SigningService.extractPublicKeyBytes(identityKey),
     );
@@ -127,9 +130,7 @@ final class _Startup {
       // the native open rejects it before any statement runs. This
       // rebuilds once (old files used the other keying); per-device
       // files never move between platforms, so formats may differ.
-      nativePassword: Platform.isAndroid || Platform.isIOS
-          ? dbPassword
-          : null,
+      nativePassword: Platform.isAndroid || Platform.isIOS ? dbPassword : null,
     );
     if (openedResult.isErr) {
       throw StateError('database: ${openedResult.failure}');
@@ -151,13 +152,16 @@ final class _Startup {
 
     DateTime clock() => DateTime.now().toUtc();
     Future<Uint8List> sign(List<int> payload) async {
-      final Signature signature =
-          await SigningService.sign(payload, identityKey);
+      final Signature signature = await SigningService.sign(
+        payload,
+        identityKey,
+      );
       return Uint8List.fromList(signature.bytes);
     }
 
-    final GroupKeyService keys =
-        GroupKeyService(GroupKeyStore(repositories.settings));
+    final GroupKeyService keys = GroupKeyService(
+      GroupKeyStore(repositories.settings),
+    );
     final GroupService groups = GroupService(
       groups: repositories.groups,
       governance: repositories.governance,
@@ -351,19 +355,14 @@ final class _VBankRoot extends StatelessWidget {
   const _VBankRoot({required this.startup});
 
   /// Pushes a screen on the nearest navigator.
-  Future<void> _push(BuildContext context, Widget screen) => Navigator.push(
-        context,
-        MaterialPageRoute<void>(builder: (_) => screen),
-      );
+  Future<void> _push(BuildContext context, Widget screen) =>
+      Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen));
 
   /// Joins a group from a share link through the sync coordinator.
   Future<Result<Unit>> _join({
     required String link,
     required String displayName,
-  }) => startup.coordinator.joinWithLink(
-    link: link,
-    displayName: displayName,
-  );
+  }) => startup.coordinator.joinWithLink(link: link, displayName: displayName);
 
   @override
   Widget build(BuildContext context) {
@@ -374,20 +373,22 @@ final class _VBankRoot extends StatelessWidget {
       return ShadcnApp(
         title: 'vBank',
         debugShowCheckedModeBanner: false,
-        theme: const ThemeData(),
-        darkTheme: const ThemeData.dark(),
+        theme: VBankTheme.light,
+        darkTheme: VBankTheme.dark,
         themeMode: ThemeMode.system,
         home: Builder(
           builder: (context) => _SystemChromeHost(
-            child: MobileHomeScreen(
-              onCreateIdentity: () => _push(
-                context,
-                OnboardingScreen(
-                  peerIdOf: startup.peerIdOf,
-                  publicKey: startup.identityPublicKey,
+            child: SyncOnResume(
+              child: MobileHomeScreen(
+                onCreateIdentity: () => _push(
+                  context,
+                  OnboardingScreen(
+                    peerIdOf: startup.peerIdOf,
+                    publicKey: startup.identityPublicKey,
+                  ),
                 ),
+                onJoinGroup: _join,
               ),
-              onJoinGroup: _join,
             ),
           ),
         ),
@@ -401,15 +402,17 @@ final class _VBankRoot extends StatelessWidget {
           theme: yaru.theme,
           darkTheme: yaru.darkTheme,
           home: Builder(
-            builder: (context) => LinuxHomePage(
-              onCreateIdentity: () => _push(
-                context,
-                LinuxOnboardingPage(
-                  peerIdOf: startup.peerIdOf,
-                  publicKey: startup.identityPublicKey,
+            builder: (context) => SyncOnResume(
+              child: LinuxHomePage(
+                onCreateIdentity: () => _push(
+                  context,
+                  LinuxOnboardingPage(
+                    peerIdOf: startup.peerIdOf,
+                    publicKey: startup.identityPublicKey,
+                  ),
                 ),
+                onJoinGroup: _join,
               ),
-              onJoinGroup: _join,
             ),
           ),
         ),
@@ -420,15 +423,17 @@ final class _VBankRoot extends StatelessWidget {
         title: 'vBank',
         debugShowCheckedModeBanner: false,
         home: Builder(
-          builder: (context) => MacosHomePage(
-            onCreateIdentity: () => _push(
-              context,
-              MacosOnboardingPage(
-                peerIdOf: startup.peerIdOf,
-                publicKey: startup.identityPublicKey,
+          builder: (context) => SyncOnResume(
+            child: MacosHomePage(
+              onCreateIdentity: () => _push(
+                context,
+                MacosOnboardingPage(
+                  peerIdOf: startup.peerIdOf,
+                  publicKey: startup.identityPublicKey,
+                ),
               ),
+              onJoinGroup: _join,
             ),
-            onJoinGroup: _join,
           ),
         ),
       );
@@ -437,15 +442,17 @@ final class _VBankRoot extends StatelessWidget {
       title: 'vBank',
       debugShowCheckedModeBanner: false,
       home: Builder(
-        builder: (context) => WindowsHomePage(
-          onCreateIdentity: () => _push(
-            context,
-            WindowsOnboardingPage(
-              peerIdOf: startup.peerIdOf,
-              publicKey: startup.identityPublicKey,
+        builder: (context) => SyncOnResume(
+          child: WindowsHomePage(
+            onCreateIdentity: () => _push(
+              context,
+              WindowsOnboardingPage(
+                peerIdOf: startup.peerIdOf,
+                publicKey: startup.identityPublicKey,
+              ),
             ),
+            onJoinGroup: _join,
           ),
-          onJoinGroup: _join,
         ),
       ),
     );
@@ -528,8 +535,8 @@ final class _StartupError extends StatelessWidget {
   String get _title => error.contains('database')
       ? 'Could not open your database'
       : error.contains('SQLCipher')
-          ? 'Encryption unavailable'
-          : 'vBank could not start';
+      ? 'Encryption unavailable'
+      : 'vBank could not start';
 
   /// User-friendly message based on the error type.
   String get _message => error.contains('database')
@@ -538,56 +545,53 @@ final class _StartupError extends StatelessWidget {
             'Your data is safe — it can be restored from other group '
             'members once sync runs.'
       : error.contains('SQLCipher')
-          ? 'This device cannot encrypt local data. On Android this means '
-                'the app was built without SQLCipher. Please reinstall '
-                'the app.'
-          : 'Something went wrong while starting vBank. Please try again. '
-                'If the problem persists, restart the app.';
+      ? 'This device cannot encrypt local data. On Android this means '
+            'the app was built without SQLCipher. Please reinstall '
+            'the app.'
+      : 'Something went wrong while starting vBank. Please try again. '
+            'If the problem persists, restart the app.';
 
   @override
   Widget build(BuildContext context) => ShadcnApp(
-        theme: const ThemeData(),
-        darkTheme: const ThemeData.dark(),
-        themeMode: ThemeMode.system,
-        home: Scaffold(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    theme: VBankTheme.light,
+    darkTheme: VBankTheme.dark,
+    themeMode: ThemeMode.system,
+    home: Scaffold(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                LucideIcons.triangleAlert,
+                size: 48,
+                color: Colors.orange,
+              ),
+              const Gap(16),
+              Text(_title).xLarge.bold,
+              const Gap(12),
+              Text(_message, textAlign: TextAlign.center).muted,
+              const Gap(24),
+              PrimaryButton(
+                onPressed: () {
+                  // Re-run main() — the OS keeps the process alive.
+                  main();
+                },
+                child: const Text('Retry'),
+              ),
+              const Gap(16),
+              Collapsible(
                 children: [
-                  const Icon(
-                    LucideIcons.triangleAlert,
-                    size: 48,
-                    color: Colors.orange,
-                  ),
-                  const Gap(16),
-                  Text(_title).xLarge.bold,
-                  const Gap(12),
-                  Text(
-                    _message,
-                    textAlign: TextAlign.center,
-                  ).muted,
-                  const Gap(24),
-                  PrimaryButton(
-                    onPressed: () {
-                      // Re-run main() — the OS keeps the process alive.
-                      main();
-                    },
-                    child: const Text('Retry'),
-                  ),
-                  const Gap(16),
-                  Collapsible(
-                    children: [
-                      const Text('Technical details').small,
-                      const Gap(8),
-                      SelectableText(safeError).muted.xSmall,
-                    ],
-                  ),
+                  const Text('Technical details').small,
+                  const Gap(8),
+                  SelectableText(safeError).muted.xSmall,
                 ],
               ),
-            ),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }

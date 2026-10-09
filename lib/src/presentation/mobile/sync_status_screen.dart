@@ -50,6 +50,12 @@ final class _MobileSyncStatusScreenState
     ref.invalidate(relayListProvider);
   }
 
+  /// Short peer id for a relay multiaddr (`…/p2p/<id>`).
+  static String _shortPeer(String addr) {
+    final String id = addr.split('/p2p/').last;
+    return id.length <= 8 ? id : id.substring(0, 8);
+  }
+
   /// Adds a user relay address.
   Future<void> _addRelay() async {
     final SyncCoordinator? coordinator = ref.read(syncCoordinatorProvider);
@@ -94,8 +100,12 @@ final class _MobileSyncStatusScreenState
               Text(
                 state.when(
                   loading: () => '…',
-                  error: (_, _) => 'error',
-                  data: (SyncState s) => s.name,
+                  error: (_, _) => 'Attention needed',
+                  data: (SyncState s) => switch (s) {
+                    SyncState.syncing => 'Syncing…',
+                    SyncState.error => 'Attention needed',
+                    SyncState.idle => 'Up to date',
+                  },
                 ),
               ).small.semiBold.muted,
               const Gap(8),
@@ -105,10 +115,12 @@ final class _MobileSyncStatusScreenState
               ),
             ],
           ),
-          if (_error != null) ...[
-            const Gap(8),
-            Text(_error!).small,
-          ],
+          const Gap(4),
+          const Text(
+            'Sync runs on its own when the app opens and returns. '
+            'This button forces a round right now.',
+          ).small.muted,
+          if (_error != null) ...[const Gap(8), Text(_error!).small],
           const Gap(20),
           Text('Relays').small.semiBold.muted,
           const Gap(8),
@@ -116,11 +128,14 @@ final class _MobileSyncStatusScreenState
             loading: () => const [Center(child: CircularProgressIndicator())],
             error: (Object error, _) => [Text('Error: $error')],
             data: (List<String> addrs) => [
-              if (addrs.isEmpty) const Text('None configured.').small.muted,
+              if (addrs.isEmpty)
+                const Text(
+                  'None configured — members can only sync on the same Wi-Fi.',
+                ).small.muted,
               for (final String addr in addrs)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Text(addr).xSmall.muted,
+                  child: Text('Relay ${_shortPeer(addr)}').xSmall.muted,
                 ),
             ],
           ),
@@ -141,8 +156,7 @@ final class _MobileSyncStatusScreenState
           const Gap(20),
           Text('Log').small.semiBold.muted,
           const Gap(8),
-          if (log.isEmpty)
-            const Text('No sync activity yet.').small.muted,
+          if (log.isEmpty) const Text('No sync activity yet.').small.muted,
           for (final SyncEvent event in log.take(30))
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),

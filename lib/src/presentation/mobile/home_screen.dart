@@ -7,6 +7,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_screen.dart';
 import 'group_detail_screen.dart';
+import 'identity_screen.dart';
 import 'join_group_screen.dart';
 
 /// The mobile home: an auth gate over the group list.
@@ -89,6 +90,16 @@ final class MobileHomeScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+            IconButton.ghost(
+              key: const ValueKey('identity-button'),
+              icon: const Icon(LucideIcons.user),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const MobileIdentityScreen(),
+                ),
+              ),
+            ),
           ],
         ),
       ],

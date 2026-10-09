@@ -48,6 +48,8 @@ void main() {
       await settle(tester);
 
       // Open the transaction, request a correction.
+      await tester.tap(find.byKey(const ValueKey('tab-activity')));
+      await settle(tester);
       await tester.tap(find.textContaining('contribution'));
       await settle(tester);
       await tester.tap(find.text('Request correction'));

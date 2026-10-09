@@ -7,6 +7,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_page.dart';
 import 'group_detail_page.dart';
+import 'identity_page.dart';
 import 'join_group_page.dart';
 
 /// The Windows home: the same auth gate and group list in Fluent dress.
@@ -112,6 +113,17 @@ final class WindowsGroupsPage extends ConsumerWidget {
                   ),
                 ),
               ),
+            CommandBarButton(
+              key: const ValueKey('identity-button'),
+              icon: const Icon(FluentIcons.contact),
+              label: const Text('Identity'),
+              onPressed: () => Navigator.push(
+                context,
+                FluentPageRoute<void>(
+                  builder: (_) => const WindowsIdentityPage(),
+                ),
+              ),
+            ),
           ],
         ),
       ),

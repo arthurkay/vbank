@@ -12,6 +12,7 @@ import '../member/member_actions.dart';
 import '../providers/auth.dart';
 import '../providers/groups.dart';
 import '../providers/ledger.dart';
+import 'format.dart';
 
 /// One ledger entry with its correction flow in shadcn dress: details,
 /// reversal state, request form (involved parties) and approve/reject
@@ -155,8 +156,7 @@ final class _MobileTransactionDetailScreenState
         ),
       ],
       child: txs.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, _) => Center(child: Text('Error: $error')),
         data: (List<Transaction> list) {
           Transaction? tx;
@@ -166,9 +166,7 @@ final class _MobileTransactionDetailScreenState
             }
           }
           if (tx == null) {
-            return Center(
-              child: Text('No longer on record.').small.muted,
-            );
+            return Center(child: Text('No longer on record.').small.muted);
           }
           final Transaction shown = tx;
           final Group? g = group.valueOrNull;
@@ -183,7 +181,15 @@ final class _MobileTransactionDetailScreenState
               const Gap(8),
               Text(money).large,
               const Gap(8),
-              Text('Status: ${shown.status.name}').small.muted,
+              Text(
+                '${_party(g, shown.fromPeerId)} → '
+                '${_party(g, shown.toPeerId)}',
+              ).small.semiBold,
+              const Gap(4),
+              Text(
+                'Recorded ${formatDay(shown.timestamp)} · '
+                'Status: ${shown.status.name}',
+              ).small.muted,
               if (shown.note != null && shown.note!.isNotEmpty) ...[
                 const Gap(8),
                 Text(shown.note!).small,
@@ -214,6 +220,21 @@ final class _MobileTransactionDetailScreenState
 
   /// Wraps [_request] for the section callback.
   Future<void> _saveRequest() => _request();
+
+  /// Roster name for a party, or 'Group fund' for the group itself.
+  static String _party(Group? group, String peerId) {
+    if (peerId == 'group') {
+      return 'Group fund';
+    }
+    if (group != null) {
+      for (final Member m in group.members) {
+        if (m.peerId == peerId) {
+          return m.name;
+        }
+      }
+    }
+    return peerId.length <= 8 ? peerId : '${peerId.substring(0, 8)}…';
+  }
 }
 
 /// Correction state, request form and pending decisions.
@@ -319,17 +340,12 @@ final class _ReversalSection extends StatelessWidget {
                   child: const Text('Request correction'),
                 ),
               ],
-              if (error != null) ...[
-                const Gap(8),
-                Text(error!).small,
-              ],
+              if (error != null) ...[const Gap(8), Text(error!).small],
               for (final TransactionReversal r in mine)
                 if (r.status != ReversalStatus.pending)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '${r.status.name}: ${r.reason}',
-                    ).small.muted,
+                    child: Text('${r.status.name}: ${r.reason}').small.muted,
                   ),
             ],
           );
@@ -385,16 +401,12 @@ final class _PendingCard extends StatelessWidget {
               Row(
                 children: [
                   PrimaryButton(
-                    onPressed: busy
-                        ? null
-                        : () => onDecide(reversal, true),
+                    onPressed: busy ? null : () => onDecide(reversal, true),
                     child: const Text('Approve'),
                   ),
                   const Gap(8),
                   OutlineButton(
-                    onPressed: busy
-                        ? null
-                        : () => onDecide(reversal, false),
+                    onPressed: busy ? null : () => onDecide(reversal, false),
                     child: const Text('Reject'),
                   ),
                 ],

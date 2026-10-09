@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../crypto/member_keys.dart';
 import '../crypto/signing.dart';
@@ -102,8 +103,29 @@ final class ApplyPipeline {
   });
 
   /// Applies one fetched block for [groupId]. Never throws: every failure
-  /// maps to an outcome.
+  /// maps to an outcome. Anything but [ApplyOutcome.applied] logs its
+  /// envelope header (type, key version), so a stuck record names itself
+  /// in the sync log instead of surfacing only as round counts.
   Future<ApplyOutcome> apply(
+    String groupId,
+    String cid,
+    Uint8List block,
+  ) async {
+    final SyncEnvelope? header = SyncEnvelope.tryDecode(block);
+    final ApplyOutcome outcome = await _apply(groupId, cid, block);
+    if (outcome != ApplyOutcome.applied) {
+      final String shortCid = cid.length <= 12 ? cid : cid.substring(0, 12);
+      final String type = header?.type.name ?? 'undecoded';
+      final String version = header == null ? '-' : '${header.keyVersion}';
+      debugPrint(
+        'vBank: apply ${outcome.name} $shortCid type=$type kv=$version',
+      );
+    }
+    return outcome;
+  }
+
+  /// The apply body: envelope decode → versioned key → open → dispatch.
+  Future<ApplyOutcome> _apply(
     String groupId,
     String cid,
     Uint8List block,
@@ -656,7 +678,9 @@ final class ApplyPipeline {
     }
     final Member? member = await groups.getMember(groupId, peerId);
     if (member == null) {
-      return ApplyOutcome.rejected;
+      // The roster hasn't caught up (join/snapshot still in flight):
+      // retry once it arrives instead of parking for the session.
+      return ApplyOutcome.deferred;
     }
     final bool ok = await SigningService.verifyWithBytes(
       SigningPayloads.memberKey(

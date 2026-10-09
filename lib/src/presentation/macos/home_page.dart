@@ -8,6 +8,7 @@ import '../providers/auth.dart';
 import '../providers/groups.dart';
 import 'create_group_page.dart';
 import 'group_detail_page.dart';
+import 'identity_page.dart';
 import 'join_group_page.dart';
 
 /// The macOS home: the same auth gate and group list in Macos dress.
@@ -129,6 +130,18 @@ final class MacosGroupsPage extends ConsumerWidget {
                 ),
               ),
             ),
+          ToolBarIconButton(
+            key: const ValueKey('identity-button'),
+            label: 'Identity',
+            icon: const MacosIcon(CupertinoIcons.person_crop_circle),
+            showLabel: false,
+            onPressed: () => Navigator.push(
+              context,
+              CupertinoPageRoute<void>(
+                builder: (_) => const MacosIdentityPage(),
+              ),
+            ),
+          ),
         ],
       ),
       children: [

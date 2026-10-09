@@ -10,13 +10,17 @@ import '../../domain/group.dart';
 import '../../domain/invites.dart';
 import '../../domain/membership.dart';
 import '../app_scope.dart';
+import '../member/member_actions.dart';
 import '../providers/auth.dart';
+import '../providers/groups.dart';
 import '../providers/invites.dart';
 import '../providers/sync.dart';
 import 'invite_share_screen.dart';
 
-/// A group's invite tickets: list plus creation. The code shown is the
-/// invite id; the link (with secret) is assembled by the share layer.
+/// A group's invite tickets: who invited, what each ticket is for and
+/// how long it lasts. Tickets are single-use join links, good for 12
+/// hours. Only owners and admins create them; anyone holding a live one
+/// can forward it, which is why the list is visible to every member.
 final class MobileInvitesScreen extends ConsumerStatefulWidget {
   /// The group inviting.
   final String groupId;
@@ -40,8 +44,20 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AsyncValue<List<Invite>> invites =
-        ref.watch(inviteListProvider(widget.groupId));
+    final AsyncValue<List<Invite>> invites = ref.watch(
+      inviteListProvider(widget.groupId),
+    );
+    final List<Group> groups =
+        ref.watch(groupListProvider).valueOrNull ?? const [];
+    Group? group;
+    for (final Group g in groups) {
+      if (g.id == widget.groupId) {
+        group = g;
+      }
+    }
+    final String? me = ref.watch(authProvider).identity?.peerId;
+    final MemberRole? role = group == null ? null : myRole(group, me);
+    final bool writer = role != null && canWrite(role);
     return Scaffold(
       headers: [
         AppBar(
@@ -53,47 +69,51 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
           ],
           title: const Text('Invites'),
           trailing: [
-            IconButton.ghost(
-              key: const ValueKey('new-invite-button'),
-              icon: const Icon(LucideIcons.plus),
-              onPressed: _saving ? null : _create,
-            ),
+            if (writer)
+              IconButton.ghost(
+                key: const ValueKey('new-invite-button'),
+                icon: const Icon(LucideIcons.plus),
+                onPressed: _saving ? null : _create,
+              ),
           ],
         ),
       ],
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          if (_error != null) ...[
-            Text(_error!).small,
-            const Gap(12),
-          ],
+          Text(
+            'Single-use links that let one person join '
+            '${group?.name ?? 'this group'}. Each works for 12 hours.',
+          ).small,
+          const Gap(4),
+          const Text(
+            'Only owners and admins create them; anyone holding a live '
+            'one can forward it.',
+          ).small.muted,
+          const Gap(16),
+          if (_error != null) ...[Text(_error!).small, const Gap(12)],
           invites.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (Object error, _) => Text('Error: $error'),
             data: (List<Invite> list) => Column(
               children: [
-                if (list.isEmpty)
+                if (list.isEmpty) ...[
                   const Text('No invites yet').small.muted,
+                  if (writer) ...[
+                    const Gap(4),
+                    const Text('Tap + to invite the next member.').small.muted,
+                  ],
+                ],
                 for (final Invite i in list)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _reshare(i),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _codeOf(i),
-                              key: ValueKey('invite-${i.id}'),
-                            ).medium,
-                          ),
-                          Text(_stateOf(i)).xSmall.muted,
-                        ],
-                      ),
-                    ),
+                  _InviteRow(
+                    group: group,
+                    invite: i,
+                    title:
+                        '${_nameOf(group, i.inviterPeerId, i.inviterName)} '
+                        'invited',
+                    detail: _detailOf(group, i),
+                    state: _stateOf(i),
+                    onTap: () => _reshare(i),
                   ),
               ],
             ),
@@ -103,10 +123,42 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     );
   }
 
-  /// Short display code for a ticket id.
-  static String _codeOf(Invite invite) => invite.id.length <= 8
-      ? invite.id
-      : '${invite.id.substring(0, 8)}…';
+  /// Roster name, invite-carried name, else a short peer id.
+  static String _nameOf(Group? group, String peerId, String? fallback) {
+    if (group != null) {
+      for (final Member m in group.members) {
+        if (m.peerId == peerId) {
+          return m.name;
+        }
+      }
+    }
+    if (fallback != null && fallback.isNotEmpty) {
+      return fallback;
+    }
+    return peerId.length <= 8 ? peerId : '${peerId.substring(0, 8)}…';
+  }
+
+  /// What this ticket is for: who used it, or how long it lasts.
+  String _detailOf(Group? group, Invite invite) {
+    if (invite.used) {
+      final String? by = invite.usedByPeerId;
+      if (by == null) {
+        return 'Already used';
+      }
+      return 'Used by ${_nameOf(group, by, null)}';
+    }
+    if (invite.isExpiredAt(_now())) {
+      return 'Expired';
+    }
+    final Duration left = invite.expiresAt.difference(_now());
+    if (left.inMinutes < 60) {
+      return 'Expires in ${left.inMinutes} min — share it now';
+    }
+    if (left.inHours < 48) {
+      return 'Expires in ${left.inHours} h';
+    }
+    return 'Expires in ${left.inDays} d';
+  }
 
   /// Clock in force: the injected one, else wall time.
   DateTime _now() {
@@ -157,15 +209,17 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
       _saving = true;
       _error = null;
     });
-    final result =
-        await ref.read(appServicesProvider).invites.createInvite(
-              groupId: g.id,
-              groupCid: g.cid ?? '',
-              groupTopic: 'vbank/group/${g.id}',
-              inviterPeerId: me,
-              inviterName: inviter.name,
-              groupKey: key,
-            );
+    final result = await ref
+        .read(appServicesProvider)
+        .invites
+        .createInvite(
+          groupId: g.id,
+          groupCid: g.cid ?? '',
+          groupTopic: 'vbank/group/${g.id}',
+          inviterPeerId: me,
+          inviterName: inviter.name,
+          groupKey: key,
+        );
     if (!mounted) {
       return;
     }
@@ -207,10 +261,8 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => MobileInviteShareScreen(
-          link: link,
-          groupId: widget.groupId,
-        ),
+        builder: (_) =>
+            MobileInviteShareScreen(link: link, groupId: widget.groupId),
       ),
     );
   }
@@ -219,16 +271,11 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
   /// tickets clear their link and say so instead.
   Future<void> _reshare(Invite invite) async {
     final settings = ref.read(appRepositoriesProvider).settings;
-    final String? link = await InviteLink.loadLink(
-      settings,
-      invite.id,
-    );
+    final String? link = await InviteLink.loadLink(settings, invite.id);
     if (link == null || invite.used || invite.isExpiredAt(_now())) {
       await InviteLink.clearLink(settings, invite.id);
       if (mounted) {
-        setState(
-          () => _error = 'That invite was already used or expired.',
-        );
+        setState(() => _error = 'That invite was already used or expired.');
       }
       return;
     }
@@ -238,22 +285,74 @@ final class _MobileInvitesState extends ConsumerState<MobileInvitesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => MobileInviteShareScreen(
-          link: link,
-          groupId: widget.groupId,
-        ),
+        builder: (_) =>
+            MobileInviteShareScreen(link: link, groupId: widget.groupId),
       ),
     );
   }
 
   /// Machine failure codes to human words.
   static String _explain(Failure failure) => switch (failure) {
-        PermissionFailure(:final action) => 'Not allowed ($action).',
-        ValidationFailure(:final reason) => 'Check the form ($reason).',
-        NotFoundFailure(:final subject) => 'Missing $subject.',
-        ConflictFailure(:final subject) => 'Conflict on $subject.',
-        NetworkFailure() => 'No connection.',
-        IntegrityFailure(:final subject) => 'Rejected $subject.',
-        StorageFailure() => 'Storage failed.',
-      };
+    PermissionFailure(:final action) => 'Not allowed ($action).',
+    ValidationFailure(:final reason) => 'Check the form ($reason).',
+    NotFoundFailure(:final subject) => 'Missing $subject.',
+    ConflictFailure(:final subject) => 'Conflict on $subject.',
+    NetworkFailure() => 'No connection.',
+    IntegrityFailure(:final subject) => 'Rejected $subject.',
+    StorageFailure() => 'Storage failed.',
+  };
+}
+
+/// One invite ticket row: who invited, what it is for, its state.
+final class _InviteRow extends StatelessWidget {
+  /// The group for name resolution.
+  final Group? group;
+
+  /// The ticket shown.
+  final Invite invite;
+
+  /// Title line (`X invited`).
+  final String title;
+
+  /// Detail line (used-by or expiry).
+  final String detail;
+
+  /// State badge text.
+  final String state;
+
+  /// Re-shares the ticket.
+  final VoidCallback onTap;
+
+  /// Creates the row.
+  const _InviteRow({
+    required this.group,
+    required this.invite,
+    required this.title,
+    required this.detail,
+    required this.state,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, key: ValueKey('invite-${invite.id}')).medium,
+                Text(detail).small.muted,
+              ],
+            ),
+          ),
+          Text(state).xSmall.muted,
+        ],
+      ),
+    ),
+  );
 }

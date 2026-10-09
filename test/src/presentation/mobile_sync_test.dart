@@ -29,14 +29,16 @@ void main() {
       container.read(selectedGroupIdProvider.notifier).state = group.id;
       await settle(tester);
 
+      await tester.tap(find.byKey(const ValueKey('tab-more')));
+      await settle(tester);
       await tester.tap(find.text('Sync'));
       await settle(tester);
 
       // State unknown, no relays, inert Sync button — but no crash.
-      expect(find.text('None configured.'), findsOneWidget);
+      expect(find.textContaining('None configured'), findsOneWidget);
       await tester.tap(find.text('Sync now'));
       await settle(tester);
-      expect(find.text('None configured.'), findsOneWidget);
+      expect(find.textContaining('None configured'), findsOneWidget);
     });
   });
 }

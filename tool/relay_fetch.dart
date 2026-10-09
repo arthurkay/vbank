@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:vbank/src/crypto/sync_envelope.dart';
 import 'package:vbank/src/sync/node_host.dart';
 
 /// Fetches exact CIDs from the relay: proves whether the desktop's
-/// snapshots actually landed there. Usage: dart run tool/relay_fetch.dart
-/// <cid> [cid...]
+/// snapshots actually landed there. Prints each block's envelope header
+/// (type, group, key version) without needing any group key.
+/// Usage: dart run tool/relay_fetch.dart cid [cid...]
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
     stdout.writeln('usage: relay_fetch.dart <cid> [cid...]');
@@ -30,7 +32,16 @@ Future<void> main(List<String> args) async {
       final bytes = await node
           .fetchFromPeers(cid, [relayId], const Duration(seconds: 15))
           .timeout(const Duration(seconds: 20));
-      stdout.writeln('${bytes == null ? 'MISSING' : 'FOUND ${bytes.length}B'} $cid');
+      if (bytes == null) {
+        stdout.writeln('MISSING $cid');
+        continue;
+      }
+      final SyncEnvelope? header = SyncEnvelope.tryDecode(bytes);
+      final String detail = header == null
+          ? 'undecodable'
+          : 'type=${header.type.name} group=${header.groupId} '
+              'kv=${header.keyVersion}';
+      stdout.writeln('FOUND ${bytes.length}B $cid $detail');
     }
   } catch (e) {
     stdout.writeln('FAILED: $e');
